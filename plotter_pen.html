@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <title>Sacchi Plotter Pen</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>✏️ Sacchi Plotter Pen</h1>
+</header>
+
+<main>
+    <aside class="left-toolbar">
+
+    <div class="panel panel-tools">
+      <div class="panel-head">
+        <span class="panel-eyebrow">Disegno</span>
+        <h2 class="panel-title">Strumenti</h2>
+        <p class="panel-subtitle">Scegli la modalità di disegno</p>
+      </div>
+      <div class="panel-body tool-buttons">
+        <button id="btnFreehand" class="btn tool-btn active" data-tool="freehand">Mano libera</button>
+        <button id="btnLine" class="btn tool-btn" data-tool="line">Linea</button>
+        <button id="btnArc" class="btn tool-btn" data-tool="arc">Arco</button>
+        <button id="btnRectangle" class="btn tool-btn" data-tool="rectangle">Rettangolo</button>
+        <button id="btnPolygon" class="btn tool-btn" data-tool="polygon">Poligono</button>
+      </div>
+    </div>
+
+    <div class="panel panel-actions">
+      <div class="panel-head">
+        <span class="panel-eyebrow">Azioni</span>
+        <h2 class="panel-title">Gestione traccia</h2>
+      </div>
+      <div class="panel-body action-list">
+        <button id="btnClear" class="btn ghost">Pulisci</button>
+        <button id="btnUndo" class="btn ghost">Annulla tratto</button>
+        <button id="btnResetView" class="btn ghost">Reset Zoom/Pan</button>
+      </div>
+    </div>
+
+    <div class="panel panel-status">
+      <div class="panel-head">
+        <span class="panel-eyebrow">Stato</span>
+        <h2 class="panel-title">Coordinate & Snap</h2>
+      </div>
+      <div class="panel-body status-body">
+        <div class="status-grid">
+          <div class="status-metric">
+            <span class="metric-label">Puntatore</span>
+            <div class="metric-value" id="coordDisplay">X 0.0 mm, Y 0.0 mm</div>
+          </div>
+          <div class="status-metric">
+            <span class="metric-label">Snap</span>
+            <div class="metric-value" id="snapDisplay">Snap: Nessuno</div>
+          </div>
+        </div>
+        <div class="callout" id="hint">Disegna a mano libera. Mouse o touch.</div>
+      </div>
+    </div>
+  </aside>
+  <section class="canvas-wrap">
+    <div class="canvas-area">
+      <canvas id="pad"></canvas>
+      <div id="snapCursorTooltip" class="snap-tooltip hidden"></div>
+    </div>
+  </section>
+
+
+  <aside class="side">
+    <div class="panel panel-settings">
+      <div class="panel-head">
+        <span class="panel-eyebrow">Impostazioni</span>
+        <h2 class="panel-title">Tavola & Griglia</h2>
+      </div>
+      <div class="panel-body settings-body">
+        <label class="field-label" for="penSize">Spessore penna</label>
+        <div class="field-range">
+          <input id="penSize" type="range" min="1" max="10" step="1" value="3" title="Spessore penna"/>
+        </div>
+        <div class="field-grid">
+          <label class="field-label" for="mmWidth">Larghezza mm</label>
+          <input id="mmWidth" type="number" min="1" max="2000" step="1" value="600" title="Width in mm"/>
+          <label class="field-label" for="mmHeight">Altezza mm</label>
+          <input id="mmHeight" type="number" min="1" max="2000" step="1" value="600" title="Height in mm"/>
+        </div>
+        <div class="toggle-grid">
+          <label class="toggle">
+            <input type="checkbox" id="cbShowGrid" checked>
+            <span>Griglia</span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="cbSnapGrid">
+            <span>Snap griglia</span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="cbSnapAnchors">
+            <span>Snap linee/archi</span>
+          </label>
+        </div>
+        <div class="field-grid narrow">
+          <label class="field-label" for="gridSpacing">Passo griglia (mm)</label>
+          <input id="gridSpacing" type="number" min="1" max="200" step="1" value="10" title="Spaziatura griglia in mm"/>
+          <label class="field-label" for="gridMajorEvery">Linea forte ogni</label>
+          <input id="gridMajorEvery" type="number" min="1" max="20" step="1" value="5" title="Numero di celle tra le linee principali"/>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Estrazione</h3>
+      <div class="row">
+        <button id="btnExtract" class="btn primary">Estrai linee & archi</button>
+        <button id="btnCopy" class="btn">Copia Testo</button>
+        <button id="btnDownload" class="btn">Scarica Testo</button>
+      </div>
+      <div class="plc-output">
+        <textarea id="outText" class="visually-hidden" aria-hidden="true" readonly></textarea>
+        <div id="outGrid" class="plc-grid" tabindex="0" role="listbox" aria-label="Comandi PLC"></div>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<!-- Tooltip for hover information -->
+<div id="hoverTooltip" class="tooltip">
+  <div class="tooltip-content"></div>
+</div>
+
+<footer>
+  Suggerimenti: disegna curve ampie per riconoscere gli archi. Parametri modificabili in alto a destra.
+</footer>
+
+<script type="module" src="src/app.js"></script>
+</body>
+</html>
