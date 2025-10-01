@@ -109,6 +109,120 @@ export function createUiController({
     updateDeletionInfo();
   }
 
+  function approxEqual(a, b, eps = 0.35) {
+    if (!Number.isFinite(a) || !Number.isFinite(b)) {
+      return false;
+    }
+    return Math.abs(a - b) <= eps;
+  }
+
+  function pointsEqual(p, q, eps = 0.35) {
+    if (!p || !q) {
+      return false;
+    }
+    return approxEqual(p.x, q.x, eps) && approxEqual(p.y, q.y, eps);
+  }
+
+  function removePrimitiveFromDrawing(primitive) {
+    if (!primitive) {
+      return false;
+    }
+    const strokes = state.drawing.strokes;
+    if (!Array.isArray(strokes) || strokes.length === 0) {
+      return false;
+    }
+
+    const strokeIndex = Number.isInteger(primitive._sourceStrokeIndex) ? primitive._sourceStrokeIndex : null;
+    if (strokeIndex != null && strokeIndex >= 0 && strokeIndex < strokes.length) {
+      strokes.splice(strokeIndex, 1);
+      snapManager.markAnchorsDirty();
+      state.hover.isHovering = false;
+      state.hover.lastPrimitive = null;
+      return true;
+    }
+
+    const segmentMatches = (a, b) => {
+      if (!a || !b) {
+        return false;
+      }
+      return (pointsEqual(a, { x: primitive.x1, y: primitive.y1 }) && pointsEqual(b, { x: primitive.x2, y: primitive.y2 })) ||
+        (pointsEqual(a, { x: primitive.x2, y: primitive.y2 }) && pointsEqual(b, { x: primitive.x1, y: primitive.y1 }));
+    };
+
+    for (let i = 0; i < strokes.length; i++) {
+      const stroke = strokes[i];
+      if (!Array.isArray(stroke) || stroke.length < 2) {
+        continue;
+      }
+
+      if (primitive.type === 'line') {
+        let matches = false;
+        if (stroke.tool === 'line' || stroke.length <= 2) {
+          matches = segmentMatches(stroke[0], stroke[stroke.length - 1]);
+        }
+        if (!matches) {
+          for (let j = 1; j < stroke.length; j++) {
+            if (segmentMatches(stroke[j - 1], stroke[j])) {
+              matches = true;
+              break;
+            }
+          }
+        }
+        if (matches) {
+          strokes.splice(i, 1);
+          snapManager.markAnchorsDirty();
+          state.hover.isHovering = false;
+          state.hover.lastPrimitive = null;
+          return true;
+        }
+      } else if (primitive.type === 'arc') {
+        const arcInfo = stroke.arcInfo;
+        if (!arcInfo && stroke.tool !== 'arc') {
+          continue;
+        }
+        const start = arcInfo?.start || stroke[0];
+        const end = arcInfo?.end || stroke[stroke.length - 1];
+        const center = arcInfo?.center;
+        const radius = arcInfo?.radius;
+        const matchesEndpoints = (pointsEqual(start, { x: primitive.x1, y: primitive.y1 }) && pointsEqual(end, { x: primitive.x2, y: primitive.y2 })) ||
+          (pointsEqual(start, { x: primitive.x2, y: primitive.y2 }) && pointsEqual(end, { x: primitive.x1, y: primitive.y1 }));
+        const matchesCenter = center ? pointsEqual(center, { x: primitive.cx, y: primitive.cy }, 0.5) : true;
+        const matchesRadius = Number.isFinite(radius) ? approxEqual(radius, primitive.r, 0.5) : true;
+        const matchesDir = !primitive.dir || !arcInfo?.dir || primitive.dir === arcInfo.dir;
+        if (matchesEndpoints && matchesCenter && matchesRadius && matchesDir) {
+          strokes.splice(i, 1);
+          snapManager.markAnchorsDirty();
+          state.hover.isHovering = false;
+          state.hover.lastPrimitive = null;
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  function deleteMarkedPrimitive() {
+    if (!state.deletion || state.deletion.markedPrimitiveId == null) {
+      return false;
+    }
+    if (typeof extractionService.deletePrimitiveById !== 'function') {
+      return false;
+    }
+    const id = state.deletion.markedPrimitiveId;
+    const removed = extractionService.deletePrimitiveById(id);
+    let removedFromDrawing = false;
+    if (removed) {
+      removedFromDrawing = removePrimitiveFromDrawing(removed);
+    }
+    setMarkedPrimitive(null);
+    if (removedFromDrawing && typeof extractionService.extractAll === 'function') {
+      extractionService.extractAll();
+      updateDeletionInfo();
+    }
+    renderer.redrawAll();
+    return true;
+  }
+
   function setupPointerEvents() {
     const { canvas } = state.elements;
     if (!canvas) {
@@ -118,14 +232,9 @@ export function createUiController({
     canvas.addEventListener('mousedown', (e) => {
       if (state.drawing.currentTool === 'delete') {
         if (e.button === 2) {
-          if (state.deletion?.markedPrimitiveId != null && typeof extractionService.deletePrimitiveById === 'function') {
-            const removed = extractionService.deletePrimitiveById(state.deletion.markedPrimitiveId);
-            if (removed) {
-              setMarkedPrimitive(null);
-              renderer.redrawAll();
-            }
+          if (!deleteMarkedPrimitive()) {
+            updateDeletionInfo();
           }
-          updateDeletionInfo();
           e.preventDefault();
           return;
         }
@@ -231,14 +340,9 @@ export function createUiController({
 
     canvas.addEventListener('contextmenu', (e) => {
       if (state.drawing.currentTool === 'delete') {
-        if (state.deletion?.markedPrimitiveId != null && typeof extractionService.deletePrimitiveById === 'function') {
-          const removed = extractionService.deletePrimitiveById(state.deletion.markedPrimitiveId);
-          if (removed) {
-            setMarkedPrimitive(null);
-            renderer.redrawAll();
-          }
+        if (!deleteMarkedPrimitive()) {
+          updateDeletionInfo();
         }
-        updateDeletionInfo();
         e.preventDefault();
         return;
       }
@@ -325,6 +429,7 @@ export function createUiController({
       }
       setMarkedPrimitive(null);
       renderer.redrawAll();
+      updateDeletionInfo();
     };
 
     if (penSizeInput) {

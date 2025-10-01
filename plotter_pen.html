@@ -26,6 +26,7 @@
         <button id="btnArc" class="btn tool-btn" data-tool="arc">Arco</button>
         <button id="btnRectangle" class="btn tool-btn" data-tool="rectangle">Rettangolo</button>
         <button id="btnPolygon" class="btn tool-btn" data-tool="polygon">Poligono</button>
+        <button id="btnDeletePrimitives" class="btn tool-btn" data-tool="delete">Cancella primitive</button>
       </div>
     </div>
 
@@ -60,7 +61,16 @@
         <div class="callout" id="hint">Disegna a mano libera. Mouse o touch.</div>
       </div>
     </div>
-  </aside>
+      <div class="panel panel-delete-info">
+      <div class="panel-head">
+        <span class="panel-eyebrow">Cancella</span>
+        <h2 class="panel-title">Stato</h2>
+      </div>
+      <div class="panel-body">
+        <div id="deleteInfo" class="delete-info">Nessuna primitiva attiva.</div>
+      </div>
+    </div>
+</aside>
   <section class="canvas-wrap">
     <div class="canvas-area">
       <canvas id="pad"></canvas>
@@ -120,14 +130,6 @@
         <textarea id="outText" class="visually-hidden" aria-hidden="true" readonly></textarea>
         <div id="outGrid" class="plc-grid" tabindex="0" role="listbox" aria-label="Comandi PLC"></div>
       </div>
-    </div>
-    <div class="card">
-      <h3>Cancella primitive</h3>
-      <p class="card-hint">Attiva lo strumento, clicca su una linea o un arco per evidenziarlo (diventa tratteggiato) e usa il tasto destro per rimuoverlo.</p>
-      <div class="row">
-        <button id="btnDeletePrimitives" class="btn tool-btn" data-tool="delete">Strumento cancellazione</button>
-      </div>
-      <div id="deleteInfo" class="delete-info">Nessuna primitiva attiva.</div>
     </div>
   </aside>
 </main>

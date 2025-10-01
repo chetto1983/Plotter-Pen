@@ -702,6 +702,30 @@ function createRectanglePrimitives(stroke, minLength = MIN_PRIMITIVE_LENGTH) {
   return lines;
 }
 
+function keyNumber(value) {
+  return Number.isFinite(value) ? value.toFixed(3) : 'null';
+}
+
+function buildPrimitiveKey(prim) {
+  if (!prim || !prim.type) {
+    return 'unknown';
+  }
+  if (prim.type === 'line') {
+    const a = keyNumber(prim.x1) + ',' + keyNumber(prim.y1);
+    const b = keyNumber(prim.x2) + ',' + keyNumber(prim.y2);
+    return (a <= b ? 'line:' + a + '|' + b : 'line:' + b + '|' + a);
+  }
+  if (prim.type === 'arc') {
+    const start = keyNumber(prim.x1) + ',' + keyNumber(prim.y1);
+    const end = keyNumber(prim.x2) + ',' + keyNumber(prim.y2);
+    const ordered = start <= end ? [start, end] : [end, start];
+    const center = keyNumber(prim.cx) + ',' + keyNumber(prim.cy);
+    const radius = keyNumber(prim.r);
+    return 'arc:' + ordered[0] + '|' + ordered[1] + '|' + center + '|' + radius;
+  }
+  return JSON.stringify(prim);
+}
+
 function createPolylinePrimitives(points, minLength = MIN_PRIMITIVE_LENGTH) {
   const lines = [];
   if (!Array.isArray(points)) return lines;
@@ -728,6 +752,7 @@ export function createExtractionService(state, snapManager, outputController) {
       const uniformFactor = (pxToMmX + pxToMmY) / 2;
 
       const primitives = [];
+      const primitiveSources = [];
       const primitivesPerStroke = [];
       const paths = [];
       const strokesPoints = [];
@@ -741,7 +766,8 @@ export function createExtractionService(state, snapManager, outputController) {
         return;
       }
 
-      for (const stroke of strokes) {
+      for (let strokeIndex = 0; strokeIndex < strokes.length; strokeIndex++) {
+        const stroke = strokes[strokeIndex];
         if (!stroke || stroke.length < 2) {
           primitivesPerStroke.push([]);
           continue;
@@ -795,7 +821,10 @@ export function createExtractionService(state, snapManager, outputController) {
           positionEps: 0.35
         });
 
-        primitives.push(...strokePrimitives);
+        strokePrimitives.forEach((prim) => {
+          primitives.push(prim);
+          primitiveSources.push({ strokeIndex, strokeTool });
+        });
         primitivesPerStroke.push(strokePrimitives);
 
         const startPt = stroke[0];
@@ -808,6 +837,14 @@ export function createExtractionService(state, snapManager, outputController) {
       }
 
       const primitivesMm = primitives.map(toMmPrimitive);
+      const primitiveSourcesByKey = new Map();
+      primitivesMm.forEach((prim, idx) => {
+        const key = buildPrimitiveKey(prim);
+        if (!primitiveSourcesByKey.has(key)) {
+          primitiveSourcesByKey.set(key, []);
+        }
+        primitiveSourcesByKey.get(key).push(primitiveSources[idx] || null);
+      });
       const primitivesPerStrokeMm = primitivesPerStroke.map((list) => list.map(toMmPrimitive));
       const allMergedPrimitivesMm = primitivesPerStrokeMm.flat();
 
@@ -849,7 +886,17 @@ export function createExtractionService(state, snapManager, outputController) {
       const effectivePrimitivesMm = (optimizedPrimitivesMm.length > 0 ? optimizedPrimitivesMm : allMergedPrimitivesMm)
         .filter((prim) => prim && (prim.type !== 'line' || lineLength(prim) >= MIN_PRIMITIVE_LENGTH));
 
-      const activePrimitives = effectivePrimitivesMm.map((prim) => ({ ...prim, _id: primitiveIdCounter++ }));
+      const activePrimitives = effectivePrimitivesMm.map((prim) => {
+        const key = buildPrimitiveKey(prim);
+        const sources = primitiveSourcesByKey.get(key);
+        const source = sources && sources.length ? (sources.shift() || null) : null;
+        return {
+          ...prim,
+          _id: primitiveIdCounter++,
+          _sourceStrokeIndex: source?.strokeIndex ?? null,
+          _sourceStrokeTool: source?.strokeTool ?? null
+        };
+      });
 
       const plcReadyPrimitives = mergePrimitivesForPlc(activePrimitives);
       const plcMovements = buildPlcMovements(plcReadyPrimitives);
