@@ -1,3 +1,5 @@
+import { distanceToArc, distanceToLineSegment } from "./geometry.js";
+
 export function createUiController({
   state,
   renderer,
@@ -9,6 +11,104 @@ export function createUiController({
   outputController,
   hoverManager
 }) {
+  function getActivePrimitives() {
+    if (typeof extractionService.getActivePrimitives === 'function') {
+      return extractionService.getActivePrimitives() || [];
+    }
+    const current = state.extraction.last;
+    if (!current || !Array.isArray(current.active_primitives)) {
+      return [];
+    }
+    return current.active_primitives;
+  }
+
+  function findPrimitiveAtPosition(point) {
+    const primitives = getActivePrimitives();
+    if (!point || primitives.length === 0) {
+      return null;
+    }
+    const scale = state.view.scaleFactor * (state.view.zoom || 1);
+    const mmToleranceLine = scale ? 8 / scale : 8;
+    const mmToleranceArc = scale ? 12 / scale : 12;
+    let best = null;
+    let bestDistance = Infinity;
+    for (const prim of primitives) {
+      if (!prim) {
+        continue;
+      }
+      let dist = Infinity;
+      if (prim.type === 'line') {
+        dist = distanceToLineSegment(prim.x1, prim.y1, prim.x2, prim.y2, point.x, point.y);
+        if (dist <= mmToleranceLine && dist < bestDistance) {
+          bestDistance = dist;
+          best = prim;
+        }
+      } else if (prim.type === 'arc') {
+        dist = distanceToArc(prim, point);
+        if (dist <= mmToleranceArc && dist < bestDistance) {
+          bestDistance = dist;
+          best = prim;
+        }
+      }
+    }
+    return best;
+  }
+
+  function updateDeletionInfo() {
+    const infoEl = state.elements.deleteInfo;
+    if (!infoEl) {
+      return;
+    }
+    const current = state.extraction.last;
+    const total = current?.total_active_primitives ?? getActivePrimitives().length;
+    const marked = state.deletion?.markedPrimitiveData;
+    if (!total) {
+      infoEl.textContent = 'Nessuna primitiva attiva.';
+      return;
+    }
+    const formatPoint = (x, y) => {
+      const fx = Number.isFinite(x) ? x.toFixed(1) : '?';
+      const fy = Number.isFinite(y) ? y.toFixed(1) : '?';
+      return `(${fx}, ${fy})`;
+    };
+    const parts = [`Primitive attive: ${total}`];
+    if (marked) {
+      if (marked.type === 'line') {
+        parts.push(`Linea ${formatPoint(marked.x1, marked.y1)} -> ${formatPoint(marked.x2, marked.y2)}`);
+      } else if (marked.type === 'arc') {
+        const radius = Number.isFinite(marked.r) ? marked.r.toFixed(1) : '?';
+        parts.push(`Arco R=${radius} mm`);
+      } else {
+        parts.push('Selezione attiva');
+      }
+    } else {
+      parts.push('Nessuna selezionata');
+    }
+    infoEl.textContent = parts.join(' | ');
+  }
+
+  function setMarkedPrimitive(primitive) {
+    if (!state.deletion) {
+      return;
+    }
+    if (primitive && primitive._id != null) {
+      state.deletion.markedPrimitiveId = primitive._id;
+      state.deletion.markedPrimitiveData = {
+        type: primitive.type,
+        x1: primitive.x1,
+        y1: primitive.y1,
+        x2: primitive.x2,
+        y2: primitive.y2,
+        r: primitive.r,
+        dir: primitive.dir
+      };
+    } else {
+      state.deletion.markedPrimitiveId = null;
+      state.deletion.markedPrimitiveData = null;
+    }
+    updateDeletionInfo();
+  }
+
   function setupPointerEvents() {
     const { canvas } = state.elements;
     if (!canvas) {
@@ -16,6 +116,30 @@ export function createUiController({
     }
 
     canvas.addEventListener('mousedown', (e) => {
+      if (state.drawing.currentTool === 'delete') {
+        if (e.button === 2) {
+          if (state.deletion?.markedPrimitiveId != null && typeof extractionService.deletePrimitiveById === 'function') {
+            const removed = extractionService.deletePrimitiveById(state.deletion.markedPrimitiveId);
+            if (removed) {
+              setMarkedPrimitive(null);
+              renderer.redrawAll();
+            }
+          }
+          updateDeletionInfo();
+          e.preventDefault();
+          return;
+        }
+        if (e.button !== 0) {
+          return;
+        }
+        const rawPos = pointerHelper.getPosition(e);
+        const target = findPrimitiveAtPosition(rawPos);
+        setMarkedPrimitive(target);
+        renderer.redrawAll();
+        e.preventDefault();
+        return;
+      }
+
       if (e.button === 2) {
         state.view.isPanning = true;
         state.view.lastPanX = e.clientX;
@@ -106,6 +230,18 @@ export function createUiController({
     });
 
     canvas.addEventListener('contextmenu', (e) => {
+      if (state.drawing.currentTool === 'delete') {
+        if (state.deletion?.markedPrimitiveId != null && typeof extractionService.deletePrimitiveById === 'function') {
+          const removed = extractionService.deletePrimitiveById(state.deletion.markedPrimitiveId);
+          if (removed) {
+            setMarkedPrimitive(null);
+            renderer.redrawAll();
+          }
+        }
+        updateDeletionInfo();
+        e.preventDefault();
+        return;
+      }
       if (state.drawing.currentTool === 'polygon' && state.drawing.isDrawingPolygon) {
         toolController.cancelPolygon();
         e.preventDefault();
@@ -169,6 +305,7 @@ export function createUiController({
       btnArc,
       btnRectangle,
       btnPolygon,
+      btnDeletePrimitives,
       btnClear,
       btnUndo,
       btnResetView,
@@ -176,6 +313,19 @@ export function createUiController({
       btnCopy,
       btnDownload
     } = state.elements;
+
+    const activateTool = (tool) => {
+      toolController.setActiveTool(tool);
+      if (tool === 'delete') {
+        const noExtraction = !state.extraction.last || !Array.isArray(state.extraction.last.active_primitives) || state.extraction.last.active_primitives.length === 0;
+        const hasStrokes = Array.isArray(state.drawing.strokes) && state.drawing.strokes.length > 0;
+        if (noExtraction && hasStrokes && typeof extractionService.extractAll === 'function') {
+          extractionService.extractAll();
+        }
+      }
+      setMarkedPrimitive(null);
+      renderer.redrawAll();
+    };
 
     if (penSizeInput) {
       penSizeInput.addEventListener('input', (e) => {
@@ -274,11 +424,12 @@ export function createUiController({
 
     applyGridSettings({ redraw: false });
 
-    if (btnFreehand) btnFreehand.addEventListener('click', () => toolController.setActiveTool('freehand'));
-    if (btnLine) btnLine.addEventListener('click', () => toolController.setActiveTool('line'));
-    if (btnArc) btnArc.addEventListener('click', () => toolController.setActiveTool('arc'));
-    if (btnRectangle) btnRectangle.addEventListener('click', () => toolController.setActiveTool('rectangle'));
-    if (btnPolygon) btnPolygon.addEventListener('click', () => toolController.setActiveTool('polygon'));
+    if (btnFreehand) btnFreehand.addEventListener('click', () => activateTool('freehand'));
+    if (btnLine) btnLine.addEventListener('click', () => activateTool('line'));
+    if (btnArc) btnArc.addEventListener('click', () => activateTool('arc'));
+    if (btnRectangle) btnRectangle.addEventListener('click', () => activateTool('rectangle'));
+    if (btnPolygon) btnPolygon.addEventListener('click', () => activateTool('polygon'));
+    if (btnDeletePrimitives) btnDeletePrimitives.addEventListener('click', () => activateTool('delete'));
 
     if (btnResetView) {
       btnResetView.addEventListener('click', () => renderer.resetView());
@@ -295,6 +446,8 @@ export function createUiController({
           state.hover.timeoutId = null;
         }
         renderer.hideHoverTooltip();
+        state.extraction.last = null;
+        setMarkedPrimitive(null);
         snapManager.markAnchorsDirty();
         renderer.redrawAll();
         outputController.setOutput('', []);
@@ -307,6 +460,7 @@ export function createUiController({
           strokeManager.endStroke();
         }
         state.drawing.strokes.pop();
+        setMarkedPrimitive(null);
         snapManager.markAnchorsDirty();
         renderer.redrawAll();
       });
@@ -322,6 +476,7 @@ export function createUiController({
     if (btnExtract) {
       btnExtract.addEventListener('click', () => {
         extractionService.extractAll();
+        setMarkedPrimitive(null);
       });
     }
 
@@ -351,6 +506,7 @@ export function createUiController({
     snapManager.updateSnapUI(null, { x: 0, y: 0 });
     outputController.setOutput('', []);
     hoverManager.attach();
+    updateDeletionInfo();
   }
 
   return { init };

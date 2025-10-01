@@ -104,7 +104,7 @@ export function createHoverManager(state, pointerHelper, renderer) {
       let minDistance = Infinity;
       let plcCommand = '';
 
-      for (const prim of merged) {
+      for (const prim of active) {
         let dist = Infinity;
         if (prim.type === 'line') {
           dist = distanceToLineSegment(prim.x1, prim.y1, prim.x2, prim.y2, pos.x, pos.y);
@@ -130,7 +130,7 @@ export function createHoverManager(state, pointerHelper, renderer) {
             state.hover.lastPrimitive = hoveredPrimitive;
             state.hover.isHovering = true;
             renderer.redrawAll();
-            renderer.renderPrimitive(hoveredPrimitive);
+            renderer.renderPrimitive(hoveredPrimitive, { style: 'hover' });
           }
         }, 50);
       } else {

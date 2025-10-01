@@ -316,9 +316,8 @@ export function createToolController(state, renderer, snapManager) {
 
     if (state.deletion) {
       state.deletion.active = tool === "delete";
-      if (!state.deletion.active) {
-        state.deletion.markedPrimitiveId = null;
-      }
+      state.deletion.markedPrimitiveId = null;
+      state.deletion.markedPrimitiveData = null;
     }
 
     if (tool === "delete") {

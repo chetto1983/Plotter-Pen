@@ -908,6 +908,11 @@ export function createExtractionService(state, snapManager, outputController) {
         uniformFactor
       };
 
+      if (state.deletion) {
+        state.deletion.markedPrimitiveId = null;
+        state.deletion.markedPrimitiveData = null;
+      }
+
       snapManager.markAnchorsDirty();
       console.timeEnd('extraction');
       return out;
@@ -953,6 +958,10 @@ export function createExtractionService(state, snapManager, outputController) {
       current.deleted_primitive_ids = [];
     }
     current.deleted_primitive_ids.push(id);
+    if (state.deletion && state.deletion.markedPrimitiveId === id) {
+      state.deletion.markedPrimitiveId = null;
+      state.deletion.markedPrimitiveData = null;
+    }
     recomputeActivePrimitiveOutputs();
     return removed || null;
   }

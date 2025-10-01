@@ -99,7 +99,8 @@ export function createAppState(elements) {
     },
     deletion: {
       active: false,
-      markedPrimitiveId: null
+      markedPrimitiveId: null,
+      markedPrimitiveData: null
     },
     extraction: {
       last: null

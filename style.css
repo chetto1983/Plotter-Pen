@@ -88,6 +88,21 @@ main {
   font-size: 14px;
   color: var(--muted);
 }
+.card-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.delete-info {
+  font-size: 12px;
+  color: var(--muted);
+  background: rgba(20, 25, 40, 0.6);
+  padding: 8px 10px;
+  border-radius: 10px;
+}
+
 .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .toolbar > * { margin: 0; }
 .drawing-tools { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
