@@ -82,8 +82,8 @@ export function createHoverManager(state, pointerHelper, renderer) {
 
     canvas.addEventListener('mousemove', (e) => {
       const last = state.extraction.last;
-      const merged = last && Array.isArray(last.merged_primitives) ? last.merged_primitives : null;
-      if (!merged) {
+      const active = last && Array.isArray(last.active_primitives) ? last.active_primitives : null;
+      if (!active) {
         hideTooltip();
         return;
       }

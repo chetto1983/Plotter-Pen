@@ -4,6 +4,8 @@ import { EXTRACTOR_DEFAULTS, MIN_PRIMITIVE_LENGTH } from "./constants.js";
 import { distance } from "./geometry.js";
 import { formatPlcMovements } from "./plcFormatter.js";
 
+let primitiveIdCounter = 0;
+
 function resample(points, step = 4) {
   if (!Array.isArray(points) || points.length <= 2) {
     return points ? points.slice() : [];
@@ -847,7 +849,9 @@ export function createExtractionService(state, snapManager, outputController) {
       const effectivePrimitivesMm = (optimizedPrimitivesMm.length > 0 ? optimizedPrimitivesMm : allMergedPrimitivesMm)
         .filter((prim) => prim && (prim.type !== 'line' || lineLength(prim) >= MIN_PRIMITIVE_LENGTH));
 
-      const plcReadyPrimitives = mergePrimitivesForPlc(effectivePrimitivesMm);
+      const activePrimitives = effectivePrimitivesMm.map((prim) => ({ ...prim, _id: primitiveIdCounter++ }));
+
+      const plcReadyPrimitives = mergePrimitivesForPlc(activePrimitives);
       const plcMovements = buildPlcMovements(plcReadyPrimitives);
 
       const circles = primitives
@@ -887,6 +891,7 @@ export function createExtractionService(state, snapManager, outputController) {
         strokes_points: strokesPoints,
         strokes_points_mm: strokesPointsMm,
         optimized_primitives_mm: optimizedPrimitivesMm,
+        active_primitives: activePrimitives,
         plc_movements: plcMovements
       };
 
@@ -896,6 +901,8 @@ export function createExtractionService(state, snapManager, outputController) {
       state.extraction.last = {
         ...out,
         merged_primitives: allMergedPrimitivesMm,
+        deleted_primitive_ids: [],
+        total_active_primitives: activePrimitives.length,
         pxToMmX,
         pxToMmY,
         uniformFactor
@@ -911,5 +918,44 @@ export function createExtractionService(state, snapManager, outputController) {
     }
   }
 
-  return { extractAll };
+  function getActivePrimitives() {
+    const current = state.extraction.last;
+    if (!current || !Array.isArray(current.active_primitives)) {
+      return [];
+    }
+    return current.active_primitives;
+  }
+
+  function recomputeActivePrimitiveOutputs() {
+    const current = state.extraction.last;
+    if (!current) {
+      return;
+    }
+    const active = Array.isArray(current.active_primitives) ? current.active_primitives.filter(Boolean) : [];
+    const plcReady = mergePrimitivesForPlc(active);
+    const plcMovements = buildPlcMovements(plcReady);
+    current.plc_movements = plcMovements;
+    current.total_active_primitives = active.length;
+    outputController.setOutput(formatPlcMovements(plcMovements), plcMovements);
+  }
+
+  function deletePrimitiveById(id) {
+    const current = state.extraction.last;
+    if (!current || !Array.isArray(current.active_primitives)) {
+      return null;
+    }
+    const index = current.active_primitives.findIndex((prim) => prim && prim._id === id);
+    if (index === -1) {
+      return null;
+    }
+    const [removed] = current.active_primitives.splice(index, 1);
+    if (!Array.isArray(current.deleted_primitive_ids)) {
+      current.deleted_primitive_ids = [];
+    }
+    current.deleted_primitive_ids.push(id);
+    recomputeActivePrimitiveOutputs();
+    return removed || null;
+  }
+
+  return { extractAll, deletePrimitiveById, getActivePrimitives };
 }

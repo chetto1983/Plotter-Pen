@@ -174,14 +174,32 @@ export function createCanvasRenderer(state) {
     viewCtx.restore();
   }
 
-  function renderPrimitive(viewCtx, primitive) {
+  function getMarkedPrimitive() {
+    if (!state.deletion || !state.deletion.markedPrimitiveId) {
+      return null;
+    }
+    const current = state.extraction.last;
+    if (!current || !Array.isArray(current.active_primitives)) {
+      return null;
+    }
+    return current.active_primitives.find((prim) => prim && prim._id === state.deletion.markedPrimitiveId) || null;
+  }
+
+  function renderPrimitive(viewCtx, primitive, options = {}) {
     if (!primitive) {
       return;
     }
+    const style = options.style || 'selection';
+    const showMarkers = style !== 'delete';
+    const baseLineWidth = style === 'hover' ? 4 : 5;
+    const strokeStyle = style === 'hover' ? '#52a8ff' : style === 'delete' ? '#ffaa4d' : '#ff4d4d';
+    const lineDash = style === 'delete' ? [8, 6] : [];
+    const scale = getEffectiveScale();
+
     viewCtx.save();
-    viewCtx.lineWidth = 5;
-    viewCtx.strokeStyle = 'red';
-    viewCtx.setLineDash([]);
+    viewCtx.lineWidth = baseLineWidth;
+    viewCtx.strokeStyle = strokeStyle;
+    viewCtx.setLineDash(lineDash);
     if (primitive.type === 'line') {
       viewCtx.beginPath();
       viewCtx.moveTo(primitive.x1, primitive.y1);
@@ -192,13 +210,14 @@ export function createCanvasRenderer(state) {
       const render = computeArcRenderData(primitive);
       viewCtx.arc(primitive.cx, primitive.cy, primitive.r, render.startAngle, render.endAngle, render.anticlockwise);
       viewCtx.stroke();
-      const scale = getEffectiveScale();
-      const midPoint = computeArcMidpoint(primitive, render);
-      if (midPoint) {
-        drawArcMidpointMarker(viewCtx, midPoint, scale);
+      if (showMarkers) {
+        const midPoint = computeArcMidpoint(primitive, render);
+        if (midPoint) {
+          drawArcMidpointMarker(viewCtx, midPoint, scale);
+        }
+        drawArcEndpointMarker(viewCtx, { x: primitive.x1, y: primitive.y1 }, scale);
+        drawArcEndpointMarker(viewCtx, { x: primitive.x2, y: primitive.y2 }, scale);
       }
-      drawArcEndpointMarker(viewCtx, { x: primitive.x1, y: primitive.y1 }, scale);
-      drawArcEndpointMarker(viewCtx, { x: primitive.x2, y: primitive.y2 }, scale);
     }
     viewCtx.restore();
   }
@@ -329,7 +348,12 @@ export function createCanvasRenderer(state) {
       drawStrokes(viewCtx, scale);
 
       if (state.selection.primitive) {
-        renderPrimitive(viewCtx, state.selection.primitive);
+        renderPrimitive(viewCtx, state.selection.primitive, { style: 'selection' });
+      }
+
+      const markedPrimitive = getMarkedPrimitive();
+      if (markedPrimitive) {
+        renderPrimitive(viewCtx, markedPrimitive, { style: 'delete' });
       }
 
       viewCtx.restore();

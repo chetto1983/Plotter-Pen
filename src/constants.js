@@ -22,5 +22,6 @@ export const TOOL_HINTS = {
   line: 'Clicca per iniziare la linea, trascina per definire la fine.',
   arc: 'Clicca per fissare inizio e fine, poi muovi il mouse per la curvatura e clicca di nuovo per confermare.',
   rectangle: 'Clicca per iniziare il rettangolo, trascina per la dimensione.',
-  polygon: 'Clicca per aggiungere punti, doppio clic per chiudere.'
+  polygon: 'Clicca per aggiungere punti, doppio clic per chiudere.',
+  delete: 'Cancella primitive: clic sinistro per selezionare, destro per rimuovere.'
 };

@@ -313,6 +313,24 @@ export function createToolController(state, renderer, snapManager) {
     if (state.elements.hint && TOOL_HINTS[tool]) {
       state.elements.hint.textContent = TOOL_HINTS[tool];
     }
+
+    if (state.deletion) {
+      state.deletion.active = tool === "delete";
+      if (!state.deletion.active) {
+        state.deletion.markedPrimitiveId = null;
+      }
+    }
+
+    if (tool === "delete") {
+      state.drawing.isDrawing = false;
+      state.drawing.tempShape = null;
+      state.drawing.startPoint = null;
+      cancelPolygon();
+      resetArcTracking();
+      renderer.redrawAll();
+      return;
+    }
+
     if (tool !== "polygon") {
       cancelPolygon();
     }

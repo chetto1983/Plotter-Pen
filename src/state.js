@@ -28,12 +28,14 @@ export function collectElements() {
     btnArc: byId('btnArc'),
     btnRectangle: byId('btnRectangle'),
     btnPolygon: byId('btnPolygon'),
+    btnDeletePrimitives: byId('btnDeletePrimitives'),
     btnClear: byId('btnClear'),
     btnUndo: byId('btnUndo'),
     btnResetView: byId('btnResetView'),
     btnExtract: byId('btnExtract'),
     btnCopy: byId('btnCopy'),
     btnDownload: byId('btnDownload'),
+    deleteInfo: byId('deleteInfo'),
     outText: byId('outText'),
     outGrid: byId('outGrid')
   };
@@ -94,6 +96,10 @@ export function createAppState(elements) {
     selection: {
       primitive: null,
       plcIndex: null
+    },
+    deletion: {
+      active: false,
+      markedPrimitiveId: null
     },
     extraction: {
       last: null
