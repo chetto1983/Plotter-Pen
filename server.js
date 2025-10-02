@@ -597,6 +597,18 @@ function checkPort(port) {
 
 function openBrowser(url) {
   const platform = process.platform;
+
+  if (
+    toBool(process.env.DISABLE_AUTO_BROWSER) === true ||
+    toBool(process.env.NO_AUTO_BROWSER) === true
+  ) {
+    return false;
+  }
+
+  if (platform === "linux" && !process.env.DISPLAY) {
+    return false;
+  }
+
   let command;
   let args;
 
@@ -615,6 +627,10 @@ function openBrowser(url) {
     const child = spawn(command, args, {
       detached: true,
       stdio: "ignore",
+    });
+    child.once("error", (error) => {
+      console.warn("Could not open browser automatically:", error.message);
+      console.log("Please open the URL manually if it did not open automatically.");
     });
     child.unref();
     return true;
@@ -735,3 +751,4 @@ start().catch((error) => {
   console.error("Failed to start OPC UA web server:", error);
   process.exit(1);
 });
+
