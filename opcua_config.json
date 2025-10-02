@@ -3,7 +3,7 @@
     "nodeId":  "ns=4;i=12",
     "username":  "",
     "password":  "",
-    "triggerNodeId":  "ns=4;s=Trigger",
+    "triggerNodeId":  "ns=4;i=535",
     "triggerValue":  true,
     "triggerResetValue":  false,
     "triggerResetDelayMs":  250,

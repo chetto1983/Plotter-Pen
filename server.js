@@ -374,17 +374,24 @@ function sleep(ms) {
 
 async function sendProgramViaOpcua({ text, commands, overrides }) {
   const settings = await buildSettings(overrides);
-  const { payload, effectiveCommands, truncated, padded } = preparePayload(
-    settings,
-    text,
-    commands
-  );
+  const { payload, effectiveCommands, truncated, padded, desiredLength } =
+    preparePayload(settings, text, commands);
+
+  let truncatedResult = truncated;
+  let paddedResult = padded;
+  let commandCount = Array.isArray(effectiveCommands)
+    ? effectiveCommands.length
+    : null;
+  let reportedArrayLength =
+    typeof desiredLength === "number" ? desiredLength : null;
 
   let mainNodeId;
   try {
     mainNodeId = coerceNodeId(settings.nodeId);
   } catch (error) {
-    throw new OpcUaConfigurationError(`Invalid nodeId "${settings.nodeId}": ${error?.message ?? error}`);
+    throw new OpcUaConfigurationError(
+      `Invalid nodeId "${settings.nodeId}": ${error?.message ?? error}`
+    );
   }
 
   let triggerNodeId;
@@ -414,21 +421,94 @@ async function sendProgramViaOpcua({ text, commands, overrides }) {
       session = await client.createSession();
     }
 
-    const mainStatus = await session.writeSingleNode(
-      settings.nodeId,
-      buildVariant(payload, settings.valueType)
-    );
+    let targetLines;
 
-    if (!statusIsGood(mainStatus)) {
-      throw new Error(
-        `OPC UA write failed: ${mainStatus ? mainStatus.toString() : "unknown status"}`
+    if (STRING_ARRAY_TYPES.has(settings.valueType)) {
+      targetLines = Array.isArray(payload)
+        ? [...payload]
+        : [payload == null ? "" : String(payload)];
+
+      let capacity = desiredLength;
+      let currentArrayLength;
+
+      try {
+        const dataValue = await session.read({
+          nodeId: mainNodeId,
+          attributeId: AttributeIds.Value,
+        });
+        if (statusIsGood(dataValue.statusCode)) {
+          const value = dataValue.value?.value;
+          if (Array.isArray(value)) {
+            currentArrayLength = value.length;
+          }
+        }
+      } catch (readError) {
+        console.warn("Unable to read existing array length:", readError);
+      }
+
+      if (typeof currentArrayLength === "number") {
+        capacity =
+          typeof capacity === "number"
+            ? Math.min(capacity, currentArrayLength)
+            : currentArrayLength;
+      }
+
+      if (typeof capacity === "number") {
+        if (targetLines.length > capacity) {
+          targetLines = targetLines.slice(0, capacity);
+          truncatedResult = true;
+        } else if (targetLines.length < capacity) {
+          targetLines = targetLines.concat(
+            Array(capacity - targetLines.length).fill("")
+          );
+          paddedResult = true;
+        }
+        reportedArrayLength = capacity;
+      }
+
+      if (targetLines.length === 0) {
+        targetLines = [""];
+      }
+
+      commandCount = targetLines.length;
+
+      const arrayVariant = new Variant({
+        dataType: DataType.String,
+        arrayType: VariantArrayType.Array,
+        value: targetLines,
+      });
+
+      const mainStatus = await session.writeSingleNode(
+        mainNodeId,
+        arrayVariant
       );
+
+      if (!statusIsGood(mainStatus)) {
+        throw new Error(
+          `OPC UA write failed: ${
+            mainStatus ? mainStatus.toString() : "unknown status"
+          }`
+        );
+      }
+    } else {
+      const mainStatus = await session.writeSingleNode(
+        mainNodeId,
+        buildVariant(payload, settings.valueType)
+      );
+
+      if (!statusIsGood(mainStatus)) {
+        throw new Error(
+          `OPC UA write failed: ${
+            mainStatus ? mainStatus.toString() : "unknown status"
+          }`
+        );
+      }
     }
 
     let triggered = false;
-    if (settings.triggerNodeId) {
+    if (triggerNodeId) {
       const triggerStatus = await session.writeSingleNode(
-        settings.triggerNodeId,
+        triggerNodeId,
         buildVariant(settings.triggerValue, "auto")
       );
       if (!statusIsGood(triggerStatus)) {
@@ -442,7 +522,7 @@ async function sendProgramViaOpcua({ text, commands, overrides }) {
       if (settings.triggerResetDelayMs > 0) {
         await sleep(settings.triggerResetDelayMs);
         const resetStatus = await session.writeSingleNode(
-          settings.triggerNodeId,
+          triggerNodeId,
           buildVariant(settings.triggerResetValue, "auto")
         );
         if (!statusIsGood(resetStatus)) {
@@ -458,13 +538,10 @@ async function sendProgramViaOpcua({ text, commands, overrides }) {
       endpoint: settings.endpoint,
       node_id: settings.nodeId,
       value_type: settings.valueType,
-      commands: Array.isArray(effectiveCommands)
-        ? effectiveCommands.length
-        : null,
-      array_length:
-        typeof settings.arrayLength === "number" ? settings.arrayLength : null,
-      padded,
-      truncated,
+      commands: commandCount,
+      array_length: reportedArrayLength,
+      padded: paddedResult,
+      truncated: truncatedResult,
       triggered,
     };
   } finally {
@@ -593,13 +670,31 @@ async function start() {
         return;
       }
       const message = error?.message ?? "Unexpected OPC UA error.";
-      if (typeof message === "string" && message.includes("BadNodeId")) {
-        console.error("OPC UA node lookup failed:", message);
-        res.status(400).json({
-          status: "error",
-          message: `${message} (check nodeId / namespace configuration).`,
-        });
-        return;
+      if (typeof message === "string") {
+        if (message.includes("BadNodeId")) {
+          console.error("OPC UA node lookup failed:", message);
+          res.status(400).json({
+            status: "error",
+            message: `${message} (check nodeId / namespace configuration).`,
+          });
+          return;
+        }
+        if (message.includes("BadOutOfRange")) {
+          console.error("OPC UA array write failed:", message);
+          res.status(400).json({
+            status: "error",
+            message: `${message} (verify target array length and command count).`,
+          });
+          return;
+        }
+        if (message.includes("BadIndexRange")) {
+          console.error("OPC UA index range error:", message);
+          res.status(400).json({
+            status: "error",
+            message: `${message} (server may not support per-element writes; array written as whole value).`,
+          });
+          return;
+        }
       }
       console.error("Unexpected OPC UA error:", error);
       res.status(500).json({
@@ -636,6 +731,10 @@ start().catch((error) => {
   console.error("Failed to start OPC UA web server:", error);
   process.exit(1);
 });
+
+
+
+
 
 
 
