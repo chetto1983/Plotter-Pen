@@ -125,11 +125,13 @@
         <button id="btnExtract" class="btn primary">Estrai linee & archi</button>
         <button id="btnCopy" class="btn">Copia Testo</button>
         <button id="btnDownload" class="btn">Scarica Testo</button>
+        <button id="btnSendOpcua" class="btn">Invia a PLC</button>
       </div>
       <div class="plc-output">
         <textarea id="outText" class="visually-hidden" aria-hidden="true" readonly></textarea>
         <div id="outGrid" class="plc-grid" tabindex="0" role="listbox" aria-label="Comandi PLC"></div>
       </div>
+      <div id="opcuaStatus" class="opcua-status" role="status" aria-live="polite" hidden></div>
     </div>
   </aside>
 </main>

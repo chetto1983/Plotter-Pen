@@ -35,6 +35,8 @@ export function collectElements() {
     btnExtract: byId('btnExtract'),
     btnCopy: byId('btnCopy'),
     btnDownload: byId('btnDownload'),
+    btnSendOpcua: byId('btnSendOpcua'),
+    opcuaStatus: byId('opcuaStatus'),
     deleteInfo: byId('deleteInfo'),
     outText: byId('outText'),
     outGrid: byId('outGrid')
@@ -104,6 +106,10 @@ export function createAppState(elements) {
     },
     extraction: {
       last: null
+    },
+    opcua: {
+      isSending: false,
+      lastResult: null
     },
     hover: {
       timeoutId: null,

@@ -87,6 +87,19 @@ export function createUiController({
     infoEl.textContent = parts.join(' | ');
   }
 
+  function setOpcuaStatus(message = '', level = 'info') {
+    const statusEl = state.elements.opcuaStatus;
+    if (!statusEl) {
+      return;
+    }
+    const safeMessage = typeof message === 'string' ? message.trim() : '';
+    statusEl.hidden = !safeMessage;
+    statusEl.textContent = safeMessage;
+    statusEl.classList.remove('is-info', 'is-success', 'is-error');
+    const className = level === 'error' ? 'is-error' : level === 'success' ? 'is-success' : 'is-info';
+    statusEl.classList.add(className);
+  }
+
   function setMarkedPrimitive(primitive) {
     if (!state.deletion) {
       return;
@@ -415,7 +428,8 @@ export function createUiController({
       btnResetView,
       btnExtract,
       btnCopy,
-      btnDownload
+      btnDownload,
+      btnSendOpcua
     } = state.elements;
 
     const activateTool = (tool) => {
@@ -542,6 +556,7 @@ export function createUiController({
 
     if (btnClear) {
       btnClear.addEventListener('click', () => {
+        setOpcuaStatus('', 'info');
         state.drawing.strokes.length = 0;
         state.drawing.currentStroke = [];
         state.hover.isHovering = false;
@@ -600,6 +615,37 @@ export function createUiController({
         outputController.downloadText(text);
       });
     }
+
+    if (btnSendOpcua) {
+      btnSendOpcua.addEventListener('click', async () => {
+        if (state.opcua?.isSending) {
+          return;
+        }
+        const movements = state.extraction.last?.plc_movements;
+        if (!Array.isArray(movements) || movements.length === 0) {
+          setOpcuaStatus('Estrai i comandi PLC prima di inviare.', 'error');
+          return;
+        }
+        state.opcua.isSending = true;
+        btnSendOpcua.disabled = true;
+        setOpcuaStatus('Invio comandi al PLC...', 'info');
+        try {
+          const details = await outputController.sendToOpcUa();
+          state.opcua.lastResult = details;
+          const endpointInfo = details?.endpoint ? ` ${details.endpoint}` : '';
+          const nodeInfo = details?.node_id ? ` ${details.node_id}` : '';
+          const endpointLabel = endpointInfo ? ` Endpoint: ${endpointInfo.trim()}` : '';
+          const nodeLabel = nodeInfo ? ` Nodo: ${nodeInfo.trim()}` : '';
+          setOpcuaStatus(`Comandi inviati via OPC UA.${endpointLabel}${nodeLabel}`, 'success');
+        } catch (error) {
+          const message = error instanceof Error && error.message ? error.message : 'Errore sconosciuto';
+          setOpcuaStatus(`Errore OPC UA: ${message}`, 'error');
+        } finally {
+          state.opcua.isSending = false;
+          btnSendOpcua.disabled = false;
+        }
+      });
+    }
   }
 
   function init() {
@@ -610,6 +656,7 @@ export function createUiController({
     renderer.redrawAll();
     snapManager.updateSnapUI(null, { x: 0, y: 0 });
     outputController.setOutput('', []);
+    setOpcuaStatus('', 'info');
     hoverManager.attach();
     updateDeletionInfo();
   }

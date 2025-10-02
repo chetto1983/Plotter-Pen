@@ -110,12 +110,62 @@ export function createOutputController(state, renderer) {
     URL.revokeObjectURL(url);
   }
 
+  async function sendToOpcUa(options = {}) {
+    const last = state.extraction?.last;
+    const movements = Array.isArray(last?.plc_movements) ? last.plc_movements.filter(Boolean) : [];
+    if (movements.length === 0) {
+      throw new Error('Nessun comando PLC da inviare');
+    }
+    const commandStrings = movements
+      .map((move) => formatPlcMove(move))
+      .filter((entry) => typeof entry === 'string' && entry.trim().length > 0);
+    const text = formatPlcMovements(movements);
+    const metadata = last
+      ? {
+          units: last.units || 'mm',
+          mm_width: last.mm_width,
+          mm_height: last.mm_height,
+          px_width: last.width,
+          px_height: last.height
+        }
+      : undefined;
+    const payload = { text, commands: commandStrings };
+    if (metadata) {
+      payload.metadata = metadata;
+    }
+    if (options?.overrides && typeof options.overrides === 'object') {
+      payload.overrides = options.overrides;
+    }
+    let response;
+    try {
+      response = await fetch('/api/opcua/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    } catch (networkError) {
+      throw new Error('Connessione al servizio OPC UA non riuscita');
+    }
+    let result;
+    try {
+      result = await response.json();
+    } catch (parseError) {
+      throw new Error('Risposta OPC UA non valida');
+    }
+    if (!response.ok || result.status !== 'ok') {
+      const message = typeof result?.message === 'string' ? result.message : `Errore OPC UA (${response.status})`;
+      throw new Error(message);
+    }
+    return result.details || {};
+  }
+
   return {
     setOutput,
     renderPlcGrid,
     selectPlcCommand,
     formatPlcMovements,
     copyToClipboard,
-    downloadText
+    downloadText,
+    sendToOpcUa
   };
 }

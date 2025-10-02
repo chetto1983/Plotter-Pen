@@ -198,6 +198,27 @@ pre.output-format { white-space: pre-wrap; font-size: 12px; margin: 0; }
 }
 
 
+.opcua-status {
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(82, 168, 255, 0.25);
+  background: rgba(14, 20, 32, 0.78);
+  color: var(--muted);
+}
+.opcua-status.is-success {
+  border-color: rgba(76, 175, 80, 0.45);
+  color: #90e290;
+}
+.opcua-status.is-error {
+  border-color: rgba(240, 98, 98, 0.55);
+  color: #ff9c9c;
+}
+.opcua-status[hidden] {
+  display: none;
+}
+
 .plc-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
