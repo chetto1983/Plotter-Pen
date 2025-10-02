@@ -1,4 +1,4 @@
-﻿import fs from "node:fs/promises";
+import fs from "node:fs/promises";
 import path from "node:path";
 import net from "node:net";
 import { fileURLToPath } from "node:url";
@@ -22,8 +22,11 @@ const __dirname = path.dirname(__filename);
 const ROOT_DIR = __dirname;
 const CONFIG_PATH = path.join(ROOT_DIR, "opcua_config.json");
 const TARGET_PAGE = "plotter_pen.html";
-const HOST = "127.0.0.1";
-const DEFAULT_PORT = 8000;
+const HOST = coalesce(process.env.HOST, process.env.BIND_HOST) ?? "127.0.0.1";
+const DEFAULT_PORT = (() => {
+  const envPort = toInt(process.env.PORT);
+  return envPort && envPort > 0 && envPort < 65536 ? envPort : 8000;
+})();
 const MAX_JSON_SIZE = 1_000_000;
 const BROWSER_OPEN_DELAY_MS = 400;
 const STRING_ARRAY_TYPES = new Set(["lines", "string_array", "string[]", "list"]);
@@ -706,7 +709,8 @@ async function start() {
 
   const port = await findAvailablePort(DEFAULT_PORT);
   const server = app.listen(port, HOST, () => {
-    const url = `http://${HOST}:${port}/${TARGET_PAGE}`;
+    const urlHost = HOST === "0.0.0.0" ? "127.0.0.1" : HOST;
+    const url = `http://${urlHost}:${port}/${TARGET_PAGE}`;
     console.log(`Serving ${ROOT_DIR} on ${HOST}:${port}`);
     console.log(`Opening ${url} ...`);
     setTimeout(() => {
@@ -731,18 +735,3 @@ start().catch((error) => {
   console.error("Failed to start OPC UA web server:", error);
   process.exit(1);
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
