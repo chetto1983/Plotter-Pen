@@ -1,13 +1,20 @@
+﻿version: "2.4"
+
 services:
   plotter:
-    build: .
-    ports:
-      - "${PLOTTER_PORT:-8000}:8000"
+    image: plotter-pen:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: plotter-pen
+    restart: always
     environment:
       HOST: 0.0.0.0
       PORT: 8000
     env_file:
       - .env
+    ports:
+      - "${PLOTTER_PORT:-8000}:8000"
     volumes:
       - ./opcua_config.json:/app/opcua_config.json:ro
-    restart: unless-stopped
+    mem_limit: 512m
