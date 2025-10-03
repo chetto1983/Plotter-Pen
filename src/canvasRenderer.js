@@ -101,85 +101,51 @@ export function createCanvasRenderer(state) {
     viewCtx.restore();
   }
 
-  function normalizeArcAngles(rawStart, rawEnd, anticlockwise) {
-    let start = rawStart;
-    let end = rawEnd;
-    if (!anticlockwise) {
-      while (end <= start) {
-        end += TWO_PI;
-      }
-      if (end - start < ARC_EPSILON) {
-        end = start + TWO_PI;
-      }
-    } else {
-      while (end >= start) {
-        end -= TWO_PI;
-      }
-      if (Math.abs(end - start) < ARC_EPSILON) {
-        end = start - TWO_PI;
-      }
-    }
-    return { startAngle: start, endAngle: end };
-  }
-
-  function angleOnSweep(start, end, anticlockwise, angle) {
-    if (!Number.isFinite(angle)) {
-      return false;
-    }
-    let test = angle;
-    if (!anticlockwise) {
-      while (end <= start) {
-        end += TWO_PI;
-      }
-      while (test < start) {
-        test += TWO_PI;
-      }
-      return test <= end + ARC_EPSILON;
-    }
-    while (end >= start) {
-      end -= TWO_PI;
-    }
-    while (test > start) {
-      test -= TWO_PI;
-    }
-    return test >= end - ARC_EPSILON;
-  }
-
   function computeArcRenderData(arc) {
     if (!arc || !Number.isFinite(arc.cx) || !Number.isFinite(arc.cy) || !Number.isFinite(arc.r) || arc.r <= 0) {
       return { startAngle: 0, endAngle: 0, anticlockwise: false };
     }
 
-    const rawStart = Number.isFinite(arc.startAngle)
+    const dir = (arc.dir || 'CW').toUpperCase();
+    const hasStoredAngles = Number.isFinite(arc.startAngle) && Number.isFinite(arc.endAngle);
+
+    const startAngle = hasStoredAngles
       ? arc.startAngle
       : Math.atan2(arc.y1 - arc.cy, arc.x1 - arc.cx);
-    const rawEnd = Number.isFinite(arc.endAngle)
+    const rawEndAngle = hasStoredAngles
       ? arc.endAngle
       : Math.atan2(arc.y2 - arc.cy, arc.x2 - arc.cx);
 
-    const controlPoint = (() => {
-      const candidates = [arc.control, arc.through, arc.middle, arc.mid];
-      for (const candidate of candidates) {
-        if (candidate && Number.isFinite(candidate.x) && Number.isFinite(candidate.y)) {
-          return candidate;
+    let sweep = rawEndAngle - startAngle;
+
+    if (!hasStoredAngles) {
+      if (dir === 'CCW') {
+        while (sweep <= 0) {
+          sweep += TWO_PI;
         }
-      }
-      return null;
-    })();
-
-    const dir = (arc.dir || 'CW').toUpperCase();
-    let anticlockwise = dir === 'CCW';
-    let { startAngle, endAngle } = normalizeArcAngles(rawStart, rawEnd, anticlockwise);
-
-    if (controlPoint) {
-      const controlAngle = Math.atan2(controlPoint.y - arc.cy, controlPoint.x - arc.cx);
-      if (!angleOnSweep(startAngle, endAngle, anticlockwise, controlAngle)) {
-        anticlockwise = !anticlockwise;
-        ({ startAngle, endAngle } = normalizeArcAngles(rawStart, rawEnd, anticlockwise));
+      } else {
+        while (sweep >= 0) {
+          sweep -= TWO_PI;
+        }
       }
     }
 
-    return { startAngle, endAngle, anticlockwise };
+    const sweepMagnitudeRaw = Math.abs(sweep) % TWO_PI;
+    const sweepMagnitude = sweepMagnitudeRaw < ARC_EPSILON ? TWO_PI : sweepMagnitudeRaw;
+
+    if (dir === 'CCW') {
+      return {
+        startAngle,
+        endAngle: startAngle + sweepMagnitude,
+        anticlockwise: true
+      };
+    }
+
+    return {
+      startAngle,
+      endAngle: startAngle - sweepMagnitude,
+      anticlockwise: false
+    };
   }
 
   function computeArcMidpoint(arc, renderData) {
@@ -479,5 +445,6 @@ export function createCanvasRenderer(state) {
     withViewContext
   };
 }
+
 
 

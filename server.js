@@ -30,6 +30,7 @@ const DEFAULT_PORT = (() => {
 const MAX_JSON_SIZE = 1_000_000;
 const BROWSER_OPEN_DELAY_MS = 400;
 const STRING_ARRAY_TYPES = new Set(["lines", "string_array", "string[]", "list"]);
+const OPCUA_OPERATION_TIMEOUT_MS = 15_000;
 
 class OpcUaConfigurationError extends Error {}
 
@@ -191,6 +192,27 @@ async function buildSettings(overrides = {}) {
       )
     ) ?? undefined;
 
+  const rawOperationTimeoutMs =
+    toInt(
+      coalesce(
+        overrides.operationTimeoutMs,
+        overrides.operation_timeout_ms,
+        overrides.timeoutMs,
+        overrides.timeout_ms,
+        env.OPCUA_OPERATION_TIMEOUT_MS,
+        env.OPCUA_TIMEOUT_MS,
+        config.operationTimeoutMs,
+        config.operation_timeout_ms,
+        config.timeoutMs,
+        config.timeout_ms,
+        OPCUA_OPERATION_TIMEOUT_MS
+      )
+    ) ?? OPCUA_OPERATION_TIMEOUT_MS;
+  const operationTimeoutMs =
+    Number.isFinite(rawOperationTimeoutMs) && rawOperationTimeoutMs > 0
+      ? rawOperationTimeoutMs
+      : OPCUA_OPERATION_TIMEOUT_MS;
+
   return {
     endpoint,
     nodeId,
@@ -202,6 +224,7 @@ async function buildSettings(overrides = {}) {
     triggerResetDelayMs,
     valueType,
     arrayLength,
+    operationTimeoutMs,
   };
 }
 
@@ -375,6 +398,93 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function isOpcuaTimeoutError(error) {
+  if (!error) {
+    return false;
+  }
+  if (error.name) {
+    const name = String(error.name).toLowerCase();
+    if (name.includes("timeout") || name === "opcuatimeouterror") {
+      return true;
+    }
+  }
+  if (error.code) {
+    const code = String(error.code).toUpperCase();
+    if (
+      code === "OPCUA_TIMEOUT" ||
+      code === "ETIMEOUT" ||
+      code === "ETIMEDOUT" ||
+      code === "ESOCKETTIMEDOUT"
+    ) {
+      return true;
+    }
+  }
+  const message = typeof error.message === "string" ? error.message.toLowerCase() : "";
+  if (message.includes("timeout") || message.includes("timed out")) {
+    return true;
+  }
+  const reason = error.reason && typeof error.reason.message === "string"
+    ? error.reason.message.toLowerCase()
+    : "";
+  return reason.includes("timeout") || reason.includes("timed out");
+}
+
+function withOpcUaTimeout(fn, label, timeoutMs = OPCUA_OPERATION_TIMEOUT_MS) {
+  if (typeof fn !== "function") {
+    throw new TypeError("withOpcUaTimeout expects a function");
+  }
+  const effectiveTimeout = Number.isFinite(timeoutMs) && timeoutMs > 0
+    ? timeoutMs
+    : OPCUA_OPERATION_TIMEOUT_MS;
+  const labelText = label ? String(label) : "Operazione OPC UA";
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const timeoutError = new Error(
+      `${labelText} timed out after ${Math.ceil(effectiveTimeout / 1000)}s`
+    );
+    timeoutError.name = "OpcUaTimeoutError";
+    timeoutError.code = "OPCUA_TIMEOUT";
+    timeoutError.label = labelText;
+
+    const timer = setTimeout(() => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      reject(timeoutError);
+    }, effectiveTimeout);
+
+    let result;
+    try {
+      result = fn();
+    } catch (error) {
+      clearTimeout(timer);
+      reject(error);
+      return;
+    }
+
+    Promise.resolve(result)
+      .then((value) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        resolve(value);
+      })
+      .catch((error) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        reject(error);
+      });
+  });
+}
+
 async function sendProgramViaOpcua({ text, commands, overrides }) {
   const settings = await buildSettings(overrides);
   const { payload, effectiveCommands, truncated, padded, desiredLength } =
@@ -408,20 +518,42 @@ async function sendProgramViaOpcua({ text, commands, overrides }) {
     }
   }
 
-  const client = OPCUAClient.create({});
+  const client = OPCUAClient.create({
+    applicationName: "PlotterPenClient",
+    connectionStrategy: {
+      initialDelay: 100,
+      maxRetry: 1,
+      maxDelay: 500,
+      maxRetryDelay: 2000
+    },
+    keepPendingSessionsOnDisconnect: false
+  });
   let session;
 
   try {
-    await client.connect(settings.endpoint);
+    await withOpcUaTimeout(
+      () => client.connect(settings.endpoint),
+      "Connessione OPC UA",
+      settings.operationTimeoutMs
+    );
 
     if (settings.username) {
-      session = await client.createSession({
-        type: "userName",
-        userName: settings.username,
-        password: settings.password ?? "",
-      });
+      session = await withOpcUaTimeout(
+        () =>
+          client.createSession({
+            type: "userName",
+            userName: settings.username,
+            password: settings.password ?? "",
+          }),
+        "Creazione sessione OPC UA",
+        settings.operationTimeoutMs
+      );
     } else {
-      session = await client.createSession();
+      session = await withOpcUaTimeout(
+        () => client.createSession(),
+        "Creazione sessione OPC UA",
+        settings.operationTimeoutMs
+      );
     }
 
     let targetLines;
@@ -435,10 +567,15 @@ async function sendProgramViaOpcua({ text, commands, overrides }) {
       let currentArrayLength;
 
       try {
-        const dataValue = await session.read({
-          nodeId: mainNodeId,
-          attributeId: AttributeIds.Value,
-        });
+        const dataValue = await withOpcUaTimeout(
+          () =>
+            session.read({
+              nodeId: mainNodeId,
+              attributeId: AttributeIds.Value,
+            }),
+          "Lettura valore nodo principale",
+          settings.operationTimeoutMs
+        );
         if (statusIsGood(dataValue.statusCode)) {
           const value = dataValue.value?.value;
           if (Array.isArray(value)) {
@@ -481,9 +618,10 @@ async function sendProgramViaOpcua({ text, commands, overrides }) {
         value: targetLines,
       });
 
-      const mainStatus = await session.writeSingleNode(
-        mainNodeId,
-        arrayVariant
+      const mainStatus = await withOpcUaTimeout(
+        () => session.writeSingleNode(mainNodeId, arrayVariant),
+        "Scrittura valore principale",
+        settings.operationTimeoutMs
       );
 
       if (!statusIsGood(mainStatus)) {
@@ -494,9 +632,10 @@ async function sendProgramViaOpcua({ text, commands, overrides }) {
         );
       }
     } else {
-      const mainStatus = await session.writeSingleNode(
-        mainNodeId,
-        buildVariant(payload, settings.valueType)
+      const mainStatus = await withOpcUaTimeout(
+        () => session.writeSingleNode(mainNodeId, buildVariant(payload, settings.valueType)),
+        "Scrittura valore principale",
+        settings.operationTimeoutMs
       );
 
       if (!statusIsGood(mainStatus)) {
@@ -510,9 +649,10 @@ async function sendProgramViaOpcua({ text, commands, overrides }) {
 
     let triggered = false;
     if (triggerNodeId) {
-      const triggerStatus = await session.writeSingleNode(
-        triggerNodeId,
-        buildVariant(settings.triggerValue, "auto")
+      const triggerStatus = await withOpcUaTimeout(
+        () => session.writeSingleNode(triggerNodeId, buildVariant(settings.triggerValue, "auto")),
+        "Scrittura nodo trigger",
+        settings.operationTimeoutMs
       );
       if (!statusIsGood(triggerStatus)) {
         throw new Error(
@@ -524,9 +664,10 @@ async function sendProgramViaOpcua({ text, commands, overrides }) {
       triggered = true;
       if (settings.triggerResetDelayMs > 0) {
         await sleep(settings.triggerResetDelayMs);
-        const resetStatus = await session.writeSingleNode(
-          triggerNodeId,
-          buildVariant(settings.triggerResetValue, "auto")
+        const resetStatus = await withOpcUaTimeout(
+          () => session.writeSingleNode(triggerNodeId, buildVariant(settings.triggerResetValue, "auto")),
+          "Ripristino nodo trigger",
+          settings.operationTimeoutMs
         );
         if (!statusIsGood(resetStatus)) {
           console.warn(
@@ -549,9 +690,17 @@ async function sendProgramViaOpcua({ text, commands, overrides }) {
     };
   } finally {
     if (session) {
-      await session.close().catch(() => {});
+      await withOpcUaTimeout(
+        () => session.close(),
+        "Chiusura sessione OPC UA",
+        settings.operationTimeoutMs
+      ).catch(() => {});
     }
-    await client.disconnect().catch(() => {});
+    await withOpcUaTimeout(
+      () => client.disconnect(),
+      "Disconnessione OPC UA",
+      settings.operationTimeoutMs
+    ).catch(() => {});
   }
 }
 
@@ -689,6 +838,14 @@ async function start() {
         return;
       }
       const message = error?.message ?? "Unexpected OPC UA error.";
+      if (isOpcuaTimeoutError(error)) {
+        console.error("OPC UA timeout:", error);
+        res.status(504).json({
+          status: "error",
+          message: "Timeout while communicating with the OPC UA server. Verify the endpoint is reachable and credentials are valid.",
+        });
+        return;
+      }
       if (typeof message === "string") {
         if (message.includes("BadNodeId")) {
           console.error("OPC UA node lookup failed:", message);
@@ -751,4 +908,5 @@ start().catch((error) => {
   console.error("Failed to start OPC UA web server:", error);
   process.exit(1);
 });
+
 
