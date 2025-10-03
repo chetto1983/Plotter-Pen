@@ -2,19 +2,20 @@
 
 services:
   plotter:
-    image: plotter-pen:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: plotter-pen
     container_name: plotter-pen
     restart: always
     environment:
       HOST: 0.0.0.0
       PORT: 8000
-    env_file:
-      - .env
+      OPCUA_ENDPOINT: opc.tcp://192.168.0.1:4840
+      OPCUA_NODE_ID: ns=4;i=12
+      OPCUA_TRIGGER_NODE_ID: ns=4;i=535
+      OPCUA_TRIGGER_VALUE: "true"
+      OPCUA_TRIGGER_RESET_VALUE: "false"
+      OPCUA_TRIGGER_RESET_DELAY_MS: "250"
+      OPCUA_VALUE_TYPE: string_array
+      OPCUA_ARRAY_LENGTH: "512"
     ports:
-      - "${PLOTTER_PORT:-8000}:8000"
-    volumes:
-      - ./opcua_config.json:/app/opcua_config.json:ro
+      - "41880:8000"
     mem_limit: 512m
