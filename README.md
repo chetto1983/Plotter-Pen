@@ -34,6 +34,33 @@ npm start
 ```
 The server scans for a free port starting at `8000`, serves static files from the project directory, and attempts to open `plotter_pen.html` in your default browser. If the browser does not open automatically, visit `http://127.0.0.1:<port>/plotter_pen.html` manually.
 
+## Run with Docker
+1. Build the image:
+   ```bash
+   docker build -t plotter-pen .
+   ```
+2. Start the container, overriding any settings you need:
+   ```bash
+   docker run --rm -it \
+     -p 8000:8000 \
+     -e OPCUA_ENDPOINT=opc.tcp://192.168.0.1:4840 \
+     -e OPCUA_NODE_ID=ns=4;i=12 \
+     -v "${PWD}/opcua_config.json:/app/opcua_config.json:ro" \
+     plotter-pen
+   ```
+
+The container exposes port `8000` and honours the same environment variables used by `opcua_config.json`. Mounting the config file is optional; environment variables take precedence.
+
+## Docker Compose
+1. Create or update a `.env` file with any overrides (for example `OPCUA_ENDPOINT`, `OPCUA_NODE_ID`, `PLOTTER_PORT`).
+2. Launch the stack:
+   ```bash
+   docker compose up --build
+   ```
+3. Open the web UI at `http://127.0.0.1:8000/plotter_pen.html`.
+
+The compose service builds this repository, publishes port `8000`, and mounts `opcua_config.json` inside the container so you can edit it locally.
+
 ## Using the web UI
 1. Load `plotter_pen.html` in your browser.
 2. Enter the G-code or pen plotter commands in the editor.
@@ -66,3 +93,4 @@ curl -X POST http://127.0.0.1:8000/api/opcua/send \
 - Static assets (`plotter_pen.html`, `style.css`) live alongside `server.js`; updates are served without rebuilding.
 - The project uses ES modules. When adding new files, prefer `import`/`export` syntax.
 - Restart `npm start` after changing server-side code to pick up the latest changes.
+

@@ -1,0 +1,13 @@
+services:
+  plotter:
+    build: .
+    ports:
+      - "${PLOTTER_PORT:-8000}:8000"
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8000
+    env_file:
+      - .env
+    volumes:
+      - ./opcua_config.json:/app/opcua_config.json:ro
+    restart: unless-stopped
