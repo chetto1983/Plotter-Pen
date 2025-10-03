@@ -1,8 +1,9 @@
-﻿import { TOOL_HINTS } from "./constants.js";
+import { TOOL_HINTS } from "./constants.js";
 import { distance } from "./geometry.js";
 
 const TWO_PI = Math.PI * 2;
 const MIN_RECT_SIDE = 0.05;
+const MIN_ARC_CHORD = 0.25;
 
 const DEFAULT_ARC_BUILDER = () => ({
   phase: 'idle',
@@ -154,14 +155,34 @@ export function createToolController(state, renderer, snapManager) {
     }
     const builder = ensureArcBuilder();
     if (builder.phase === 'draggingEnd') {
+      const start = builder.start ? { x: builder.start.x, y: builder.start.y } : null;
+      if (!start) {
+        resetArcTracking();
+        renderer.redrawAll();
+        return;
+      }
+      const chord = Math.hypot(point.x - start.x, point.y - start.y);
+      if (chord < MIN_ARC_CHORD) {
+        builder.phase = 'awaitingEnd';
+        builder.end = null;
+        builder.through = null;
+        builder.geometry = null;
+        state.drawing.isDrawing = false;
+        state.drawing.startPoint = { x: start.x, y: start.y };
+        state.drawing.tempShape = null;
+        state.drawing.arcControlPoint = null;
+        state.drawing.arcControlInfo = null;
+        renderer.redrawAll();
+        return;
+      }
       builder.end = { x: point.x, y: point.y };
       builder.phase = 'adjusting';
       state.drawing.isDrawing = false;
-      state.drawing.startPoint = builder.start ? { x: builder.start.x, y: builder.start.y } : null;
+      state.drawing.startPoint = { x: start.x, y: start.y };
       state.drawing.tempShape = {
         type: 'line',
-        x1: builder.start ? builder.start.x : point.x,
-        y1: builder.start ? builder.start.y : point.y,
+        x1: start.x,
+        y1: start.y,
         x2: builder.end.x,
         y2: builder.end.y
       };
@@ -189,7 +210,6 @@ export function createToolController(state, renderer, snapManager) {
     state.drawing.startPoint = null;
     renderer.redrawAll();
   }
-
   function updateArcBuilder(rawPoint, options = {}) {
     if (state.drawing.currentTool !== 'arc') {
       return;
@@ -199,6 +219,20 @@ export function createToolController(state, renderer, snapManager) {
       return;
     }
     const builder = ensureArcBuilder();
+
+    if (builder.phase === 'awaitingEnd' && builder.start) {
+      state.drawing.tempShape = {
+        type: 'line',
+        x1: builder.start.x,
+        y1: builder.start.y,
+        x2: point.x,
+        y2: point.y
+      };
+      renderer.redrawAll();
+      renderer.drawTempShape();
+      return;
+    }
+
     if (builder.phase !== 'adjusting') {
       return;
     }
@@ -240,12 +274,14 @@ export function createToolController(state, renderer, snapManager) {
       cx: geometry.cx,
       cy: geometry.cy,
       r: geometry.r,
-      dir: geometry.dir
+      dir: geometry.dir,
+      startAngle: geometry.startAngle,
+      endAngle: geometry.endAngle,
+      control: clonePoint(through)
     };
     renderer.redrawAll();
     renderer.drawTempShape();
   }
-
   function commitArcBuilder() {
     const builder = ensureArcBuilder();
     if (!builder.start || !builder.end) {
@@ -292,6 +328,8 @@ export function createToolController(state, renderer, snapManager) {
       center: { x: builder.geometry.cx, y: builder.geometry.cy },
       radius: builder.geometry.r,
       dir: builder.geometry.dir,
+      startAngle: builder.geometry.startAngle,
+      endAngle: builder.geometry.endAngle,
       control: controlPoint,
       controlSignedDistance: signed
     };
@@ -353,6 +391,27 @@ export function createToolController(state, renderer, snapManager) {
         }
         return false;
       }
+      if (builder.phase === 'awaitingEnd' && builder.start) {
+        builder.phase = 'draggingEnd';
+        builder.end = null;
+        builder.through = null;
+        builder.geometry = null;
+        state.drawing.startPoint = { x: builder.start.x, y: builder.start.y };
+        state.drawing.isDrawing = true;
+        state.drawing.tempShape = {
+          type: 'line',
+          x1: builder.start.x,
+          y1: builder.start.y,
+          x2: point.x,
+          y2: point.y
+        };
+        state.drawing.arcPointerHistory = [{ x: builder.start.x, y: builder.start.y }, { x: point.x, y: point.y }];
+        state.drawing.arcControlPoint = null;
+        state.drawing.arcControlInfo = null;
+        renderer.redrawAll();
+        renderer.drawTempShape();
+        return true;
+      }
       builder.phase = 'draggingEnd';
       builder.start = { x: point.x, y: point.y };
       builder.end = null;
@@ -372,7 +431,6 @@ export function createToolController(state, renderer, snapManager) {
     resetArcTracking();
     return true;
   }
-
   function updateCurrentShape(currentPoint, options = {}) {
     if (!state.drawing.isDrawing || !state.drawing.startPoint) {
       return;
@@ -568,5 +626,6 @@ export function createToolController(state, renderer, snapManager) {
     updateArcBuilder
   };
 }
+
 
 
