@@ -797,7 +797,7 @@ async function start() {
       limit: MAX_JSON_SIZE,
     })
   );
-  app.use(express.static(ROOT_DIR));
+  app.use(express.static(ROOT_DIR, { index: TARGET_PAGE }));
 
   app.post("/api/opcua/send", async (req, res) => {
     try {
@@ -908,5 +908,6 @@ start().catch((error) => {
   console.error("Failed to start OPC UA web server:", error);
   process.exit(1);
 });
+
 
 
