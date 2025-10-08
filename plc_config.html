@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <title>Configurazione PLC - Sacchi Plotter Pen</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="app-shell config-shell">
+  <header class="app-header">
+    <div class="app-header-bar">
+      <button
+        type="button"
+        class="hamburger-button"
+        id="hamburgerButton"
+        aria-label="Apri menu di navigazione"
+        aria-controls="appNav"
+        aria-expanded="false"
+      >
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+      <div class="app-brand">
+        <span class="brand-title">Sacchi Plotter Pen</span>
+        <span class="brand-subtitle">Configurazione PLC</span>
+      </div>
+    </div>
+    <nav class="app-nav" id="appNav" aria-label="Navigazione principale" tabindex="-1">
+      <ul>
+        <li><a href="plotter_pen.html">Editor Disegno</a></li>
+        <li><a href="plc_config.html" aria-current="page">Configurazione PLC</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main class="config-main">
+    <section class="config-card">
+      <h2>Parametri OPC UA</h2>
+      <p class="config-helper">
+        Modifica i parametri di connessione verso il PLC e salva per aggiornare il file <code>opcua_config.json</code>.
+      </p>
+      <form id="plcConfigForm" novalidate>
+        <div class="form-grid">
+          <label for="endpoint" class="field-label">Endpoint OPC&nbsp;UA</label>
+          <input type="text" id="endpoint" name="endpoint" required placeholder="opc.tcp://host:porta" />
+
+          <label for="username" class="field-label">Username</label>
+          <input type="text" id="username" name="username" placeholder="(opzionale)" />
+
+          <label for="password" class="field-label">Password</label>
+          <input type="password" id="password" name="password" placeholder="(opzionale)" autocomplete="current-password" />
+
+          <label for="nodeId" class="field-label">Node ID target</label>
+          <input type="text" id="nodeId" name="nodeId" required placeholder="ns=4;i=12" />
+
+          <label for="triggerNodeId" class="field-label">Node ID trigger</label>
+          <input type="text" id="triggerNodeId" name="triggerNodeId" placeholder="ns=4;i=535" />
+
+          <label for="triggerResetDelayMs" class="field-label">Delay reset (ms)</label>
+          <input type="number" id="triggerResetDelayMs" name="triggerResetDelayMs" min="0" step="1" />
+
+          <label for="valueType" class="field-label">Tipo valore</label>
+          <input type="text" id="valueType" name="valueType" placeholder="string_array" />
+
+          <label for="arrayLength" class="field-label">Lunghezza array</label>
+          <input type="number" id="arrayLength" name="arrayLength" min="0" step="1" />
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn primary">Salva configurazione</button>
+          <button type="button" class="btn ghost" id="reloadConfigBtn">Ricarica</button>
+        </div>
+      </form>
+      <div id="configStatus" class="config-status" role="status" aria-live="polite" hidden></div>
+    </section>
+  </main>
+
+  <script type="module" src="src/plc-config.js"></script>
+</body>
+</html>

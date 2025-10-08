@@ -6,23 +6,48 @@ body {
   font-family: ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial;
   background: var(--bg);
   color: var(--fg);
+}
+body.drawing-shell {
+  --app-header-height: 64px;
   display: grid;
   height: 100vh;
   grid-template-rows: auto 1fr auto;
   overflow: hidden; /* Prevent body scroll */
 }
-header, footer {
+.app-header {
   padding: 12px 16px;
   background: #0b0d12;
   border-bottom: 1px solid #1c2130;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: relative;
+  z-index: 10;
 }
-header h1 {
-  margin: 0;
+.app-footer {
+  padding: 12px 16px;
+  background: #0b0d12;
+  border-top: 1px solid #1c2130;
+}
+.app-header-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.app-brand {
+  display: flex;
+  flex-direction: column;
+}
+.brand-title {
   font-size: 16px;
   font-weight: 600;
   letter-spacing: .2px;
 }
-main {
+.brand-subtitle {
+  font-size: 12px;
+  color: var(--muted);
+}
+body.drawing-shell main {
   display: grid;
   gap: 0; /* No gap for maximum space */
   grid-template-columns: 420px 1fr 320px; /* left-toolbar, canvas, sidebar */
@@ -355,3 +380,277 @@ input[type="number"]:focus {
 
 .panel-delete-info { margin-top: 16px; }
 .panel-delete-info .panel-body { padding: 10px 14px; }
+
+
+/* Navigazione condivisa */
+body.menu-open {
+  overflow: hidden;
+}
+
+.hamburger-button {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  border: 1px solid rgba(82, 168, 255, 0.32);
+  background: rgba(82, 168, 255, 0.12);
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.hamburger-button span {
+  width: 22px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.hamburger-button:focus-visible {
+  outline: 2px solid rgba(82, 168, 255, 0.75);
+  outline-offset: 3px;
+}
+
+.hamburger-button:hover {
+  background: rgba(82, 168, 255, 0.22);
+  border-color: rgba(82, 168, 255, 0.48);
+  transform: translateY(-1px);
+}
+
+.app-nav {
+  position: fixed;
+  top: var(--app-header-height, 64px);
+  left: 0;
+  width: 240px;
+  padding: 20px;
+  background: rgba(11, 17, 28, 0.98);
+  box-shadow: 0 16px 40px rgba(3, 7, 16, 0.55);
+  border-right: 1px solid rgba(82, 168, 255, 0.18);
+  transform: translateX(-110%);
+  transition: transform 0.25s ease;
+  pointer-events: none;
+  z-index: 9;
+}
+
+body.menu-open .app-nav {
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+.app-nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.app-nav a {
+  display: block;
+  padding: 10px 14px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 600;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+body.drawing-shell .app-nav a {
+  color: var(--fg);
+}
+
+body.drawing-shell .app-nav a:hover {
+  background: rgba(82, 168, 255, 0.12);
+}
+
+body.drawing-shell .app-nav a[aria-current="page"] {
+  background: rgba(82, 168, 255, 0.22);
+  color: #ffffff;
+}
+
+body.drawing-shell .hamburger-button span {
+  background: #ffffff;
+}
+
+body.config-shell {
+  --app-header-height: 72px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+body.config-shell .app-nav {
+  background: rgba(11, 17, 28, 0.98);
+  color: var(--fg);
+  box-shadow: 0 16px 40px rgba(3, 7, 16, 0.55);
+  border-right: 1px solid rgba(82, 168, 255, 0.18);
+}
+
+body.config-shell .app-nav a {
+  color: var(--fg);
+}
+
+body.config-shell .app-nav a:hover {
+  background: rgba(82, 168, 255, 0.12);
+}
+
+body.config-shell .app-nav a[aria-current="page"] {
+  background: rgba(82, 168, 255, 0.22);
+  color: #ffffff;
+}
+
+body.config-shell .config-main {
+  flex: 1;
+  padding: 24px 16px 48px;
+  display: flex;
+  justify-content: center;
+}
+
+body.config-shell .config-card {
+  max-width: 720px;
+  width: 100%;
+  background: var(--card);
+  border-radius: 16px;
+  border: 1px solid #1c2130;
+  box-shadow: 0 24px 60px rgba(4, 8, 18, 0.4);
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+body.config-shell .config-card h2 {
+  font-size: 1.25rem;
+  margin: 0;
+  color: var(--fg);
+}
+
+body.config-shell .config-helper {
+  margin: 0;
+  color: var(--muted);
+}
+
+body.config-shell .form-grid {
+  display: grid;
+  gap: 16px;
+}
+
+body.config-shell .form-grid input[type="text"],
+body.config-shell .form-grid input[type="password"],
+body.config-shell .form-grid input[type="number"] {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(82, 168, 255, 0.22);
+  font-size: 0.95rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  background: rgba(15, 21, 33, 0.85);
+  color: var(--fg);
+}
+
+body.config-shell .form-grid input:focus {
+  border-color: rgba(82, 168, 255, 0.6);
+  box-shadow: 0 0 0 2px rgba(82, 168, 255, 0.25);
+  outline: none;
+}
+
+body.config-shell .form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+body.config-shell .config-status {
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-weight: 600;
+  background: rgba(82, 168, 255, 0.12);
+  color: var(--fg);
+}
+
+body.config-shell .config-status[data-tone="success"] {
+  background: rgba(39, 174, 96, 0.18);
+  color: #21a366;
+}
+
+body.config-shell .config-status[data-tone="error"] {
+  background: rgba(217, 45, 32, 0.18);
+  color: #f07167;
+}
+
+@media (min-width: 680px) {
+  body.config-shell .form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body.config-shell .form-grid label {
+    align-self: end;
+  }
+}
+
+@media (min-width: 960px) {
+  .hamburger-button {
+    display: none;
+  }
+
+  .app-header {
+    flex-direction: row;
+    align-items: center;
+    gap: 24px;
+  }
+
+  .app-nav {
+    position: static;
+    width: auto;
+    padding: 0;
+    margin-left: auto;
+    transform: none;
+    background: transparent;
+    box-shadow: none;
+    border-right: none;
+    pointer-events: auto;
+  }
+
+  .app-nav ul {
+    flex-direction: row;
+    gap: 18px;
+    justify-content: flex-end;
+  }
+
+  .app-nav a {
+    padding: 12px 18px;
+  }
+
+  body.config-shell .app-nav {
+    padding: 0 24px;
+    background: transparent;
+    box-shadow: none;
+    border-right: none;
+    margin-left: auto;
+  }
+
+  body.config-shell .app-nav a {
+    color: var(--fg);
+  }
+
+  body.config-shell .app-nav a:hover {
+    background: rgba(82, 168, 255, 0.16);
+  }
+
+  body.config-shell .app-nav a[aria-current="page"] {
+    background: rgba(82, 168, 255, 0.22);
+    color: #ffffff;
+  }
+
+  body.config-shell .config-main {
+    padding-top: 32px;
+  }
+}

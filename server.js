@@ -31,8 +31,21 @@ const MAX_JSON_SIZE = 1_000_000;
 const BROWSER_OPEN_DELAY_MS = 400;
 const STRING_ARRAY_TYPES = new Set(["lines", "string_array", "string[]", "list"]);
 const OPCUA_OPERATION_TIMEOUT_MS = 15_000;
+const DEFAULT_OPCUA_CONFIG = {
+  endpoint: "",
+  nodeId: "",
+  username: "",
+  password: "",
+  triggerNodeId: "",
+  triggerValue: false,
+  triggerResetValue: false,
+  triggerResetDelayMs: 0,
+  valueType: "string_array",
+  arrayLength: 0,
+};
 
 class OpcUaConfigurationError extends Error {}
+class OpcUaConfigValidationError extends Error {}
 
 async function loadFileConfig() {
   try {
@@ -92,6 +105,134 @@ function toBool(value) {
     }
   }
   return undefined;
+}
+
+function toTrimmedString(value, { allowEmpty = false } = {}) {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  if (!allowEmpty && trimmed.length === 0) {
+    return undefined;
+  }
+  return trimmed;
+}
+
+function withDefaultOpcuaConfig(config = {}) {
+  if (!config || typeof config !== "object" || Array.isArray(config)) {
+    return { ...DEFAULT_OPCUA_CONFIG };
+  }
+  const result = { ...DEFAULT_OPCUA_CONFIG, ...config };
+  result.triggerValue = typeof result.triggerValue === "boolean" ? result.triggerValue : DEFAULT_OPCUA_CONFIG.triggerValue;
+  result.triggerResetValue =
+    typeof result.triggerResetValue === "boolean"
+      ? result.triggerResetValue
+      : DEFAULT_OPCUA_CONFIG.triggerResetValue;
+  const delay = toInt(result.triggerResetDelayMs);
+  result.triggerResetDelayMs = delay !== undefined && delay >= 0 ? delay : DEFAULT_OPCUA_CONFIG.triggerResetDelayMs;
+  const arrayLength = toInt(result.arrayLength);
+  result.arrayLength = arrayLength !== undefined && arrayLength >= 0 ? arrayLength : DEFAULT_OPCUA_CONFIG.arrayLength;
+  if (typeof result.valueType !== "string" || result.valueType.trim() === "") {
+    result.valueType = DEFAULT_OPCUA_CONFIG.valueType;
+  }
+  if (typeof result.username !== "string") {
+    result.username = DEFAULT_OPCUA_CONFIG.username;
+  }
+  if (typeof result.password !== "string") {
+    result.password = DEFAULT_OPCUA_CONFIG.password;
+  }
+  if (typeof result.triggerNodeId !== "string") {
+    result.triggerNodeId = DEFAULT_OPCUA_CONFIG.triggerNodeId;
+  }
+  if (typeof result.endpoint !== "string") {
+    result.endpoint = DEFAULT_OPCUA_CONFIG.endpoint;
+  }
+  if (typeof result.nodeId !== "string") {
+    result.nodeId = DEFAULT_OPCUA_CONFIG.nodeId;
+  }
+  return result;
+}
+
+function normalizeOpcuaConfigPayload(payload, current = DEFAULT_OPCUA_CONFIG) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new OpcUaConfigValidationError("Configurazione non valida: payload mancante o di tipo errato.");
+  }
+  const base = withDefaultOpcuaConfig(current);
+
+  const endpoint = coalesce(payload.endpoint);
+  if (!endpoint) {
+    throw new OpcUaConfigValidationError("Il campo 'endpoint' e' obbligatorio.");
+  }
+  base.endpoint = endpoint;
+
+  const nodeId = coalesce(payload.nodeId, payload.node_id);
+  if (!nodeId) {
+    throw new OpcUaConfigValidationError("Il campo 'nodeId' e' obbligatorio.");
+  }
+  base.nodeId = nodeId;
+
+  const username = toTrimmedString(
+    payload.username ?? base.username,
+    { allowEmpty: true }
+  );
+  base.username = username ?? "";
+
+  const password = toTrimmedString(
+    payload.password ?? base.password,
+    { allowEmpty: true }
+  );
+  base.password = password ?? "";
+
+  const triggerNodeId = toTrimmedString(
+    payload.triggerNodeId ?? payload.trigger_node_id ?? base.triggerNodeId,
+    { allowEmpty: true }
+  );
+  base.triggerNodeId = triggerNodeId ?? "";
+
+  const triggerValueRaw = payload.triggerValue ?? payload.trigger_value;
+  if (triggerValueRaw !== undefined) {
+    const triggerValue = toBool(triggerValueRaw);
+    if (triggerValue === undefined) {
+      throw new OpcUaConfigValidationError("Il campo 'triggerValue' deve essere booleano.");
+    }
+    base.triggerValue = triggerValue;
+  }
+
+  const triggerResetValueRaw = payload.triggerResetValue ?? payload.trigger_reset_value;
+  if (triggerResetValueRaw !== undefined) {
+    const triggerResetValue = toBool(triggerResetValueRaw);
+    if (triggerResetValue === undefined) {
+      throw new OpcUaConfigValidationError("Il campo 'triggerResetValue' deve essere booleano.");
+    }
+    base.triggerResetValue = triggerResetValue;
+  }
+
+  const delayRaw = payload.triggerResetDelayMs ?? payload.trigger_reset_delay_ms;
+  if (delayRaw !== undefined) {
+    const delay = toInt(delayRaw);
+    if (delay === undefined || delay < 0) {
+      throw new OpcUaConfigValidationError("Il campo 'triggerResetDelayMs' deve essere un intero maggiore o uguale a 0.");
+    }
+    base.triggerResetDelayMs = delay;
+  }
+
+  const valueType = coalesce(payload.valueType, payload.value_type);
+  if (valueType) {
+    base.valueType = valueType;
+  } else if (!base.valueType) {
+    base.valueType = DEFAULT_OPCUA_CONFIG.valueType;
+  }
+
+  const arrayLengthRaw = payload.arrayLength ?? payload.array_length;
+  if (arrayLengthRaw !== undefined) {
+    const arrayLength = toInt(arrayLengthRaw);
+    if (arrayLength === undefined || arrayLength < 0) {
+      throw new OpcUaConfigValidationError("Il campo 'arrayLength' deve essere un intero maggiore o uguale a 0.");
+    }
+    base.arrayLength = arrayLength;
+  }
+
+  return base;
 }
 
 async function buildSettings(overrides = {}) {
@@ -798,6 +939,49 @@ async function start() {
     })
   );
   app.use(express.static(ROOT_DIR, { index: TARGET_PAGE }));
+
+  app.get("/api/opcua/config", async (req, res) => {
+    try {
+      const stored = await loadFileConfig();
+      const data = withDefaultOpcuaConfig(stored);
+      res.json({
+        status: "ok",
+        data,
+      });
+    } catch (error) {
+      console.error("Errore durante la lettura della configurazione OPC UA:", error);
+      res.status(500).json({
+        status: "error",
+        message: "Impossibile leggere la configurazione OPC UA.",
+      });
+    }
+  });
+
+  app.put("/api/opcua/config", async (req, res) => {
+    try {
+      const stored = await loadFileConfig();
+      const updated = normalizeOpcuaConfigPayload(req.body ?? {}, stored);
+      const serialized = `${JSON.stringify(updated, null, 4)}\n`;
+      await fs.writeFile(CONFIG_PATH, serialized, "utf8");
+      res.json({
+        status: "ok",
+        data: updated,
+      });
+    } catch (error) {
+      if (error instanceof OpcUaConfigValidationError) {
+        res.status(400).json({
+          status: "error",
+          message: error.message,
+        });
+        return;
+      }
+      console.error("Errore durante il salvataggio della configurazione OPC UA:", error);
+      res.status(500).json({
+        status: "error",
+        message: "Impossibile salvare la configurazione OPC UA.",
+      });
+    }
+  });
 
   app.post("/api/opcua/send", async (req, res) => {
     try {

@@ -6,9 +6,32 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
-<header>
-  <h1>✏️ Sacchi Plotter Pen</h1>
+<body class="app-shell drawing-shell">
+<header class="app-header">
+  <div class="app-header-bar">
+    <button
+      type="button"
+      class="hamburger-button"
+      id="hamburgerButton"
+      aria-label="Apri menu di navigazione"
+      aria-controls="appNav"
+      aria-expanded="false"
+    >
+      <span></span>
+      <span></span>
+      <span></span>
+    </button>
+    <div class="app-brand">
+      <span class="brand-title">Sacchi Plotter Pen</span>
+      <span class="brand-subtitle">Editor Disegno</span>
+    </div>
+  </div>
+  <nav class="app-nav" id="appNav" aria-label="Navigazione principale" tabindex="-1">
+    <ul>
+      <li><a href="plotter_pen.html" aria-current="page">Editor Disegno</a></li>
+      <li><a href="plc_config.html">Configurazione PLC</a></li>
+    </ul>
+  </nav>
 </header>
 
 <main>
@@ -18,7 +41,7 @@
       <div class="panel-head">
         <span class="panel-eyebrow">Disegno</span>
         <h2 class="panel-title">Strumenti</h2>
-        <p class="panel-subtitle">Scegli la modalità di disegno</p>
+        <p class="panel-subtitle">Scegli la modalita' di disegno</p>
       </div>
       <div class="panel-body tool-buttons">
         <button id="btnFreehand" class="btn tool-btn active" data-tool="freehand">Mano libera</button>
@@ -141,7 +164,7 @@
   <div class="tooltip-content"></div>
 </div>
 
-<footer>
+<footer class="app-footer">
   Suggerimenti: disegna curve ampie per riconoscere gli archi. Parametri modificabili in alto a destra.
 </footer>
 

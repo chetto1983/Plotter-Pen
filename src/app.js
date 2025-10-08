@@ -1,3 +1,4 @@
+import initNavigation from "./navigation.js";
 import { collectElements, createAppState } from "./state.js";
 import { createSnapManager } from "./snapManager.js";
 import { createCanvasRenderer } from "./canvasRenderer.js";
@@ -10,6 +11,8 @@ import { createHoverManager } from "./hoverManager.js";
 import { createUiController } from "./uiController.js";
 
 function bootstrap() {
+  initNavigation();
+
   const elements = collectElements();
   const state = createAppState(elements);
 
