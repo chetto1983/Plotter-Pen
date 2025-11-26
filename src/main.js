@@ -1,15 +1,20 @@
 /**
  * Sacchi Plotter Pen - CAD Application
- * Main application module integrating all components
+ * Main entry point
  */
 
-import { Vector2, Point, BoundingBox, Transform2D, distance, TOLERANCE } from './geometry/core.js';
-import { Line, Arc, Circle, Rectangle, Polygon, Polyline, Primitive } from './geometry/primitives.js';
-import { ArcBuilder, ArcToolState } from './geometry/arcBuilder.js';
-import { SnapManager, CollisionDetector } from './geometry/snap.js';
-import { ToolManager, LineTool, ArcTool, CircleTool, RectangleTool, PolygonTool, parseCommandInput } from './tools/toolManager.js';
+console.log('=== main.js: starting imports ===');
+
+import { Vector2 } from './geometry/core.js';
+import { SnapManager } from './geometry/snap.js';
+import { LineTool, ArcTool, CircleTool, RectangleTool, PolygonTool } from './tools/toolManager.js';
 import { CanvasRenderer } from './ui/renderer.js';
-import { PrimitiveExtractor, PathOptimizer, PLCOutputGenerator } from './plc/extraction.js';
+import { PLCOutputGenerator } from './plc/extraction.js';
+import { InputHandler } from './app/InputHandler.js';
+import { UIController } from './app/UIController.js';
+import { StateManager } from './app/StateManager.js';
+
+console.log('=== main.js: all imports successful ===');
 
 /**
  * Main CAD Application Class
@@ -18,28 +23,22 @@ class CADApplication {
   constructor() {
     // Canvas and rendering
     this.canvas = null;
-    this.ctx = null;
     this.renderer = null;
 
     // State
     this.primitives = [];
     this.selectedPrimitives = new Set();
-    this.undoStack = [];
-    this.redoStack = [];
+    this.hoveredPrimitive = null;
+    this.highlightedPrimitive = null;
+    this.plcCommands = [];
 
-    // Tools and managers
-    this.toolManager = null;
+    // Managers
     this.snapManager = null;
-    this.collisionDetector = null;
+    this.input = null;
+    this.ui = null;
+    this.state = null;
 
-    // View state
-    this.viewOffset = new Vector2(0, 0);
-    this.viewScale = 1;
-    this.isDragging = false;
-    this.lastMousePos = new Vector2(0, 0);
-    this.currentMousePos = new Vector2(0, 0);
-
-    // Workspace settings
+    // Settings
     this.workspaceWidth = 600;
     this.workspaceHeight = 600;
     this.gridSpacing = 10;
@@ -47,9 +46,11 @@ class CADApplication {
     this.snapToGrid = false;
     this.snapToObjects = true;
 
-    // Current tool state
+    // Tool state
     this.currentTool = null;
+    this.selectMode = false;
     this.arcMode = '3point';
+    this.lastReferencePoint = { x: 0, y: 0 };
 
     // PLC output
     this.plcOutput = [];
@@ -69,527 +70,250 @@ class CADApplication {
       return;
     }
 
-    this.ctx = this.canvas.getContext('2d');
+    console.log('Canvas found:', this.canvas);
+    console.log('Canvas size:', this.canvas.clientWidth, 'x', this.canvas.clientHeight);
 
     // Initialize renderer
     this.renderer = new CanvasRenderer(this.canvas);
     this.renderer.setWorkspaceSize(this.workspaceWidth, this.workspaceHeight);
 
+    console.log('Renderer initialized, workspace:', this.workspaceWidth, 'x', this.workspaceHeight);
+
     // Initialize snap manager
     this.snapManager = new SnapManager({
-      gridSize: this.gridSpacing,
+      gridSpacing: this.gridSpacing,
       snapDistance: 10,
-      enableGrid: this.snapToGrid,
-      enableObjects: this.snapToObjects
+      gridEnabled: this.snapToGrid,
+      objectSnapEnabled: this.snapToObjects
     });
 
-    // Initialize collision detector
-    this.collisionDetector = new CollisionDetector();
+    // Initialize handlers
+    this.input = new InputHandler(this);
+    this.ui = new UIController(this);
+    this.state = new StateManager(this);
 
-    // Initialize tool manager
-    this.toolManager = new ToolManager();
+    // Setup
+    this.input.setup();
+    this.ui.setup();
 
-    // Setup event listeners
-    this.setupEventListeners();
-
-    // Setup UI bindings
-    this.setupUIBindings();
-
-    // Initial resize and render
-    this.resizeCanvas();
-    this.render();
-
-    // Update status
-    this.updateStatus('Pronto');
-  }
-
-  /**
-   * Setup canvas and input event listeners
-   */
-  setupEventListeners() {
-    // Canvas events
-    this.canvas.addEventListener('mousedown', this.handleMouseDown.bind(this));
-    this.canvas.addEventListener('mousemove', this.handleMouseMove.bind(this));
-    this.canvas.addEventListener('mouseup', this.handleMouseUp.bind(this));
-    this.canvas.addEventListener('wheel', this.handleWheel.bind(this));
-    this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-
-    // Touch events
-    this.canvas.addEventListener('touchstart', this.handleTouchStart.bind(this));
-    this.canvas.addEventListener('touchmove', this.handleTouchMove.bind(this));
-    this.canvas.addEventListener('touchend', this.handleTouchEnd.bind(this));
-
-    // Keyboard events
-    document.addEventListener('keydown', this.handleKeyDown.bind(this));
-
-    // Window resize
-    window.addEventListener('resize', this.resizeCanvas.bind(this));
-  }
-
-  /**
-   * Setup UI element bindings
-   */
-  setupUIBindings() {
-    // Tool buttons
-    document.querySelectorAll('[data-tool]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const toolName = btn.dataset.tool;
-        this.selectTool(toolName);
-      });
-    });
-
-    // Arc mode buttons
-    document.querySelectorAll('[data-arc-mode]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        this.arcMode = btn.dataset.arcMode;
-        this.selectTool('arc');
-        this.updateArcModeUI();
-      });
-    });
-
-    // Action buttons
-    document.getElementById('btnUndo')?.addEventListener('click', () => this.undo());
-    document.getElementById('btnRedo')?.addEventListener('click', () => this.redo());
-    document.getElementById('btnClear')?.addEventListener('click', () => this.clearAll());
-    document.getElementById('btnZoomIn')?.addEventListener('click', () => this.zoomIn());
-    document.getElementById('btnZoomOut')?.addEventListener('click', () => this.zoomOut());
-    document.getElementById('btnZoomFit')?.addEventListener('click', () => this.zoomFit());
-    document.getElementById('btnExtract')?.addEventListener('click', () => this.extractPLC());
-    document.getElementById('btnCopyOutput')?.addEventListener('click', () => this.copyOutput());
-    document.getElementById('btnDownloadOutput')?.addEventListener('click', () => this.downloadOutput());
-    document.getElementById('btnSendPLC')?.addEventListener('click', () => this.sendToPLC());
-
-    // Settings inputs
-    document.getElementById('workspaceWidth')?.addEventListener('change', (e) => {
-      this.workspaceWidth = parseInt(e.target.value) || 600;
-      this.renderer.setWorkspaceSize(this.workspaceWidth, this.workspaceHeight);
+    // Initial render (wait for layout to be calculated)
+    requestAnimationFrame(() => {
       this.render();
+      this.ui.updateStatus('Pronto');
     });
-
-    document.getElementById('workspaceHeight')?.addEventListener('change', (e) => {
-      this.workspaceHeight = parseInt(e.target.value) || 600;
-      this.renderer.setWorkspaceSize(this.workspaceWidth, this.workspaceHeight);
-      this.render();
-    });
-
-    document.getElementById('gridSpacing')?.addEventListener('change', (e) => {
-      this.gridSpacing = parseInt(e.target.value) || 10;
-      this.snapManager.gridSize = this.gridSpacing;
-      this.renderer.gridSpacing = this.gridSpacing;
-      this.render();
-    });
-
-    document.getElementById('showGrid')?.addEventListener('change', (e) => {
-      this.showGrid = e.target.checked;
-      this.renderer.showGrid = this.showGrid;
-      this.render();
-    });
-
-    document.getElementById('snapGrid')?.addEventListener('change', (e) => {
-      this.snapToGrid = e.target.checked;
-      this.snapManager.enableGrid = this.snapToGrid;
-    });
-
-    document.getElementById('snapObjects')?.addEventListener('change', (e) => {
-      this.snapToObjects = e.target.checked;
-      this.snapManager.enableObjects = this.snapToObjects;
-    });
-
-    // Command input
-    const commandInput = document.getElementById('commandInput');
-    commandInput?.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        this.handleCommand(commandInput.value);
-        commandInput.value = '';
-      } else if (e.key === 'Escape') {
-        this.cancelCurrentOperation();
-        commandInput.value = '';
-      }
-    });
-
-    // Shortcuts modal
-    document.getElementById('closeShortcuts')?.addEventListener('click', () => {
-      document.getElementById('shortcutsModal')?.setAttribute('hidden', '');
-    });
-  }
-
-  /**
-   * Resize canvas to fit container
-   */
-  resizeCanvas() {
-    const container = this.canvas.parentElement;
-    if (container) {
-      const rect = container.getBoundingClientRect();
-      this.canvas.width = rect.width * window.devicePixelRatio;
-      this.canvas.height = rect.height * window.devicePixelRatio;
-      this.canvas.style.width = rect.width + 'px';
-      this.canvas.style.height = rect.height + 'px';
-
-      this.renderer.resize(rect.width, rect.height);
-      this.render();
-    }
-  }
-
-  /**
-   * Convert screen coordinates to world coordinates
-   */
-  screenToWorld(screenX, screenY) {
-    const rect = this.canvas.getBoundingClientRect();
-    const x = (screenX - rect.left - this.canvas.width / (2 * window.devicePixelRatio) - this.viewOffset.x) / this.viewScale;
-    const y = -(screenY - rect.top - this.canvas.height / (2 * window.devicePixelRatio) - this.viewOffset.y) / this.viewScale;
-    return new Vector2(x, y);
-  }
-
-  /**
-   * Handle mouse down event
-   */
-  handleMouseDown(e) {
-    const worldPos = this.screenToWorld(e.clientX, e.clientY);
-
-    if (e.button === 1 || (e.button === 0 && e.altKey)) {
-      // Middle button or Alt+Left for panning
-      this.isDragging = true;
-      this.lastMousePos.set(e.clientX, e.clientY);
-      this.canvas.style.cursor = 'grabbing';
-      return;
-    }
-
-    if (e.button === 0) {
-      // Left button - tool action
-      const snappedPos = this.getSnappedPosition(worldPos);
-      this.handleToolClick(snappedPos);
-    }
-  }
-
-  /**
-   * Handle mouse move event
-   */
-  handleMouseMove(e) {
-    const worldPos = this.screenToWorld(e.clientX, e.clientY);
-    this.currentMousePos.copy(worldPos);
-
-    if (this.isDragging) {
-      // Pan view
-      const dx = e.clientX - this.lastMousePos.x;
-      const dy = e.clientY - this.lastMousePos.y;
-      this.viewOffset.x += dx;
-      this.viewOffset.y += dy;
-      this.lastMousePos.set(e.clientX, e.clientY);
-      this.renderer.setView(this.viewOffset, this.viewScale);
-      this.render();
-      return;
-    }
-
-    // Update snap position
-    const snappedPos = this.getSnappedPosition(worldPos);
-
-    // Update coordinate display
-    this.updateCoordinates(snappedPos);
-
-    // Update tool preview
-    if (this.currentTool) {
-      this.currentTool.onMouseMove(snappedPos);
-      this.render();
-    }
-  }
-
-  /**
-   * Handle mouse up event
-   */
-  handleMouseUp(e) {
-    if (this.isDragging) {
-      this.isDragging = false;
-      this.canvas.style.cursor = 'crosshair';
-    }
-  }
-
-  /**
-   * Handle mouse wheel event
-   */
-  handleWheel(e) {
-    e.preventDefault();
-
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    const newScale = Math.max(0.1, Math.min(10, this.viewScale * delta));
-
-    // Zoom towards mouse position
-    const rect = this.canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-
-    const centerX = this.canvas.width / (2 * window.devicePixelRatio);
-    const centerY = this.canvas.height / (2 * window.devicePixelRatio);
-
-    const beforeX = (mouseX - centerX - this.viewOffset.x) / this.viewScale;
-    const beforeY = (mouseY - centerY - this.viewOffset.y) / this.viewScale;
-
-    this.viewScale = newScale;
-
-    const afterX = (mouseX - centerX - this.viewOffset.x) / this.viewScale;
-    const afterY = (mouseY - centerY - this.viewOffset.y) / this.viewScale;
-
-    this.viewOffset.x += (afterX - beforeX) * this.viewScale;
-    this.viewOffset.y += (afterY - beforeY) * this.viewScale;
-
-    this.renderer.setView(this.viewOffset, this.viewScale);
-    this.updateZoomDisplay();
-    this.render();
-  }
-
-  /**
-   * Handle touch events
-   */
-  handleTouchStart(e) {
-    if (e.touches.length === 1) {
-      const touch = e.touches[0];
-      this.handleMouseDown({ clientX: touch.clientX, clientY: touch.clientY, button: 0 });
-    }
-  }
-
-  handleTouchMove(e) {
-    if (e.touches.length === 1) {
-      const touch = e.touches[0];
-      this.handleMouseMove({ clientX: touch.clientX, clientY: touch.clientY });
-    }
-  }
-
-  handleTouchEnd(e) {
-    this.handleMouseUp({ button: 0 });
-  }
-
-  /**
-   * Handle keyboard events
-   */
-  handleKeyDown(e) {
-    // Don't handle if typing in an input
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-      return;
-    }
-
-    switch (e.key.toLowerCase()) {
-      case 'l':
-        this.selectTool('line');
-        break;
-      case 'a':
-        this.selectTool('arc');
-        break;
-      case 'c':
-        this.selectTool('circle');
-        break;
-      case 'r':
-        this.selectTool('rectangle');
-        break;
-      case 'p':
-        this.selectTool('polygon');
-        break;
-      case 's':
-        this.selectTool('select');
-        break;
-      case 'delete':
-      case 'backspace':
-        this.deleteSelected();
-        break;
-      case 'escape':
-        this.cancelCurrentOperation();
-        break;
-      case 'z':
-        if (e.ctrlKey || e.metaKey) {
-          e.preventDefault();
-          if (e.shiftKey) {
-            this.redo();
-          } else {
-            this.undo();
-          }
-        }
-        break;
-      case 'y':
-        if (e.ctrlKey || e.metaKey) {
-          e.preventDefault();
-          this.redo();
-        }
-        break;
-      case 'g':
-        this.toggleGrid();
-        break;
-      case 'f':
-        this.zoomFit();
-        break;
-      case '+':
-      case '=':
-        this.zoomIn();
-        break;
-      case '-':
-        this.zoomOut();
-        break;
-      case 'f1':
-        e.preventDefault();
-        document.getElementById('shortcutsModal')?.removeAttribute('hidden');
-        break;
-    }
   }
 
   /**
    * Get snapped position for a world coordinate
    */
   getSnappedPosition(worldPos) {
-    // Update snap manager with current primitives
     this.snapManager.setPrimitives(this.primitives);
+    // snap() expects a point object, not separate x,y
+    const snapResult = this.snapManager.snap(worldPos);
 
-    // Try to snap
-    const snapResult = this.snapManager.snap(worldPos.x, worldPos.y);
-
-    if (snapResult) {
-      this.updateSnapInfo(snapResult.type);
-      return new Vector2(snapResult.x, snapResult.y);
+    // Check if snap result has a valid point
+    if (snapResult && snapResult.isValid && snapResult.point) {
+      this.ui.updateSnapInfo(snapResult.type);
+      return new Vector2(snapResult.point.x, snapResult.point.y);
     }
 
-    this.updateSnapInfo(null);
+    this.ui.updateSnapInfo(null);
     return worldPos;
   }
 
   /**
-   * Handle tool click
+   * Handle tool click (mouse down + up)
+   * @param {Object} position - Click position
+   * @param {boolean} shiftKey - Whether shift key was held
    */
-  handleToolClick(position) {
-    if (!this.currentTool) {
+  handleToolClick(position, shiftKey = false) {
+    console.log('=== handleToolClick ===', position, 'tool:', this.currentTool, 'selectMode:', this.selectMode);
+
+    // Clear PLC highlight on any canvas click
+    if (this.highlightedPrimitive) {
+      this.clearHighlight();
+    }
+
+    // Handle selection mode
+    if (this.selectMode) {
+      this.handleSelection(position, shiftKey);
       return;
     }
 
-    const result = this.currentTool.onClick(position);
+    if (!this.currentTool) {
+      console.log('No current tool selected');
+      return;
+    }
 
-    if (result && result.completed) {
-      // Tool completed a primitive
-      this.addPrimitive(result.primitive);
-      this.updateStatus(`${result.primitive.type} creato`);
+    // Tools use onMouseDown/onMouseUp pattern
+    console.log('Calling tool onMouseDown/onMouseUp');
+    this.currentTool.onMouseDown(position, null);
+    this.currentTool.onMouseUp(position, null);
+
+    this.render();
+  }
+
+  /**
+   * Handle selection at position
+   * @param {Object} position - Click position
+   * @param {boolean} addToSelection - If true, add to existing selection (Shift+Click)
+   */
+  handleSelection(position, addToSelection = false) {
+    const hitDistance = 5 / this.renderer.view.zoom; // 5 pixels in world space
+    let found = null;
+
+    // Find primitive closest to click
+    for (const prim of this.primitives) {
+      const dist = prim.distanceToPoint ? prim.distanceToPoint(position) : Infinity;
+      if (dist < hitDistance) {
+        found = prim;
+        break;
+      }
+    }
+
+    if (found) {
+      if (addToSelection) {
+        // Shift+Click: toggle this primitive in selection
+        if (this.selectedPrimitives.has(found)) {
+          this.selectedPrimitives.delete(found);
+          this.ui.updateStatus('Elemento deselezionato');
+        } else {
+          this.selectedPrimitives.add(found);
+          this.ui.updateStatus(`Selezionati: ${this.selectedPrimitives.size} elementi`);
+        }
+      } else {
+        // Normal click: replace selection
+        if (this.selectedPrimitives.has(found) && this.selectedPrimitives.size === 1) {
+          // Clicking on already selected single item - deselect
+          this.selectedPrimitives.clear();
+          this.ui.updateStatus('Elemento deselezionato');
+        } else {
+          // Select only this item
+          this.selectedPrimitives.clear();
+          this.selectedPrimitives.add(found);
+          this.ui.updateStatus(`Selezionato: ${found.type}`);
+        }
+      }
+    } else {
+      // Click on empty space - clear selection and highlight
+      this.selectedPrimitives.clear();
+      this.clearHighlight();
+      this.ui.updateStatus('Selezione cancellata');
     }
 
     this.render();
   }
 
   /**
-   * Handle command input
+   * Update hovered primitive based on mouse position
    */
-  handleCommand(input) {
-    if (!input.trim()) return;
-
-    const cmd = input.trim().toLowerCase();
-
-    // Check for tool commands
-    if (cmd === 'line' || cmd === 'l') {
-      this.selectTool('line');
-      return;
-    }
-    if (cmd === 'arc' || cmd === 'a') {
-      this.selectTool('arc');
-      return;
-    }
-    if (cmd === 'circle' || cmd === 'c') {
-      this.selectTool('circle');
-      return;
-    }
-    if (cmd === 'rectangle' || cmd === 'rect' || cmd === 'r') {
-      this.selectTool('rectangle');
-      return;
-    }
-    if (cmd === 'polygon' || cmd === 'p') {
-      this.selectTool('polygon');
+  updateHover(position) {
+    if (!this.selectMode) {
+      if (this.hoveredPrimitive) {
+        this.hoveredPrimitive = null;
+        this.renderer.setHovered(null);
+        this.canvas.style.cursor = 'crosshair';
+      }
       return;
     }
 
-    // Try to parse as coordinate input
-    const coord = parseCommandInput(input, this.currentMousePos);
-    if (coord && this.currentTool) {
-      this.handleToolClick(coord);
-      return;
+    const hitDistance = 5 / this.renderer.view.zoom; // 5 pixels in world space
+    let found = null;
+    let minDist = Infinity;
+
+    // Find closest primitive to cursor
+    for (const prim of this.primitives) {
+      const dist = prim.distanceToPoint ? prim.distanceToPoint(position) : Infinity;
+      if (dist < hitDistance && dist < minDist) {
+        found = prim;
+        minDist = dist;
+      }
     }
 
-    this.updateStatus(`Comando non riconosciuto: ${input}`);
+    if (found !== this.hoveredPrimitive) {
+      this.hoveredPrimitive = found;
+      // Convert to render format for the renderer
+      this.renderer.setHovered(found ? this.toRenderFormat(found) : null);
+      // Update cursor
+      this.canvas.style.cursor = found ? 'pointer' : 'default';
+    }
+  }
+
+  /**
+   * Get tool manager interface (provides callbacks for tools)
+   */
+  getToolManager() {
+    return {
+      addPrimitive: (primitive) => this.addPrimitive(primitive),
+      setReferencePoint: (point) => { this.lastReferencePoint = point; },
+      referencePoint: this.lastReferencePoint || { x: 0, y: 0 }
+    };
   }
 
   /**
    * Select a tool
    */
   selectTool(toolName) {
-    // Cancel current operation
+    console.log('=== selectTool ===', toolName);
     if (this.currentTool) {
       this.currentTool.cancel();
     }
 
-    // Create new tool
+    const manager = this.getToolManager();
+    console.log('Tool manager:', manager);
+
+    this.selectMode = false; // Reset select mode for all tools
+
     switch (toolName) {
       case 'line':
-        this.currentTool = new LineTool();
+        this.currentTool = new LineTool(manager);
         break;
       case 'arc':
-        this.currentTool = new ArcTool(this.arcMode);
+        this.currentTool = new ArcTool(manager);
+        if (this.arcMode) this.currentTool.setMode(this.arcMode);
         break;
       case 'circle':
-        this.currentTool = new CircleTool();
+        this.currentTool = new CircleTool(manager);
         break;
       case 'rectangle':
-        this.currentTool = new RectangleTool();
+        this.currentTool = new RectangleTool(manager);
         break;
       case 'polygon':
-        this.currentTool = new PolygonTool();
+        this.currentTool = new PolygonTool(manager);
         break;
       case 'select':
         this.currentTool = null;
+        this.selectMode = true;
         break;
       case 'delete':
         this.currentTool = null;
+        this.selectMode = false;
         this.deleteSelected();
-        return;
+        break;
       default:
         this.currentTool = null;
+        this.selectMode = false;
     }
 
-    // Update UI
-    this.updateToolUI(toolName);
-    this.updateStatus(this.currentTool ? `Strumento: ${toolName}` : 'Nessuno strumento');
+    console.log('Current tool after selection:', this.currentTool);
+    this.ui.updateToolUI(toolName);
+    if (this.selectMode) {
+      this.ui.updateStatus('Modalità selezione - clicca su una primitiva');
+    } else {
+      this.ui.updateStatus(this.currentTool ? `Strumento: ${toolName}` : 'Nessuno strumento');
+    }
     this.render();
   }
 
   /**
-   * Update tool button UI
-   */
-  updateToolUI(activeTool) {
-    document.querySelectorAll('[data-tool]').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.tool === activeTool);
-    });
-
-    const statusTool = document.getElementById('statusTool');
-    if (statusTool) {
-      statusTool.textContent = activeTool ? activeTool.charAt(0).toUpperCase() + activeTool.slice(1) : 'Nessuno';
-    }
-  }
-
-  /**
-   * Update arc mode UI
-   */
-  updateArcModeUI() {
-    document.querySelectorAll('[data-arc-mode]').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.arcMode === this.arcMode);
-    });
-  }
-
-  /**
-   * Add a primitive to the drawing
+   * Add a primitive
    */
   addPrimitive(primitive) {
-    // Save state for undo
-    this.pushUndo();
-
-    // Add primitive
+    this.state.pushState();
     this.primitives.push(primitive);
-
-    // Clear redo stack
-    this.redoStack = [];
-
-    // Update stats
-    this.updateStats();
-
-    // Render
+    this.ui.updateStats();
     this.render();
+    this.refreshPLCOutput();
   }
 
   /**
@@ -597,24 +321,18 @@ class CADApplication {
    */
   deleteSelected() {
     if (this.selectedPrimitives.size === 0) {
-      this.updateStatus('Nessun elemento selezionato');
+      this.ui.updateStatus('Nessun elemento selezionato');
       return;
     }
 
-    // Save state for undo
-    this.pushUndo();
-
-    // Remove selected primitives
+    this.state.pushState();
     this.primitives = this.primitives.filter(p => !this.selectedPrimitives.has(p));
     this.selectedPrimitives.clear();
-
-    // Clear redo stack
-    this.redoStack = [];
-
-    // Update
-    this.updateStats();
+    this.highlightedPrimitive = null;
+    this.ui.updateStats();
     this.render();
-    this.updateStatus('Elementi eliminati');
+    this.refreshPLCOutput();
+    this.ui.updateStatus('Elementi eliminati');
   }
 
   /**
@@ -623,20 +341,27 @@ class CADApplication {
   clearAll() {
     if (this.primitives.length === 0) return;
 
-    // Save state for undo
-    this.pushUndo();
-
-    // Clear
+    this.state.pushState();
     this.primitives = [];
     this.selectedPrimitives.clear();
-
-    // Clear redo stack
-    this.redoStack = [];
-
-    // Update
-    this.updateStats();
+    this.highlightedPrimitive = null;
+    this.ui.updateStats();
     this.render();
-    this.updateStatus('Area di lavoro pulita');
+    this.refreshPLCOutput();
+    this.ui.updateStatus('Area di lavoro pulita');
+  }
+
+  /**
+   * Refresh PLC output after changes
+   */
+  refreshPLCOutput() {
+    if (this.primitives.length > 0) {
+      this.extractPLC();
+    } else {
+      this.plcCommands = [];
+      this.plcOutput = [];
+      this.ui.displayPLCOutput([], this);
+    }
   }
 
   /**
@@ -648,157 +373,49 @@ class CADApplication {
       this.render();
     }
     this.selectedPrimitives.clear();
-    this.updateStatus('Operazione annullata');
+    this.highlightedPrimitive = null;
+    this.ui.updateStatus('Operazione annullata');
   }
 
   /**
-   * Push current state to undo stack
+   * Highlight a primitive from PLC command
    */
-  pushUndo() {
-    this.undoStack.push(JSON.stringify(this.primitives.map(p => p.toJSON())));
-
-    // Limit stack size
-    if (this.undoStack.length > 50) {
-      this.undoStack.shift();
-    }
-  }
-
-  /**
-   * Undo last action
-   */
-  undo() {
-    if (this.undoStack.length === 0) {
-      this.updateStatus('Nessuna azione da annullare');
-      return;
-    }
-
-    // Save current state to redo stack
-    this.redoStack.push(JSON.stringify(this.primitives.map(p => p.toJSON())));
-
-    // Restore previous state
-    const state = JSON.parse(this.undoStack.pop());
-    this.primitives = this.deserializePrimitives(state);
-    this.selectedPrimitives.clear();
-
-    // Update
-    this.updateStats();
+  highlightPrimitive(primitive) {
+    this.highlightedPrimitive = primitive;
     this.render();
-    this.updateStatus('Azione annullata');
   }
 
   /**
-   * Redo last undone action
+   * Clear primitive highlight
    */
-  redo() {
-    if (this.redoStack.length === 0) {
-      this.updateStatus('Nessuna azione da ripetere');
-      return;
+  clearHighlight() {
+    this.highlightedPrimitive = null;
+    // Also clear selection in output grid
+    const grid = document.getElementById('outputGrid');
+    if (grid) {
+      grid.querySelectorAll('.cad-output-item.selected').forEach(el => el.classList.remove('selected'));
     }
-
-    // Save current state to undo stack
-    this.undoStack.push(JSON.stringify(this.primitives.map(p => p.toJSON())));
-
-    // Restore next state
-    const state = JSON.parse(this.redoStack.pop());
-    this.primitives = this.deserializePrimitives(state);
-    this.selectedPrimitives.clear();
-
-    // Update
-    this.updateStats();
     this.render();
-    this.updateStatus('Azione ripetuta');
-  }
-
-  /**
-   * Deserialize primitives from JSON
-   */
-  deserializePrimitives(data) {
-    return data.map(item => {
-      switch (item.type) {
-        case 'line':
-          return new Line(
-            new Point(item.start.x, item.start.y),
-            new Point(item.end.x, item.end.y)
-          );
-        case 'arc':
-          const arc = new Arc(
-            new Point(item.center.x, item.center.y),
-            item.radius,
-            item.startAngle,
-            item.endAngle,
-            item.counterClockwise
-          );
-          arc.startPoint = new Point(item.startPoint.x, item.startPoint.y);
-          arc.endPoint = new Point(item.endPoint.x, item.endPoint.y);
-          return arc;
-        case 'circle':
-          return new Circle(
-            new Point(item.center.x, item.center.y),
-            item.radius
-          );
-        case 'rectangle':
-          return new Rectangle(
-            new Point(item.corner.x, item.corner.y),
-            item.width,
-            item.height
-          );
-        case 'polygon':
-          return new Polygon(item.vertices.map(v => new Point(v.x, v.y)));
-        default:
-          return null;
-      }
-    }).filter(Boolean);
   }
 
   /**
    * Zoom controls
    */
   zoomIn() {
-    this.viewScale = Math.min(10, this.viewScale * 1.2);
-    this.renderer.setView(this.viewOffset, this.viewScale);
-    this.updateZoomDisplay();
-    this.render();
+    const newZoom = Math.min(10, this.renderer.view.zoom * 1.2);
+    this.renderer.setZoom(newZoom);
+    this.ui.updateZoomDisplay();
   }
 
   zoomOut() {
-    this.viewScale = Math.max(0.1, this.viewScale / 1.2);
-    this.renderer.setView(this.viewOffset, this.viewScale);
-    this.updateZoomDisplay();
-    this.render();
+    const newZoom = Math.max(0.1, this.renderer.view.zoom / 1.2);
+    this.renderer.setZoom(newZoom);
+    this.ui.updateZoomDisplay();
   }
 
   zoomFit() {
-    if (this.primitives.length === 0) {
-      this.viewScale = 1;
-      this.viewOffset.set(0, 0);
-    } else {
-      // Calculate bounding box of all primitives
-      const bb = new BoundingBox();
-      for (const p of this.primitives) {
-        bb.expandByBox(p.getBoundingBox());
-      }
-
-      // Add padding
-      bb.expand(20);
-
-      // Calculate scale to fit
-      const canvasWidth = this.canvas.width / window.devicePixelRatio;
-      const canvasHeight = this.canvas.height / window.devicePixelRatio;
-
-      const scaleX = canvasWidth / bb.width;
-      const scaleY = canvasHeight / bb.height;
-      this.viewScale = Math.min(scaleX, scaleY) * 0.9;
-
-      // Center view
-      this.viewOffset.set(
-        -bb.center.x * this.viewScale,
-        bb.center.y * this.viewScale
-      );
-    }
-
-    this.renderer.setView(this.viewOffset, this.viewScale);
-    this.updateZoomDisplay();
-    this.render();
+    this.renderer.resetView();
+    this.ui.updateZoomDisplay();
   }
 
   /**
@@ -806,7 +423,7 @@ class CADApplication {
    */
   toggleGrid() {
     this.showGrid = !this.showGrid;
-    this.renderer.showGrid = this.showGrid;
+    this.renderer.grid.show = this.showGrid;
 
     const checkbox = document.getElementById('showGrid');
     if (checkbox) checkbox.checked = this.showGrid;
@@ -819,50 +436,80 @@ class CADApplication {
    */
   extractPLC() {
     if (this.primitives.length === 0) {
-      this.updateStatus('Nessuna primitiva da estrarre');
+      this.ui.updateStatus('Nessuna primitiva da estrarre');
       return;
     }
 
-    // Extract and optimize
-    const extractor = new PrimitiveExtractor();
-    const extracted = this.primitives.map(p => extractor.extractPrimitive(p));
-
-    const optimizer = new PathOptimizer();
-    const optimized = optimizer.optimize(extracted);
-
-    // Generate PLC output
-    const generator = new PLCOutputGenerator();
-    this.plcOutput = generator.generateCommands(optimized);
-
-    // Update output display
-    this.displayPLCOutput();
-
-    this.updateStats();
-    this.updateStatus(`Estratte ${this.plcOutput.length} istruzioni PLC`);
-  }
-
-  /**
-   * Display PLC output in grid
-   */
-  displayPLCOutput() {
-    const grid = document.getElementById('outputGrid');
-    if (!grid) return;
-
-    if (this.plcOutput.length === 0) {
-      grid.innerHTML = '<div class="cad-output-empty">Estrai le primitive per generare i comandi PLC</div>';
-      return;
-    }
-
-    grid.innerHTML = this.plcOutput.map((cmd, i) =>
-      `<div class="cad-output-item" data-index="${i}">${cmd}</div>`
-    ).join('');
-
-    // Add click handlers for selection
-    grid.querySelectorAll('.cad-output-item').forEach(item => {
-      item.addEventListener('click', () => {
-        item.classList.toggle('selected');
-      });
+    // Add PLC data to primitives if not present
+    const primitivesWithData = this.primitives.map(p => {
+      if (!p.plcData) {
+        if (p.type === 'line') {
+          p.plcData = { type: 1, x1: p.x1, y1: p.y1, x2: p.x2, y2: p.y2 };
+        } else if (p.type === 'arc') {
+          p.plcData = {
+            type: p.isClockwise ? 2 : 3,
+            x1: p.x1, y1: p.y1, x2: p.x2, y2: p.y2,
+            cx: p.cx, cy: p.cy, r: p.radius
+          };
+        } else if (p.type === 'circle') {
+          // Circle is an arc from 0 to 360 degrees
+          p.plcData = {
+            type: 3, // CCW full circle
+            x1: p.center.x + p.radius, y1: p.center.y,
+            x2: p.center.x + p.radius, y2: p.center.y,
+            cx: p.center.x, cy: p.center.y, r: p.radius
+          };
+        } else if (p.type === 'rectangle') {
+          // Rectangle becomes 4 lines - handle separately
+          p.plcData = { type: 'rectangle', x: p.x, y: p.y, width: p.width, height: p.height };
+        }
+      }
+      return p;
     });
+
+    // Expand rectangles and polygons to lines
+    const expandedPrimitives = [];
+    for (const p of primitivesWithData) {
+      if (p.type === 'rectangle') {
+        // Create 4 lines for rectangle
+        const x = p.x, y = p.y, w = p.width, h = p.height;
+        expandedPrimitives.push(
+          { type: 'line', x1: x, y1: y, x2: x + w, y2: y, plcData: { type: 1, x1: x, y1: y, x2: x + w, y2: y } },
+          { type: 'line', x1: x + w, y1: y, x2: x + w, y2: y + h, plcData: { type: 1, x1: x + w, y1: y, x2: x + w, y2: y + h } },
+          { type: 'line', x1: x + w, y1: y + h, x2: x, y2: y + h, plcData: { type: 1, x1: x + w, y1: y + h, x2: x, y2: y + h } },
+          { type: 'line', x1: x, y1: y + h, x2: x, y2: y, plcData: { type: 1, x1: x, y1: y + h, x2: x, y2: y } }
+        );
+      } else if (p.type === 'polygon' && p.points && p.points.length > 1) {
+        // Create lines for polygon edges
+        for (let i = 0; i < p.points.length - 1; i++) {
+          const p1 = p.points[i], p2 = p.points[i + 1];
+          expandedPrimitives.push({
+            type: 'line', x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y,
+            plcData: { type: 1, x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y }
+          });
+        }
+        // Close polygon if closed
+        if (p.closed && p.points.length > 2) {
+          const first = p.points[0], last = p.points[p.points.length - 1];
+          expandedPrimitives.push({
+            type: 'line', x1: last.x, y1: last.y, x2: first.x, y2: first.y,
+            plcData: { type: 1, x1: last.x, y1: last.y, x2: first.x, y2: first.y }
+          });
+        }
+      } else if (p.type === 'line' || p.type === 'arc' || p.type === 'circle') {
+        expandedPrimitives.push(p);
+      }
+    }
+
+    // Generate PLC commands (skip path optimization as it requires full primitive objects)
+    const generator = new PLCOutputGenerator();
+    const commands = generator.generate(expandedPrimitives);
+    this.plcCommands = commands; // Store full commands with primitive references
+    this.plcOutput = commands.map(c => c.command);
+
+    this.ui.displayPLCOutput(this.plcCommands, this);
+    this.ui.updateStats();
+    this.ui.updateStatus(`Estratte ${this.plcOutput.length} istruzioni PLC`);
   }
 
   /**
@@ -870,15 +517,15 @@ class CADApplication {
    */
   async copyOutput() {
     if (this.plcOutput.length === 0) {
-      this.updateStatus('Nessun output da copiare');
+      this.ui.updateStatus('Nessun output da copiare');
       return;
     }
 
     try {
       await navigator.clipboard.writeText(this.plcOutput.join('\n'));
-      this.updateStatus('Output copiato negli appunti');
+      this.ui.updateStatus('Output copiato negli appunti');
     } catch (err) {
-      this.updateStatus('Errore nella copia');
+      this.ui.updateStatus('Errore nella copia');
     }
   }
 
@@ -887,7 +534,7 @@ class CADApplication {
    */
   downloadOutput() {
     if (this.plcOutput.length === 0) {
-      this.updateStatus('Nessun output da scaricare');
+      this.ui.updateStatus('Nessun output da scaricare');
       return;
     }
 
@@ -899,7 +546,7 @@ class CADApplication {
     a.click();
     URL.revokeObjectURL(url);
 
-    this.updateStatus('File scaricato');
+    this.ui.updateStatus('File scaricato');
   }
 
   /**
@@ -907,17 +554,13 @@ class CADApplication {
    */
   async sendToPLC() {
     if (this.plcOutput.length === 0) {
-      this.updateStatus('Nessun output da inviare');
+      this.ui.updateStatus('Nessun output da inviare');
       return;
     }
 
-    const statusEl = document.getElementById('opcuaStatus');
+    this.ui.updateOPCUAStatus('Invio in corso...', 'info');
 
     try {
-      statusEl.textContent = 'Invio in corso...';
-      statusEl.className = 'cad-opcua-status';
-
-      // This would be the actual OPC UA call
       const response = await fetch('/api/opcua/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -925,73 +568,14 @@ class CADApplication {
       });
 
       if (response.ok) {
-        statusEl.textContent = 'Inviato con successo';
-        statusEl.className = 'cad-opcua-status connected';
-        this.updateStatus('Comandi inviati al PLC');
+        this.ui.updateOPCUAStatus('Inviato con successo', 'success');
+        this.ui.updateStatus('Comandi inviati al PLC');
       } else {
         throw new Error('Errore nella risposta');
       }
     } catch (err) {
-      statusEl.textContent = `Errore: ${err.message}`;
-      statusEl.className = 'cad-opcua-status error';
-      this.updateStatus('Errore invio PLC');
-    }
-  }
-
-  /**
-   * Update UI elements
-   */
-  updateCoordinates(pos) {
-    const coordX = document.getElementById('coordX');
-    const coordY = document.getElementById('coordY');
-    const statusX = document.getElementById('statusX');
-    const statusY = document.getElementById('statusY');
-
-    if (coordX) coordX.textContent = pos.x.toFixed(2);
-    if (coordY) coordY.textContent = pos.y.toFixed(2);
-    if (statusX) statusX.textContent = `X: ${pos.x.toFixed(2)}`;
-    if (statusY) statusY.textContent = `Y: ${pos.y.toFixed(2)}`;
-  }
-
-  updateSnapInfo(snapType) {
-    const snapInfo = document.getElementById('snapInfo');
-    if (snapInfo) {
-      const typeLabels = {
-        endpoint: 'Fine',
-        midpoint: 'Medio',
-        center: 'Centro',
-        intersection: 'Intersezione',
-        grid: 'Griglia'
-      };
-      snapInfo.querySelector('.cad-snap-type').textContent = typeLabels[snapType] || '-';
-    }
-  }
-
-  updateZoomDisplay() {
-    const statusZoom = document.getElementById('statusZoom');
-    if (statusZoom) {
-      statusZoom.textContent = `${Math.round(this.viewScale * 100)}%`;
-    }
-  }
-
-  updateStats() {
-    const lines = this.primitives.filter(p => p.type === 'line').length;
-    const arcs = this.primitives.filter(p => p.type === 'arc' || p.type === 'circle').length;
-
-    document.getElementById('statLines')?.textContent = lines;
-    document.getElementById('statArcs')?.textContent = arcs;
-    document.getElementById('statTotal')?.textContent = this.primitives.length;
-  }
-
-  updateStatus(message) {
-    const statusMessage = document.getElementById('statusMessage');
-    if (statusMessage) {
-      statusMessage.textContent = message;
-    }
-
-    const commandHint = document.getElementById('commandHint');
-    if (commandHint && this.currentTool) {
-      commandHint.textContent = this.currentTool.getHint?.() || message;
+      this.ui.updateOPCUAStatus(`Errore: ${err.message}`, 'error');
+      this.ui.updateStatus('Errore invio PLC');
     }
   }
 
@@ -999,34 +583,126 @@ class CADApplication {
    * Render the canvas
    */
   render() {
-    this.renderer.clear();
+    // Update renderer state
+    this.renderer.grid.show = this.showGrid;
+    this.renderer.grid.spacing = this.gridSpacing;
 
-    // Draw workspace background
-    this.renderer.drawWorkspace();
+    // Convert primitives to renderer format
+    this.renderer.primitives = this.primitives.map(p => this.toRenderFormat(p));
 
-    // Draw grid if enabled
-    if (this.showGrid) {
-      this.renderer.drawGrid();
-    }
-
-    // Draw primitives
-    for (const primitive of this.primitives) {
-      const isSelected = this.selectedPrimitives.has(primitive);
-      this.renderer.drawPrimitive(primitive, isSelected);
-    }
-
-    // Draw tool preview
+    // Set preview
     if (this.currentTool && this.currentTool.getPreview) {
       const preview = this.currentTool.getPreview();
-      if (preview) {
-        this.renderer.drawPreview(preview);
-      }
+      this.renderer.preview = preview ? this.previewToRenderFormat(preview) : null;
+    } else {
+      this.renderer.preview = null;
     }
 
-    // Draw snap indicator
+    // Render
+    this.renderer.render();
+
+    // Draw highlighted primitive from PLC command (if not already in main primitives)
+    if (this.highlightedPrimitive) {
+      this.renderer.drawHighlightedPrimitive(this.highlightedPrimitive);
+    }
+
+    // Draw snap indicator with CAD-style icon
     const snapResult = this.snapManager.lastSnapResult;
-    if (snapResult) {
-      this.renderer.drawSnapIndicator(snapResult);
+    if (snapResult && snapResult.isValid && snapResult.point) {
+      this.renderer.drawSnapIndicator(
+        { x: snapResult.point.x, y: snapResult.point.y },
+        snapResult.type
+      );
+    }
+  }
+
+  /**
+   * Convert primitive to renderer format
+   */
+  toRenderFormat(p) {
+    const isHighlighted = this.highlightedPrimitive === p ||
+      (this.highlightedPrimitive &&
+       this.highlightedPrimitive.x1 === p.x1 &&
+       this.highlightedPrimitive.y1 === p.y1 &&
+       this.highlightedPrimitive.x2 === p.x2 &&
+       this.highlightedPrimitive.y2 === p.y2);
+    const base = { visible: true, type: p.type, selected: this.selectedPrimitives.has(p), highlighted: isHighlighted };
+
+    switch (p.type) {
+      case 'line':
+        // Line class uses a and b for endpoints, with x1/y1/x2/y2 getters
+        return { ...base, x1: p.x1, y1: p.y1, x2: p.x2, y2: p.y2 };
+      case 'arc':
+        // Arc class uses c for center, a for start, b for end
+        return {
+          ...base,
+          cx: p.cx, cy: p.cy, r: p.radius,
+          x1: p.x1, y1: p.y1,
+          x2: p.x2, y2: p.y2,
+          startAngle: p.startAngle, endAngle: p.endAngle,
+          isClockwise: p.isClockwise,
+          getRenderData: () => ({
+            cx: p.cx, cy: p.cy, r: p.radius,
+            startAngle: p.startAngle, endAngle: p.endAngle,
+            anticlockwise: !p.isClockwise
+          })
+        };
+      case 'circle':
+        return { ...base, cx: p.center.x, cy: p.center.y, radius: p.radius };
+      case 'rectangle':
+        // Rectangle class has x, y, width, height directly
+        return { ...base, x: p.x, y: p.y, width: p.width, height: p.height };
+      case 'polygon':
+        // Polygon class uses points, not vertices
+        return { ...base, points: p.points, closed: p.closed };
+      default:
+        return base;
+    }
+  }
+
+  /**
+   * Convert preview to renderer format
+   * Preview comes from tools and uses different format than primitives
+   */
+  previewToRenderFormat(preview) {
+    if (!preview) return null;
+
+    switch (preview.type) {
+      case 'line':
+        // LineTool provides: { type: 'line', x1, y1, x2, y2 }
+        return { type: 'line', x1: preview.x1, y1: preview.y1, x2: preview.x2, y2: preview.y2 };
+      case 'arc':
+        if (preview.arc) {
+          // Arc from ArcTool - use Arc class properties
+          const arc = preview.arc;
+          return {
+            type: 'arc',
+            arc: {
+              cx: arc.cx, cy: arc.cy, r: arc.radius,
+              x1: arc.x1, y1: arc.y1,
+              x2: arc.x2, y2: arc.y2,
+              startAngle: arc.startAngle, endAngle: arc.endAngle,
+              isClockwise: arc.isClockwise,
+              getRenderData: () => ({
+                cx: arc.cx, cy: arc.cy, r: arc.radius,
+                startAngle: arc.startAngle, endAngle: arc.endAngle,
+                anticlockwise: !arc.isClockwise
+              })
+            }
+          };
+        }
+        return preview;
+      case 'circle':
+        // CircleTool provides: { type: 'circle', cx, cy, r }
+        return { type: 'circle', cx: preview.cx, cy: preview.cy, r: preview.r };
+      case 'rectangle':
+        // RectangleTool provides: { type: 'rectangle', x, y, width, height }
+        return { type: 'rectangle', x: preview.x, y: preview.y, width: preview.width, height: preview.height };
+      case 'polygon':
+        // PolygonTool provides: { type: 'polygon', points, closed }
+        return { type: 'polygon', points: preview.points };
+      default:
+        return preview;
     }
   }
 }
@@ -1036,5 +712,4 @@ document.addEventListener('DOMContentLoaded', () => {
   window.cadApp = new CADApplication();
 });
 
-// Export for module usage
 export { CADApplication };

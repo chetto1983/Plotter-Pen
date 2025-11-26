@@ -70,6 +70,9 @@ export class SnapManager {
 
     // Reference to primitives collection
     this.primitives = [];
+
+    // Last snap result for rendering
+    this.lastSnapResult = null;
   }
 
   /**
@@ -156,10 +159,12 @@ export class SnapManager {
 
     // Return closest snap
     if (results.length === 0) {
+      this.lastSnapResult = null;
       return new SnapResult();
     }
 
     results.sort((a, b) => a.distance - b.distance);
+    this.lastSnapResult = results[0];
     return results[0];
   }
 

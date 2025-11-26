@@ -520,7 +520,7 @@ export class Arc extends Primitive {
       r: this.radius,
       startAngle: startNorm,
       endAngle: isFullCircle ? startNorm + TWO_PI : normalizeAngle(this._endAngle),
-      anticlockwise: this._sweep < 0
+      anticlockwise: this._sweep >= 0  // CCW when sweep is positive
     };
   }
 

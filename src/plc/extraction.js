@@ -490,24 +490,73 @@ export class PathOptimizer {
 
 /**
  * PLC Output Generator - Generate PLC command strings
+ * Generates human-readable PLC commands for plotter
  */
 export class PLCOutputGenerator {
   constructor(config = {}) {
-    this.precision = config.precision ?? 2;
-    this.separator = config.separator ?? ';';
-    this.includeIndex = config.includeIndex ?? true;
+    this.precision = config.precision ?? 3;
+    this.includeZMovements = config.includeZMovements ?? true;
   }
 
   /**
-   * Generate PLC commands from primitives
+   * Generate PLC commands from primitives with Z movements
    */
   generate(primitives) {
     const commands = [];
+    let lastPoint = { x: 0, y: 0 };
 
     for (let i = 0; i < primitives.length; i++) {
       const prim = primitives[i];
-      const cmd = this.primitiveToCommand(prim, i);
-      if (cmd) commands.push(cmd);
+      const data = prim.plcData || {};
+      const x1 = data.x1 ?? prim.x1;
+      const y1 = data.y1 ?? prim.y1;
+
+      // Check if we need a jump to the start point
+      const needsJump = Math.abs(lastPoint.x - x1) > 0.01 || Math.abs(lastPoint.y - y1) > 0.01;
+
+      if (needsJump && this.includeZMovements) {
+        // Pen up
+        commands.push({
+          index: commands.length,
+          type: 'Z_up',
+          command: 'Z_UP',
+          primitive: null
+        });
+
+        // Jump to start point
+        commands.push({
+          index: commands.length,
+          type: 'waypoint',
+          command: `J X ${x1.toFixed(this.precision)}, Y ${y1.toFixed(this.precision)}, Z 1`,
+          primitive: null
+        });
+
+        // Pen down
+        commands.push({
+          index: commands.length,
+          type: 'Z_down',
+          command: 'Z_DW',
+          primitive: null
+        });
+      }
+
+      // Add the drawing command
+      const cmd = this.primitiveToCommand(prim, commands.length);
+      if (cmd) {
+        commands.push(cmd);
+        // Update last point to end of this primitive
+        lastPoint = { x: data.x2 ?? prim.x2, y: data.y2 ?? prim.y2 };
+      }
+    }
+
+    // Final pen up
+    if (this.includeZMovements && commands.length > 0) {
+      commands.push({
+        index: commands.length,
+        type: 'Z_up',
+        command: 'Z_UP',
+        primitive: null
+      });
     }
 
     return commands;
@@ -520,32 +569,24 @@ export class PLCOutputGenerator {
     const data = primitive.plcData || {};
     const fmt = (v) => v.toFixed(this.precision);
 
-    let cmdParts = [];
-
-    if (this.includeIndex) {
-      cmdParts.push(index + 1);
-    }
+    let command = '';
 
     if (primitive.type === 'line') {
-      cmdParts.push(
-        PLC_TYPES.LINE,
-        fmt(data.x1 ?? primitive.x1),
-        fmt(data.y1 ?? primitive.y1),
-        fmt(data.x2 ?? primitive.x2),
-        fmt(data.y2 ?? primitive.y2)
-      );
+      const x2 = data.x2 ?? primitive.x2;
+      const y2 = data.y2 ?? primitive.y2;
+      command = `L X ${fmt(x2)}, Y ${fmt(y2)}`;
     } else if (primitive.type === 'arc') {
-      const type = primitive.isClockwise ? PLC_TYPES.ARC_CW : PLC_TYPES.ARC_CCW;
-      cmdParts.push(
-        type,
-        fmt(data.x1 ?? primitive.x1),
-        fmt(data.y1 ?? primitive.y1),
-        fmt(data.x2 ?? primitive.x2),
-        fmt(data.y2 ?? primitive.y2),
-        fmt(data.cx ?? primitive.cx),
-        fmt(data.cy ?? primitive.cy),
-        fmt(data.r ?? primitive.radius)
-      );
+      const x2 = data.x2 ?? primitive.x2;
+      const y2 = data.y2 ?? primitive.y2;
+      const r = data.r ?? primitive.radius;
+      const dir = primitive.isClockwise ? 'CW' : 'CCW';
+      command = `A X ${fmt(x2)}, Y ${fmt(y2)}, R ${fmt(r)}, DIR ${dir}`;
+    } else if (primitive.type === 'circle') {
+      // Circle is drawn as a full arc
+      const cx = data.cx ?? primitive.cx;
+      const cy = data.cy ?? primitive.cy;
+      const r = data.r ?? primitive.radius;
+      command = `C X ${fmt(cx)}, Y ${fmt(cy)}, R ${fmt(r)}`;
     } else {
       return null;
     }
@@ -553,7 +594,7 @@ export class PLCOutputGenerator {
     return {
       index: index,
       type: primitive.type,
-      command: cmdParts.join(this.separator),
+      command: command,
       primitive: primitive
     };
   }
@@ -570,29 +611,56 @@ export class PLCOutputGenerator {
    * Parse command string back to primitive data
    */
   parseCommand(commandString) {
-    const parts = commandString.split(this.separator);
+    const cmd = commandString.trim();
 
-    if (parts.length < 5) return null;
+    if (cmd === 'Z_UP') {
+      return { type: 'Z_up' };
+    }
+    if (cmd === 'Z_DW') {
+      return { type: 'Z_down' };
+    }
 
-    const hasIndex = this.includeIndex;
-    const offset = hasIndex ? 1 : 0;
+    // Parse waypoint: J X 100.000, Y 200.000, Z 1
+    const waypointMatch = cmd.match(/^J\s+X\s+([\d.-]+),\s*Y\s+([\d.-]+),\s*Z\s+([\d.-]+)$/);
+    if (waypointMatch) {
+      return {
+        type: 'waypoint',
+        x: parseFloat(waypointMatch[1]),
+        y: parseFloat(waypointMatch[2]),
+        z: parseFloat(waypointMatch[3])
+      };
+    }
 
-    const type = parseInt(parts[offset]);
-    const x1 = parseFloat(parts[offset + 1]);
-    const y1 = parseFloat(parts[offset + 2]);
-    const x2 = parseFloat(parts[offset + 3]);
-    const y2 = parseFloat(parts[offset + 4]);
+    // Parse line: L X 100.000, Y 200.000
+    const lineMatch = cmd.match(/^L\s+X\s+([\d.-]+),\s*Y\s+([\d.-]+)$/);
+    if (lineMatch) {
+      return {
+        type: 'line',
+        x2: parseFloat(lineMatch[1]),
+        y2: parseFloat(lineMatch[2])
+      };
+    }
 
-    if (type === PLC_TYPES.LINE) {
-      return { type: 'line', x1, y1, x2, y2 };
-    } else if (type === PLC_TYPES.ARC_CW || type === PLC_TYPES.ARC_CCW) {
-      const cx = parseFloat(parts[offset + 5]);
-      const cy = parseFloat(parts[offset + 6]);
-      const r = parseFloat(parts[offset + 7]);
+    // Parse arc: A X 100.000, Y 200.000, R 50.000, DIR CW
+    const arcMatch = cmd.match(/^A\s+X\s+([\d.-]+),\s*Y\s+([\d.-]+),\s*R\s+([\d.-]+),\s*DIR\s+(CW|CCW)$/);
+    if (arcMatch) {
       return {
         type: 'arc',
-        x1, y1, x2, y2, cx, cy, r,
-        dir: type === PLC_TYPES.ARC_CW ? 'CW' : 'CCW'
+        x2: parseFloat(arcMatch[1]),
+        y2: parseFloat(arcMatch[2]),
+        r: parseFloat(arcMatch[3]),
+        dir: arcMatch[4]
+      };
+    }
+
+    // Parse circle: C X 100.000, Y 200.000, R 50.000
+    const circleMatch = cmd.match(/^C\s+X\s+([\d.-]+),\s*Y\s+([\d.-]+),\s*R\s+([\d.-]+)$/);
+    if (circleMatch) {
+      return {
+        type: 'circle',
+        cx: parseFloat(circleMatch[1]),
+        cy: parseFloat(circleMatch[2]),
+        r: parseFloat(circleMatch[3])
       };
     }
 

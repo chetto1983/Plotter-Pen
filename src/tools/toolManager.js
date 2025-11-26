@@ -104,6 +104,13 @@ export class Tool {
    * Commit the current shape
    */
   commit() { }
+
+  /**
+   * Get current preview for rendering
+   */
+  getPreview() {
+    return this.preview;
+  }
 }
 
 /**
@@ -158,12 +165,14 @@ export class LineTool extends Tool {
         point.x, point.y
       );
 
+      // Only create and reset if line has meaningful length
+      // This allows click-click workflow (first click sets start, second click sets end)
       if (line.length > 0.1) {
         this.manager.addPrimitive(line);
         this.manager.setReferencePoint(point);
+        this.reset();
       }
-
-      this.reset();
+      // If points are same/too close, stay in POINT1 phase waiting for second click
     }
   }
 
@@ -326,12 +335,13 @@ export class CircleTool extends Tool {
         Math.pow(point.y - this.center.y, 2)
       );
 
+      // Only create and reset if radius is meaningful
       if (radius > 0.1) {
         const circle = new Circle(this.center.x, this.center.y, radius);
         this.manager.addPrimitive(circle);
+        this.reset();
       }
-
-      this.reset();
+      // If radius too small, stay in POINT1 waiting for second click
     }
   }
 
@@ -407,11 +417,12 @@ export class RectangleTool extends Tool {
     if (this.phase === TOOL_PHASES.POINT1 && this.corner1) {
       const rect = Rectangle.fromCorners(this.corner1, point);
 
+      // Only create and reset if rectangle has meaningful size
       if (rect.width > 0.1 && rect.height > 0.1) {
         this.manager.addPrimitive(rect);
+        this.reset();
       }
-
-      this.reset();
+      // If too small, stay in POINT1 waiting for second click
     }
   }
 
@@ -530,7 +541,7 @@ export class PolygonTool extends Tool {
  */
 const VECTOR_PATTERN = /^(@)?(.+)(,|<)(.+)$/;
 
-function parseNumber(str) {
+export function parseNumber(str) {
   try {
     const val = parseFloat(str);
     if (isNaN(val)) return 'Numero non valido: ' + str;
@@ -540,7 +551,7 @@ function parseNumber(str) {
   }
 }
 
-function parseVector(referencePoint, command) {
+export function parseVector(referencePoint, command) {
   command = command.replace(/\s+/g, '');
 
   const match = command.match(VECTOR_PATTERN);
@@ -569,6 +580,16 @@ function parseVector(referencePoint, command) {
   }
 
   return { error: 'Formato non valido. Usa: x,y | @x,y | r<angolo | @r<angolo' };
+}
+
+/**
+ * Parse command input and return coordinates or null
+ * Used by UIController for coordinate input
+ */
+export function parseCommandInput(input, referencePoint) {
+  const result = parseVector(referencePoint || { x: 0, y: 0 }, input);
+  if (result.error) return null;
+  return result;
 }
 
 /**

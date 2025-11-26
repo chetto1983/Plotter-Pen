@@ -3,7 +3,7 @@
  * Handles all drawing operations with professional visuals
  */
 
-import { TWO_PI, normalizeAngle } from '../geometry/core.js';
+import { TWO_PI } from '../geometry/core.js';
 
 /**
  * CAD Color Scheme
@@ -13,16 +13,16 @@ export const COLORS = {
   background: '#0a0d14',
   workspaceBackground: 'rgba(15, 20, 30, 0.95)',
 
-  // Grid
-  gridMinor: 'rgba(60, 80, 120, 0.15)',
-  gridMajor: 'rgba(80, 120, 180, 0.25)',
-  gridOrigin: 'rgba(120, 150, 200, 0.4)',
+  // Grid - increased visibility
+  gridMinor: 'rgba(60, 80, 120, 0.3)',
+  gridMajor: 'rgba(80, 120, 180, 0.5)',
+  gridOrigin: 'rgba(120, 150, 200, 0.6)',
 
-  // Primitives
-  primitive: '#64b5f6',
-  primitiveSelected: '#4fc3f7',
-  primitiveHovered: '#81d4fa',
-  primitivePreview: 'rgba(100, 181, 246, 0.7)',
+  // Primitives - bright white/cyan for contrast against blue grid
+  primitive: '#ffffff',
+  primitiveSelected: '#00ffff',
+  primitiveHovered: '#ffff00',
+  primitivePreview: 'rgba(255, 255, 255, 0.6)',
 
   // Snap
   snapPoint: '#4caf50',
@@ -91,7 +91,10 @@ export class CanvasRenderer {
   }
 
   initialize() {
-    this.resizeCanvas();
+    // Wait for layout to be calculated
+    requestAnimationFrame(() => {
+      this.resizeCanvas();
+    });
     window.addEventListener('resize', () => this.resizeCanvas());
   }
 
@@ -100,8 +103,20 @@ export class CanvasRenderer {
    */
   resizeCanvas() {
     const rect = this.canvas.getBoundingClientRect();
-    const width = rect.width || this.canvas.clientWidth;
-    const height = rect.height || this.canvas.clientHeight;
+    let width = rect.width || this.canvas.clientWidth;
+    let height = rect.height || this.canvas.clientHeight;
+
+    console.log('resizeCanvas called - rect:', rect.width, 'x', rect.height);
+
+    // Fallback if container has no size yet
+    if (width < 10) {
+      console.warn('Width too small, using fallback');
+      width = 800;
+    }
+    if (height < 10) {
+      console.warn('Height too small, using fallback');
+      height = 600;
+    }
 
     this.canvas.width = Math.floor(width * this.dpr);
     this.canvas.height = Math.floor(height * this.dpr);
@@ -114,6 +129,8 @@ export class CanvasRenderer {
     // Center the workspace
     this.view.panX = (width - this.workspace.width * this.view.scaleFactor) / 2;
     this.view.panY = (height - this.workspace.height * this.view.scaleFactor) / 2;
+
+    console.log('resizeCanvas - scaleFactor:', this.view.scaleFactor, 'pan:', this.view.panX, this.view.panY);
 
     this.render();
   }
@@ -310,8 +327,9 @@ export class CanvasRenderer {
       if (!prim.visible) continue;
 
       ctx.save();
-      ctx.strokeStyle = COLORS.primitive;
-      ctx.lineWidth = lineWidth;
+      // Use selected color for selected primitives
+      ctx.strokeStyle = prim.selected ? COLORS.primitiveSelected : COLORS.primitive;
+      ctx.lineWidth = prim.selected ? lineWidth * 1.5 : lineWidth;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
 
@@ -364,7 +382,7 @@ export class CanvasRenderer {
       r: arc.radius || arc.r,
       startAngle: arc.startAngle,
       endAngle: arc.endAngle,
-      anticlockwise: arc.isClockwise || arc.sweep < 0
+      anticlockwise: !arc.isClockwise  // Canvas anticlockwise = true when NOT clockwise
     };
 
     ctx.beginPath();
@@ -500,7 +518,7 @@ export class CanvasRenderer {
   drawHovered(ctx, scale) {
     ctx.save();
     ctx.strokeStyle = COLORS.primitiveHovered;
-    ctx.lineWidth = (this.lineWidth + 1) / scale;
+    ctx.lineWidth = (this.lineWidth + 2) / scale;  // Thicker line when hovered
     ctx.setLineDash([]);
 
     this.drawPrimitive(ctx, this.hovered, scale);
@@ -508,48 +526,186 @@ export class CanvasRenderer {
   }
 
   /**
-   * Draw snap indicator
+   * Draw highlighted primitive from PLC command selection
+   */
+  drawHighlightedPrimitive(primitive) {
+    if (!primitive) return;
+
+    this.withViewContext((ctx, scale) => {
+      ctx.save();
+      // Bright magenta/pink for PLC highlight
+      ctx.strokeStyle = '#ff00ff';
+      ctx.lineWidth = 3 / scale;
+      ctx.setLineDash([]);
+
+      if (primitive.type === 'line') {
+        ctx.beginPath();
+        ctx.moveTo(primitive.x1, primitive.y1);
+        ctx.lineTo(primitive.x2, primitive.y2);
+        ctx.stroke();
+
+        // Draw start/end markers
+        const markerSize = 6 / scale;
+        ctx.fillStyle = '#00ff00'; // Green for start
+        ctx.beginPath();
+        ctx.arc(primitive.x1, primitive.y1, markerSize, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#ff0000'; // Red for end
+        ctx.beginPath();
+        ctx.arc(primitive.x2, primitive.y2, markerSize, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (primitive.type === 'arc') {
+        // Build render data with proper fallback like drawArc does
+        const render = primitive.getRenderData ? primitive.getRenderData() : {
+          cx: primitive.cx,
+          cy: primitive.cy,
+          r: primitive.radius || primitive.r,
+          startAngle: primitive.startAngle,
+          endAngle: primitive.endAngle,
+          anticlockwise: !primitive.isClockwise
+        };
+
+        ctx.beginPath();
+        ctx.arc(render.cx, render.cy, render.r, render.startAngle, render.endAngle, render.anticlockwise);
+        ctx.stroke();
+
+        // Draw start/end markers
+        const markerSize = 6 / scale;
+        if (primitive.x1 !== undefined) {
+          ctx.fillStyle = '#00ff00';
+          ctx.beginPath();
+          ctx.arc(primitive.x1, primitive.y1, markerSize, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = '#ff0000';
+          ctx.beginPath();
+          ctx.arc(primitive.x2, primitive.y2, markerSize, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (primitive.type === 'circle') {
+        const cx = primitive.cx ?? primitive.center?.x;
+        const cy = primitive.cy ?? primitive.center?.y;
+        const r = primitive.r ?? primitive.radius;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Draw center marker
+        const markerSize = 6 / scale;
+        ctx.fillStyle = '#ffff00';
+        ctx.beginPath();
+        ctx.arc(cx, cy, markerSize, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    });
+  }
+
+  /**
+   * Draw snap indicator with CAD-style icons
    */
   drawSnapIndicator(point, type = 'default') {
     this.withViewContext((ctx, scale) => {
-      const size = 6 / scale;
+      const size = 8 / scale;
+      const halfSize = size / 2;
 
-      ctx.fillStyle = COLORS.snapPoint;
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 1.5 / scale;
+      // Bright yellow/green color for visibility
+      ctx.strokeStyle = '#00ff00';
+      ctx.fillStyle = 'rgba(0, 255, 0, 0.3)';
+      ctx.lineWidth = 2 / scale;
 
       ctx.beginPath();
 
       switch (type) {
         case 'endpoint':
-          // Square
-          ctx.rect(point.x - size / 2, point.y - size / 2, size, size);
+          // Square marker for endpoint
+          ctx.rect(point.x - halfSize, point.y - halfSize, size, size);
+          ctx.fill();
+          ctx.stroke();
           break;
+
         case 'midpoint':
-          // Triangle
+          // Triangle marker for midpoint
           ctx.moveTo(point.x, point.y - size);
-          ctx.lineTo(point.x + size, point.y + size / 2);
-          ctx.lineTo(point.x - size, point.y + size / 2);
+          ctx.lineTo(point.x + size * 0.866, point.y + halfSize);
+          ctx.lineTo(point.x - size * 0.866, point.y + halfSize);
           ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
           break;
+
         case 'center':
-          // Circle with crosshair
+          // Circle with crosshair for center
           ctx.arc(point.x, point.y, size, 0, TWO_PI);
+          ctx.stroke();
+          // Draw crosshair
+          ctx.beginPath();
+          ctx.moveTo(point.x - size * 1.5, point.y);
+          ctx.lineTo(point.x + size * 1.5, point.y);
+          ctx.moveTo(point.x, point.y - size * 1.5);
+          ctx.lineTo(point.x, point.y + size * 1.5);
+          ctx.stroke();
           break;
+
         case 'intersection':
-          // X
+          // X marker for intersection
           ctx.moveTo(point.x - size, point.y - size);
           ctx.lineTo(point.x + size, point.y + size);
           ctx.moveTo(point.x + size, point.y - size);
           ctx.lineTo(point.x - size, point.y + size);
+          ctx.stroke();
           break;
-        default:
-          // Circle
-          ctx.arc(point.x, point.y, size / 2, 0, TWO_PI);
-      }
 
-      ctx.fill();
-      ctx.stroke();
+        case 'quadrant':
+          // Diamond for quadrant
+          ctx.moveTo(point.x, point.y - size);
+          ctx.lineTo(point.x + size, point.y);
+          ctx.lineTo(point.x, point.y + size);
+          ctx.lineTo(point.x - size, point.y);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+          break;
+
+        case 'nearest':
+          // Hourglass shape for nearest
+          ctx.moveTo(point.x - halfSize, point.y - size);
+          ctx.lineTo(point.x + halfSize, point.y - size);
+          ctx.lineTo(point.x - halfSize, point.y + size);
+          ctx.lineTo(point.x + halfSize, point.y + size);
+          ctx.closePath();
+          ctx.stroke();
+          break;
+
+        case 'grid':
+          // Plus sign for grid snap
+          ctx.moveTo(point.x - size, point.y);
+          ctx.lineTo(point.x + size, point.y);
+          ctx.moveTo(point.x, point.y - size);
+          ctx.lineTo(point.x, point.y + size);
+          ctx.stroke();
+          // Small circle at center
+          ctx.beginPath();
+          ctx.arc(point.x, point.y, size / 3, 0, TWO_PI);
+          ctx.fill();
+          break;
+
+        case 'node':
+        case 'vertex':
+          // Circle for node/vertex
+          ctx.arc(point.x, point.y, halfSize, 0, TWO_PI);
+          ctx.fill();
+          ctx.stroke();
+          break;
+
+        default:
+          // Default: small filled circle
+          ctx.arc(point.x, point.y, halfSize, 0, TWO_PI);
+          ctx.fill();
+          ctx.stroke();
+      }
     });
   }
 

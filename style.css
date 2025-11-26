@@ -22,6 +22,41 @@
 * { box-sizing: border-box; }
 html { height: 100%; }
 
+/* ============================================
+   GLOBAL SCROLLBAR STYLING
+   ============================================ */
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(82, 168, 255, 0.4) rgba(15, 20, 30, 0.5);
+}
+
+/* Webkit browsers (Chrome, Safari, Edge) */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(15, 20, 30, 0.5);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(82, 168, 255, 0.5), rgba(54, 122, 255, 0.4));
+  border-radius: 5px;
+  border: 2px solid rgba(15, 20, 30, 0.5);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(82, 168, 255, 0.7), rgba(54, 122, 255, 0.6));
+}
+
+::-webkit-scrollbar-corner {
+  background: rgba(15, 20, 30, 0.5);
+}
+
 body {
   margin: 0;
   font-family: ui-sans-serif, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
@@ -50,6 +85,7 @@ body.cad-app {
   background: var(--bg-darker);
   border-bottom: 1px solid var(--border);
   z-index: 100;
+  position: relative;
 }
 
 .cad-header-left {
@@ -125,6 +161,158 @@ body.cad-app {
   background: var(--accent-dim);
 }
 
+/* Hamburger Menu Dropdown */
+.cad-hamburger-menu {
+  position: absolute;
+  top: 100%;
+  left: 8px;
+  margin-top: 4px;
+  min-width: 220px;
+  background: var(--bg-darker);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  z-index: 9999;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-8px);
+  transition: all 0.2s ease;
+}
+
+.cad-hamburger-menu.open {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.cad-hamburger-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  font-size: 14px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cad-hamburger-item:first-child {
+  border-radius: 7px 7px 0 0;
+}
+
+.cad-hamburger-item:last-child {
+  border-radius: 0 0 7px 7px;
+}
+
+.cad-hamburger-item:hover {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.cad-hamburger-item svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+/* Hamburger Menu Settings */
+.cad-hamburger-section {
+  padding: 12px 16px;
+}
+
+.cad-hamburger-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 12px;
+  letter-spacing: 0.5px;
+}
+
+.cad-hamburger-setting {
+  margin-bottom: 10px;
+}
+
+.cad-hamburger-setting:last-child {
+  margin-bottom: 0;
+}
+
+.cad-hamburger-setting > label {
+  display: block;
+  font-size: 12px;
+  color: var(--fg-dim);
+  margin-bottom: 4px;
+}
+
+.cad-hamburger-setting input[type="number"] {
+  width: 100%;
+  padding: 6px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--fg);
+  font-size: 13px;
+}
+
+.cad-hamburger-setting input[type="number"]:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.cad-hamburger-inputs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cad-hamburger-inputs input[type="number"] {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--fg);
+  font-size: 13px;
+}
+
+.cad-hamburger-inputs input[type="number"]:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.cad-hamburger-inputs span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.cad-hamburger-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--fg);
+  margin: 0;
+}
+
+.cad-hamburger-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.cad-hamburger-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
 .cad-header-right {
   display: flex;
   align-items: center;
@@ -165,7 +353,9 @@ body.cad-app {
   padding: 8px 16px;
   background: linear-gradient(180deg, #13171e 0%, #0f1318 100%);
   border-bottom: 1px solid var(--border);
-  overflow-x: auto;
+  overflow: visible;
+  position: relative;
+  z-index: 1000;
 }
 
 .cad-toolbar-group {
@@ -314,7 +504,7 @@ body.cad-app {
   border: 1px solid var(--border-light);
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-  z-index: 1000;
+  z-index: 9999;
   opacity: 0;
   visibility: hidden;
   transform: translateY(-4px);
@@ -731,6 +921,8 @@ body.cad-app {
   position: relative;
   background: #0b0e16;
   overflow: hidden;
+  min-height: 0;
+  height: 100%;
 }
 
 .cad-canvas-container canvas {
@@ -1104,60 +1296,287 @@ body.menu-open .app-nav {
 
 body.config-shell .config-main {
   flex: 1;
-  padding: 24px 16px 48px;
+  padding: 32px 16px 48px;
   display: flex;
   justify-content: center;
+  overflow-y: auto;
+}
+
+body.config-shell .config-container {
+  width: 100%;
+  max-width: 560px;
 }
 
 body.config-shell .config-card {
-  max-width: 720px;
-  width: 100%;
   background: var(--card);
-  border-radius: 16px;
+  border-radius: 12px;
   border: 1px solid var(--border);
-  box-shadow: 0 24px 60px rgba(4, 8, 18, 0.4);
-  padding: 32px;
+  box-shadow: 0 16px 40px rgba(4, 8, 18, 0.4);
+  overflow: hidden;
+}
+
+body.config-shell .config-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, rgba(82, 168, 255, 0.08), rgba(54, 122, 255, 0.04));
+  border-bottom: 1px solid var(--border);
+}
+
+body.config-shell .config-card-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(82, 168, 255, 0.2), rgba(54, 122, 255, 0.15));
+  border-radius: 10px;
+  color: var(--accent);
+}
+
+body.config-shell .config-card-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+body.config-shell .config-card-title h2 {
+  font-size: 1.1rem;
+  margin: 0 0 2px 0;
+  color: var(--fg);
+  font-weight: 600;
+}
+
+body.config-shell .config-card-title p {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+body.config-shell .config-section {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+body.config-shell .config-section:last-of-type {
+  border-bottom: none;
+}
+
+body.config-shell .config-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+body.config-shell .config-section-header svg {
+  width: 16px;
+  height: 16px;
+  opacity: 0.8;
+}
+
+body.config-shell .config-fields {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+body.config-shell .config-field {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 4px;
 }
 
-body.config-shell .config-card h2 {
-  font-size: 1.25rem;
-  margin: 0;
-  color: var(--fg);
+body.config-shell .config-field.full-width {
+  grid-column: 1 / -1;
 }
 
-body.config-shell .form-grid {
-  display: grid;
-  gap: 16px;
+body.config-shell .config-field label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--fg-dim);
 }
 
-body.config-shell .form-grid input[type="text"],
-body.config-shell .form-grid input[type="password"],
-body.config-shell .form-grid input[type="number"] {
+body.config-shell .config-field input {
   width: 100%;
   padding: 10px 12px;
-  border-radius: 10px;
+  border-radius: 8px;
   border: 1px solid rgba(82, 168, 255, 0.22);
-  font-size: 0.95rem;
+  font-size: 0.875rem;
   background: rgba(15, 21, 33, 0.85);
   color: var(--fg);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-body.config-shell .form-grid input:focus {
+body.config-shell .config-field input:focus {
   border-color: rgba(82, 168, 255, 0.6);
-  box-shadow: 0 0 0 2px rgba(82, 168, 255, 0.25);
+  box-shadow: 0 0 0 3px rgba(82, 168, 255, 0.15);
   outline: none;
 }
 
-body.config-shell .form-actions {
+body.config-shell .config-field input::placeholder {
+  color: var(--muted);
+  opacity: 0.6;
+}
+
+/* Number input spinner styling */
+body.config-shell .config-field input[type="number"] {
+  -webkit-appearance: textfield;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+body.config-shell .config-field input[type="number"]::-webkit-inner-spin-button,
+body.config-shell .config-field input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 100%;
+  background: rgba(82, 168, 255, 0.1);
+  border-left: 1px solid rgba(82, 168, 255, 0.2);
+  cursor: pointer;
+  opacity: 1;
+}
+
+/* Select/Combo styling */
+body.config-shell .config-field select {
+  width: 100%;
+  padding: 10px 36px 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(82, 168, 255, 0.22);
+  font-size: 0.875rem;
+  background: rgba(15, 21, 33, 0.85);
+  color: var(--fg);
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2352a8ff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 16px;
+}
+
+body.config-shell .config-field select:focus {
+  border-color: rgba(82, 168, 255, 0.6);
+  box-shadow: 0 0 0 3px rgba(82, 168, 255, 0.15);
+  outline: none;
+}
+
+body.config-shell .config-field select:hover {
+  border-color: rgba(82, 168, 255, 0.4);
+}
+
+body.config-shell .config-field select option {
+  background: var(--bg-darker);
+  color: var(--fg);
+  padding: 10px;
+}
+
+body.config-shell .config-field-hint {
+  font-size: 0.75rem;
+  color: var(--muted);
+  opacity: 0.8;
+}
+
+body.config-shell .config-actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
+  gap: 10px;
   justify-content: flex-end;
-  margin-top: 12px;
+  padding: 14px 20px;
+  background: rgba(15, 21, 33, 0.4);
+  border-top: 1px solid var(--border);
+}
+
+body.config-shell .config-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+}
+
+body.config-shell .config-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+body.config-shell .config-btn.secondary {
+  background: rgba(82, 168, 255, 0.1);
+  border-color: rgba(82, 168, 255, 0.25);
+  color: var(--fg);
+}
+
+body.config-shell .config-btn.secondary:hover {
+  background: rgba(82, 168, 255, 0.18);
+  border-color: rgba(82, 168, 255, 0.4);
+}
+
+body.config-shell .config-btn.primary {
+  background: linear-gradient(135deg, rgba(82, 168, 255, 0.9), rgba(54, 122, 255, 0.9));
+  color: #fff;
+  border-color: rgba(82, 168, 255, 0.6);
+}
+
+body.config-shell .config-btn.primary:hover {
+  background: linear-gradient(135deg, rgba(92, 178, 255, 0.95), rgba(64, 132, 255, 0.95));
+  box-shadow: 0 4px 16px rgba(82, 168, 255, 0.3);
+}
+
+body.config-shell .config-status {
+  margin: 16px 28px 24px;
+  padding: 14px 18px;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+body.config-shell .config-status.success {
+  background: rgba(76, 175, 80, 0.15);
+  border: 1px solid rgba(76, 175, 80, 0.3);
+  color: #81c784;
+}
+
+body.config-shell .config-status.error {
+  background: rgba(244, 67, 54, 0.15);
+  border: 1px solid rgba(244, 67, 54, 0.3);
+  color: #e57373;
+}
+
+@media (max-width: 600px) {
+  body.config-shell .config-fields {
+    grid-template-columns: 1fr;
+  }
+
+  body.config-shell .config-card-header {
+    padding: 20px;
+  }
+
+  body.config-shell .config-section {
+    padding: 20px;
+  }
+
+  body.config-shell .config-actions {
+    padding: 16px 20px;
+    flex-direction: column;
+  }
+
+  body.config-shell .config-btn {
+    justify-content: center;
+  }
 }
 
 .btn {

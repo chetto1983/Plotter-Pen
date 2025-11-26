@@ -6,76 +6,184 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link rel="stylesheet" href="style.css" />
 </head>
-<body class="app-shell config-shell">
-  <header class="app-header">
-    <div class="app-header-bar">
-      <button
-        type="button"
-        class="hamburger-button"
-        id="hamburgerButton"
-        aria-label="Apri menu di navigazione"
-        aria-controls="appNav"
-        aria-expanded="false"
-      >
-        <span></span>
-        <span></span>
-        <span></span>
+<body class="cad-app config-shell">
+  <!-- Header / Menu Bar -->
+  <header class="cad-header">
+    <div class="cad-header-left">
+      <button type="button" class="cad-menu-btn" id="menuBtn" aria-label="Menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
       </button>
-      <div class="app-brand">
-        <span class="brand-title">Sacchi Plotter Pen</span>
-        <span class="brand-subtitle">Configurazione PLC</span>
+      <div class="cad-brand">
+        <span class="cad-brand-name">Sacchi Plotter Pen</span>
+        <span class="cad-brand-version">v2.0</span>
       </div>
     </div>
-    <nav class="app-nav" id="appNav" aria-label="Navigazione principale" tabindex="-1">
-      <ul>
-        <li><a href="plotter_pen.html">Editor Disegno</a></li>
-        <li><a href="plc_config.html" aria-current="page">Configurazione PLC</a></li>
-      </ul>
+    <nav class="cad-nav" id="mainNav">
+      <a href="plc_config.html" class="cad-nav-link active">Configurazione PLC</a>
     </nav>
+    <!-- Hamburger Menu Dropdown -->
+    <div class="cad-hamburger-menu" id="hamburgerMenu">
+      <a href="plotter_pen.html" class="cad-hamburger-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+        <span>Editor</span>
+      </a>
+      <a href="plc_config.html" class="cad-hamburger-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="12" y2="17"/></svg>
+        <span>Configurazione PLC</span>
+      </a>
+    </div>
   </header>
 
   <main class="config-main">
-    <section class="config-card">
-      <h2>Parametri OPC UA</h2>
-      <p class="config-helper">
-        Modifica i parametri di connessione verso il PLC e salva per aggiornare il file <code>opcua_config.json</code>.
-      </p>
-      <form id="plcConfigForm" novalidate>
-        <div class="form-grid">
-          <label for="endpoint" class="field-label">Endpoint OPC&nbsp;UA</label>
-          <input type="text" id="endpoint" name="endpoint" required placeholder="opc.tcp://host:porta" />
-
-          <label for="username" class="field-label">Username</label>
-          <input type="text" id="username" name="username" placeholder="(opzionale)" />
-
-          <label for="password" class="field-label">Password</label>
-          <input type="password" id="password" name="password" placeholder="(opzionale)" autocomplete="current-password" />
-
-          <label for="nodeId" class="field-label">Node ID target</label>
-          <input type="text" id="nodeId" name="nodeId" required placeholder="ns=4;i=12" />
-
-          <label for="triggerNodeId" class="field-label">Node ID trigger</label>
-          <input type="text" id="triggerNodeId" name="triggerNodeId" placeholder="ns=4;i=535" />
-
-          <label for="triggerResetDelayMs" class="field-label">Delay reset (ms)</label>
-          <input type="number" id="triggerResetDelayMs" name="triggerResetDelayMs" min="0" step="1" />
-
-          <label for="valueType" class="field-label">Tipo valore</label>
-          <input type="text" id="valueType" name="valueType" placeholder="string_array" />
-
-          <label for="arrayLength" class="field-label">Lunghezza array</label>
-          <input type="number" id="arrayLength" name="arrayLength" min="0" step="1" />
+    <div class="config-container">
+      <section class="config-card">
+        <div class="config-card-header">
+          <div class="config-card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="4" y="4" width="16" height="16" rx="2"/>
+              <path d="M9 9h6"/>
+              <path d="M9 13h6"/>
+              <path d="M9 17h4"/>
+            </svg>
+          </div>
+          <div class="config-card-title">
+            <h2>Parametri OPC UA</h2>
+            <p>Configurazione connessione al PLC</p>
+          </div>
         </div>
 
-        <div class="form-actions">
-          <button type="submit" class="btn primary">Salva configurazione</button>
-          <button type="button" class="btn ghost" id="reloadConfigBtn">Ricarica</button>
-        </div>
-      </form>
-      <div id="configStatus" class="config-status" role="status" aria-live="polite" hidden></div>
-    </section>
+        <form id="plcConfigForm" novalidate>
+          <!-- Connection Section -->
+          <div class="config-section">
+            <div class="config-section-header">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M5 12h14"/>
+                <path d="M12 5l7 7-7 7"/>
+              </svg>
+              <span>Connessione</span>
+            </div>
+            <div class="config-fields">
+              <div class="config-field full-width">
+                <label for="endpoint">Endpoint OPC UA</label>
+                <input type="text" id="endpoint" name="endpoint" required placeholder="opc.tcp://192.168.1.100:4840" />
+                <span class="config-field-hint">Indirizzo completo del server OPC UA</span>
+              </div>
+              <div class="config-field">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" placeholder="admin" />
+              </div>
+              <div class="config-field">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" placeholder="••••••••" autocomplete="current-password" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Node Configuration Section -->
+          <div class="config-section">
+            <div class="config-section-header">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M12 2v4"/>
+                <path d="M12 18v4"/>
+                <path d="M4.93 4.93l2.83 2.83"/>
+                <path d="M16.24 16.24l2.83 2.83"/>
+                <path d="M2 12h4"/>
+                <path d="M18 12h4"/>
+                <path d="M4.93 19.07l2.83-2.83"/>
+                <path d="M16.24 7.76l2.83-2.83"/>
+              </svg>
+              <span>Nodi OPC UA</span>
+            </div>
+            <div class="config-fields">
+              <div class="config-field">
+                <label for="nodeId">Node ID Target</label>
+                <input type="text" id="nodeId" name="nodeId" required placeholder="ns=4;i=12" />
+                <span class="config-field-hint">Nodo per scrittura comandi</span>
+              </div>
+              <div class="config-field">
+                <label for="triggerNodeId">Node ID Trigger</label>
+                <input type="text" id="triggerNodeId" name="triggerNodeId" placeholder="ns=4;i=535" />
+                <span class="config-field-hint">Nodo per segnale di trigger</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Data Configuration Section -->
+          <div class="config-section">
+            <div class="config-section-header">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                <line x1="12" y1="22.08" x2="12" y2="12"/>
+              </svg>
+              <span>Configurazione Dati</span>
+            </div>
+            <div class="config-fields">
+              <div class="config-field">
+                <label for="valueType">Tipo Valore</label>
+                <select id="valueType" name="valueType">
+                  <option value="string_array">String Array</option>
+                  <option value="string">String</option>
+                  <option value="int_array">Int Array</option>
+                  <option value="float_array">Float Array</option>
+                  <option value="bool_array">Bool Array</option>
+                </select>
+              </div>
+              <div class="config-field">
+                <label for="arrayLength">Lunghezza Array</label>
+                <input type="number" id="arrayLength" name="arrayLength" min="0" step="1" placeholder="100" />
+              </div>
+              <div class="config-field">
+                <label for="triggerResetDelayMs">Delay Reset (ms)</label>
+                <input type="number" id="triggerResetDelayMs" name="triggerResetDelayMs" min="0" step="1" placeholder="500" />
+                <span class="config-field-hint">Ritardo prima del reset del trigger</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="config-actions">
+            <button type="button" class="config-btn secondary" id="reloadConfigBtn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M23 4v6h-6"/>
+                <path d="M1 20v-6h6"/>
+                <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+              </svg>
+              Ricarica
+            </button>
+            <button type="submit" class="config-btn primary">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                <polyline points="17 21 17 13 7 13 7 21"/>
+                <polyline points="7 3 7 8 15 8"/>
+              </svg>
+              Salva Configurazione
+            </button>
+          </div>
+        </form>
+
+        <div id="configStatus" class="config-status" role="status" aria-live="polite" hidden></div>
+      </section>
+    </div>
   </main>
 
+  <script type="module">
+    // Hamburger menu toggle
+    const menuBtn = document.getElementById('menuBtn');
+    const hamburgerMenu = document.getElementById('hamburgerMenu');
+
+    menuBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      hamburgerMenu?.classList.toggle('open');
+    });
+
+    // Close hamburger menu when clicking outside
+    document.addEventListener('click', (e) => {
+      if (hamburgerMenu?.classList.contains('open') && !hamburgerMenu.contains(e.target)) {
+        hamburgerMenu.classList.remove('open');
+      }
+    });
+  </script>
   <script type="module" src="src/plc-config.js"></script>
 </body>
 </html>
