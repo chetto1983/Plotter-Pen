@@ -3,8 +3,6 @@
  * Main entry point
  */
 
-console.log('=== main.js: starting imports ===');
-
 import { Vector2 } from './geometry/core.js';
 import { SnapManager } from './geometry/snap.js';
 import { LineTool, ArcTool, CircleTool, RectangleTool, PolygonTool } from './tools/toolManager.js';
@@ -13,8 +11,6 @@ import { PLCOutputGenerator } from './plc/extraction.js';
 import { InputHandler } from './app/InputHandler.js';
 import { UIController } from './app/UIController.js';
 import { StateManager } from './app/StateManager.js';
-
-console.log('=== main.js: all imports successful ===');
 
 /**
  * Main CAD Application Class
@@ -55,6 +51,9 @@ class CADApplication {
     // PLC output
     this.plcOutput = [];
 
+    // Clipboard for copy/paste
+    this.clipboard = [];
+
     // Initialize
     this.init();
   }
@@ -70,14 +69,9 @@ class CADApplication {
       return;
     }
 
-    console.log('Canvas found:', this.canvas);
-    console.log('Canvas size:', this.canvas.clientWidth, 'x', this.canvas.clientHeight);
-
     // Initialize renderer
     this.renderer = new CanvasRenderer(this.canvas);
     this.renderer.setWorkspaceSize(this.workspaceWidth, this.workspaceHeight);
-
-    console.log('Renderer initialized, workspace:', this.workspaceWidth, 'x', this.workspaceHeight);
 
     // Initialize snap manager
     this.snapManager = new SnapManager({
@@ -127,8 +121,6 @@ class CADApplication {
    * @param {boolean} shiftKey - Whether shift key was held
    */
   handleToolClick(position, shiftKey = false) {
-    console.log('=== handleToolClick ===', position, 'tool:', this.currentTool, 'selectMode:', this.selectMode);
-
     // Clear PLC highlight on any canvas click
     if (this.highlightedPrimitive) {
       this.clearHighlight();
@@ -141,12 +133,10 @@ class CADApplication {
     }
 
     if (!this.currentTool) {
-      console.log('No current tool selected');
       return;
     }
 
     // Tools use onMouseDown/onMouseUp pattern
-    console.log('Calling tool onMouseDown/onMouseUp');
     this.currentTool.onMouseDown(position, null);
     this.currentTool.onMouseUp(position, null);
 
@@ -254,13 +244,11 @@ class CADApplication {
    * Select a tool
    */
   selectTool(toolName) {
-    console.log('=== selectTool ===', toolName);
     if (this.currentTool) {
       this.currentTool.cancel();
     }
 
     const manager = this.getToolManager();
-    console.log('Tool manager:', manager);
 
     this.selectMode = false; // Reset select mode for all tools
 
@@ -295,7 +283,6 @@ class CADApplication {
         this.selectMode = false;
     }
 
-    console.log('Current tool after selection:', this.currentTool);
     this.ui.updateToolUI(toolName);
     if (this.selectMode) {
       this.ui.updateStatus('Modalità selezione - clicca su una primitiva');
@@ -333,6 +320,223 @@ class CADApplication {
     this.render();
     this.refreshPLCOutput();
     this.ui.updateStatus('Elementi eliminati');
+  }
+
+  /**
+   * Move selected primitives by dx, dy (in world units)
+   */
+  moveSelected(dx, dy) {
+    if (this.selectedPrimitives.size === 0) return;
+
+    this.state.pushState();
+    for (const primitive of this.selectedPrimitives) {
+      primitive.translate(dx, dy);
+    }
+    this.render();
+    this.refreshPLCOutput();
+    this.ui.updateStatus(`Spostato: ${dx.toFixed(1)}, ${dy.toFixed(1)} mm`);
+  }
+
+  /**
+   * Copy selected primitives to clipboard
+   */
+  copySelected() {
+    if (this.selectedPrimitives.size === 0) {
+      this.ui.updateStatus('Nessuna selezione da copiare');
+      return;
+    }
+
+    // Serialize selected primitives
+    this.clipboard = [];
+    for (const primitive of this.selectedPrimitives) {
+      this.clipboard.push(primitive.toJSON());
+    }
+
+    this.ui.updateStatus(`Copiati: ${this.clipboard.length} elementi`);
+  }
+
+  /**
+   * Cut selected primitives (copy + delete)
+   */
+  cutSelected() {
+    if (this.selectedPrimitives.size === 0) {
+      this.ui.updateStatus('Nessuna selezione da tagliare');
+      return;
+    }
+
+    this.copySelected();
+    this.deleteSelected();
+    this.ui.updateStatus(`Tagliati: ${this.clipboard.length} elementi`);
+  }
+
+  /**
+   * Paste primitives from clipboard
+   */
+  pasteClipboard() {
+    if (this.clipboard.length === 0) {
+      this.ui.updateStatus('Appunti vuoti');
+      return;
+    }
+
+    this.state.pushState();
+
+    // Deserialize and add primitives with offset
+    const newPrimitives = this.state.deserializePrimitives(JSON.stringify(this.clipboard));
+
+    // Offset pasted primitives by 10mm so they're visible
+    for (const prim of newPrimitives) {
+      prim.translate(10, 10);
+    }
+
+    // Add to scene and select
+    this.selectedPrimitives.clear();
+    for (const prim of newPrimitives) {
+      this.primitives.push(prim);
+      this.selectedPrimitives.add(prim);
+    }
+
+    this.render();
+    this.refreshPLCOutput();
+    this.ui.updateStatus(`Incollati: ${newPrimitives.length} elementi`);
+  }
+
+  /**
+   * Rotate selected primitives around their center
+   * @param {number} angle - Rotation angle in degrees
+   */
+  rotateSelected(angle) {
+    if (this.selectedPrimitives.size === 0) {
+      this.ui.updateStatus('Nessuna selezione da ruotare');
+      return;
+    }
+
+    this.state.pushState();
+
+    // Calculate center of selection
+    const center = this.getSelectionCenter();
+    const radians = (angle * Math.PI) / 180;
+
+    for (const primitive of this.selectedPrimitives) {
+      primitive.rotate(center.x, center.y, radians);
+    }
+
+    this.render();
+    this.refreshPLCOutput();
+    this.ui.updateStatus(`Ruotato: ${angle}°`);
+  }
+
+  /**
+   * Scale selected primitives from their center
+   * @param {number} factor - Scale factor (1.0 = no change)
+   */
+  scaleSelected(factor) {
+    if (this.selectedPrimitives.size === 0) {
+      this.ui.updateStatus('Nessuna selezione da scalare');
+      return;
+    }
+
+    this.state.pushState();
+
+    // Calculate center of selection
+    const center = this.getSelectionCenter();
+
+    for (const primitive of this.selectedPrimitives) {
+      primitive.scale(center.x, center.y, factor);
+    }
+
+    this.render();
+    this.refreshPLCOutput();
+    this.ui.updateStatus(`Scalato: ${(factor * 100).toFixed(0)}%`);
+  }
+
+  /**
+   * Mirror selected primitives
+   * @param {string} axis - 'x' for horizontal mirror, 'y' for vertical mirror
+   */
+  mirrorSelected(axis) {
+    if (this.selectedPrimitives.size === 0) {
+      this.ui.updateStatus('Nessuna selezione da specchiare');
+      return;
+    }
+
+    this.state.pushState();
+
+    // Calculate center of selection
+    const center = this.getSelectionCenter();
+
+    for (const primitive of this.selectedPrimitives) {
+      primitive.mirror(center.x, center.y, axis);
+    }
+
+    this.render();
+    this.refreshPLCOutput();
+    this.ui.updateStatus(`Specchiato: asse ${axis.toUpperCase()}`);
+  }
+
+  /**
+   * Get the center point of all selected primitives
+   */
+  getSelectionCenter() {
+    if (this.selectedPrimitives.size === 0) {
+      return { x: 0, y: 0 };
+    }
+
+    let minX = Infinity, minY = Infinity;
+    let maxX = -Infinity, maxY = -Infinity;
+
+    for (const primitive of this.selectedPrimitives) {
+      const bbox = primitive.getBoundingBox();
+      minX = Math.min(minX, bbox.minX);
+      minY = Math.min(minY, bbox.minY);
+      maxX = Math.max(maxX, bbox.maxX);
+      maxY = Math.max(maxY, bbox.maxY);
+    }
+
+    return {
+      x: (minX + maxX) / 2,
+      y: (minY + maxY) / 2
+    };
+  }
+
+  /**
+   * Select primitives inside a box (rubber band selection)
+   * @param {number} minX - Min X in world coordinates
+   * @param {number} minY - Min Y in world coordinates
+   * @param {number} maxX - Max X in world coordinates
+   * @param {number} maxY - Max Y in world coordinates
+   * @param {boolean} crossing - If true, select any intersecting primitive (crossing mode)
+   * @param {boolean} additive - If true, add to existing selection (Shift held)
+   */
+  boxSelect(minX, minY, maxX, maxY, crossing = false, additive = false) {
+    // Clear selection if not additive
+    if (!additive) {
+      this.selectedPrimitives.clear();
+    }
+
+    // Select primitives based on mode
+    for (const primitive of this.primitives) {
+      const intersects = primitive.intersectsBox(minX, minY, maxX, maxY);
+
+      if (crossing) {
+        // Crossing mode: select any primitive that intersects the box
+        if (intersects) {
+          this.selectedPrimitives.add(primitive);
+        }
+      } else {
+        // Window mode: select only primitives fully inside the box
+        const bbox = primitive.getBoundingBox();
+        const fullyInside = bbox.minX >= minX && bbox.maxX <= maxX &&
+                          bbox.minY >= minY && bbox.maxY <= maxY;
+        if (fullyInside) {
+          this.selectedPrimitives.add(primitive);
+        }
+      }
+    }
+
+    const count = this.selectedPrimitives.size;
+    const mode = crossing ? 'attraversamento' : 'finestra';
+    this.ui.updateStatus(count > 0 ? `Selezionati: ${count} (${mode})` : 'Nessun elemento selezionato');
+    this.render();
   }
 
   /**
@@ -440,29 +644,27 @@ class CADApplication {
       return;
     }
 
-    // Add PLC data to primitives if not present
+    // Always regenerate PLC data from current primitive coordinates
     const primitivesWithData = this.primitives.map(p => {
-      if (!p.plcData) {
-        if (p.type === 'line') {
-          p.plcData = { type: 1, x1: p.x1, y1: p.y1, x2: p.x2, y2: p.y2 };
-        } else if (p.type === 'arc') {
-          p.plcData = {
-            type: p.isClockwise ? 2 : 3,
-            x1: p.x1, y1: p.y1, x2: p.x2, y2: p.y2,
-            cx: p.cx, cy: p.cy, r: p.radius
-          };
-        } else if (p.type === 'circle') {
-          // Circle is an arc from 0 to 360 degrees
-          p.plcData = {
-            type: 3, // CCW full circle
-            x1: p.center.x + p.radius, y1: p.center.y,
-            x2: p.center.x + p.radius, y2: p.center.y,
-            cx: p.center.x, cy: p.center.y, r: p.radius
-          };
-        } else if (p.type === 'rectangle') {
-          // Rectangle becomes 4 lines - handle separately
-          p.plcData = { type: 'rectangle', x: p.x, y: p.y, width: p.width, height: p.height };
-        }
+      if (p.type === 'line') {
+        p.plcData = { type: 1, x1: p.x1, y1: p.y1, x2: p.x2, y2: p.y2 };
+      } else if (p.type === 'arc') {
+        p.plcData = {
+          type: p.isClockwise ? 2 : 3,
+          x1: p.x1, y1: p.y1, x2: p.x2, y2: p.y2,
+          cx: p.cx, cy: p.cy, r: p.radius
+        };
+      } else if (p.type === 'circle') {
+        // Circle is an arc from 0 to 360 degrees
+        p.plcData = {
+          type: 3, // CCW full circle
+          x1: p.center.x + p.radius, y1: p.center.y,
+          x2: p.center.x + p.radius, y2: p.center.y,
+          cx: p.center.x, cy: p.center.y, r: p.radius
+        };
+      } else if (p.type === 'rectangle') {
+        // Rectangle becomes 4 lines - handle separately
+        p.plcData = { type: 'rectangle', x: p.x, y: p.y, width: p.width, height: p.height };
       }
       return p;
     });
@@ -580,12 +782,130 @@ class CADApplication {
   }
 
   /**
+   * Save drawing to JSON file
+   */
+  saveToFile() {
+    const data = {
+      version: '1.0',
+      created: new Date().toISOString(),
+      workspace: {
+        width: this.workspaceWidth,
+        height: this.workspaceHeight,
+        gridSpacing: this.gridSpacing
+      },
+      primitives: this.primitives.map(p => p.toJSON())
+    };
+
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `disegno_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+
+    URL.revokeObjectURL(url);
+    this.ui.updateStatus('Disegno salvato');
+  }
+
+  /**
+   * Load drawing from JSON file
+   */
+  loadFromFile() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        this.loadDrawingData(data);
+        this.ui.updateStatus(`Caricato: ${file.name}`);
+      } catch (err) {
+        this.ui.updateStatus(`Errore caricamento: ${err.message}`);
+      }
+    };
+
+    input.click();
+  }
+
+  /**
+   * Apply loaded drawing data
+   */
+  loadDrawingData(data) {
+    // Validate
+    if (!data.version || !data.primitives) {
+      throw new Error('Formato file non valido');
+    }
+
+    // Clear current state
+    this.state.pushState();
+    this.primitives = [];
+    this.selectedPrimitives.clear();
+    this.highlightedPrimitive = null;
+
+    // Apply workspace settings
+    if (data.workspace) {
+      this.workspaceWidth = data.workspace.width || 600;
+      this.workspaceHeight = data.workspace.height || 600;
+      this.gridSpacing = data.workspace.gridSpacing || 10;
+
+      this.renderer.setWorkspaceSize(this.workspaceWidth, this.workspaceHeight);
+
+      // Update snap manager grid spacing
+      if (this.snapManager.options) {
+        this.snapManager.options.gridSpacing = this.gridSpacing;
+      }
+      if (this.snapManager.gridSize !== undefined) {
+        this.snapManager.gridSize = this.gridSpacing;
+      }
+
+      // Update UI inputs
+      const widthInput = document.getElementById('workspaceWidth');
+      const heightInput = document.getElementById('workspaceHeight');
+      const gridInput = document.getElementById('gridSpacing');
+      if (widthInput) widthInput.value = this.workspaceWidth;
+      if (heightInput) heightInput.value = this.workspaceHeight;
+      if (gridInput) gridInput.value = this.gridSpacing;
+    }
+
+    // Load primitives - handle both array format and JSON string
+    try {
+      if (Array.isArray(data.primitives)) {
+        const primitivesJson = JSON.stringify(data.primitives);
+        this.primitives = this.state.deserializePrimitives(primitivesJson);
+      } else {
+        throw new Error('Primitives deve essere un array');
+      }
+    } catch (err) {
+      console.error('Error deserializing primitives:', err);
+      throw new Error(`Errore caricamento primitive: ${err.message}`);
+    }
+
+    // Update UI
+    this.ui.updateStats();
+    this.render();
+    this.refreshPLCOutput();
+    this.renderer.resetView();
+  }
+
+  /**
    * Render the canvas
    */
   render() {
     // Update renderer state
     this.renderer.grid.show = this.showGrid;
     this.renderer.grid.spacing = this.gridSpacing;
+
+    // Update floating toolbar visibility based on selection
+    if (this.ui) {
+      this.ui.updateFloatingToolbar();
+    }
 
     // Convert primitives to renderer format
     this.renderer.primitives = this.primitives.map(p => this.toRenderFormat(p));

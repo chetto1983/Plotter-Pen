@@ -103,6 +103,21 @@
 
     <div class="cad-toolbar-divider"></div>
 
+    <!-- File Operations -->
+    <div class="cad-toolbar-group">
+      <span class="cad-toolbar-label">File</span>
+      <div class="cad-toolbar-buttons">
+        <button type="button" class="cad-action-btn" id="btnSave" title="Salva (Ctrl+S)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        </button>
+        <button type="button" class="cad-action-btn" id="btnLoad" title="Apri (Ctrl+O)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="cad-toolbar-divider"></div>
+
     <!-- Actions -->
     <div class="cad-toolbar-group">
       <span class="cad-toolbar-label">Azioni</span>
@@ -234,6 +249,70 @@
     <div class="cad-canvas-container">
       <canvas id="cadCanvas"></canvas>
       <div class="cad-canvas-overlay" id="canvasOverlay"></div>
+      <div class="cad-selection-box" id="selectionBox"></div>
+
+      <!-- Floating Edit Toolbar (appears when selection exists) -->
+      <div class="cad-float-toolbar" id="floatToolbar">
+        <!-- Rotate Group -->
+        <div class="cad-float-group">
+          <button type="button" class="cad-float-btn" id="ftRotateCCW" title="Ruota CCW (Q)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2.5 2v6h6"/><path d="M2.5 8C5 4 9 2 13.5 2a9.5 9.5 0 110 19c-4 0-7-2-9-5"/></svg>
+          </button>
+          <div class="cad-float-input-wrap">
+            <input type="number" id="ftRotateAngle" class="cad-float-input" value="90" min="1" max="360" step="1" title="Angolo di rotazione in gradi">
+            <span class="cad-float-unit">°</span>
+          </div>
+          <button type="button" class="cad-float-btn" id="ftRotateCW" title="Ruota CW (R/E)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6"/><path d="M21.5 8C19 4 15 2 10.5 2A9.5 9.5 0 1010.5 21c4 0 7-2 9-5"/></svg>
+          </button>
+        </div>
+        <div class="cad-float-divider"></div>
+        <!-- Mirror Group -->
+        <button type="button" class="cad-float-btn" id="ftMirrorX" title="Specchia X (M)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18"/><path d="M17 7l4 5-4 5"/><path d="M7 7l-4 5 4 5"/></svg>
+        </button>
+        <button type="button" class="cad-float-btn" id="ftMirrorY" title="Specchia Y">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18"/><path d="M7 7l5-4 5 4"/><path d="M7 17l5 4 5-4"/></svg>
+        </button>
+        <div class="cad-float-divider"></div>
+        <!-- Scale Group -->
+        <div class="cad-float-group">
+          <button type="button" class="cad-float-btn" id="ftScaleDown" title="Riduci">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+          </button>
+          <div class="cad-float-input-wrap">
+            <input type="number" id="ftScaleFactor" class="cad-float-input" value="1.5" min="0.1" max="10" step="0.1" title="Fattore di scala">
+            <span class="cad-float-unit">x</span>
+          </div>
+          <button type="button" class="cad-float-btn" id="ftScaleUp" title="Ingrandisci">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+          </button>
+        </div>
+        <div class="cad-float-divider"></div>
+        <!-- Move Group -->
+        <div class="cad-float-group">
+          <span class="cad-float-label">Sposta</span>
+          <div class="cad-float-input-wrap">
+            <input type="number" id="ftMoveX" class="cad-float-input cad-float-input-sm" value="0" step="1" title="Spostamento X in mm">
+            <span class="cad-float-unit">X</span>
+          </div>
+          <div class="cad-float-input-wrap">
+            <input type="number" id="ftMoveY" class="cad-float-input cad-float-input-sm" value="0" step="1" title="Spostamento Y in mm">
+            <span class="cad-float-unit">Y</span>
+          </div>
+          <button type="button" class="cad-float-btn cad-float-btn-sm" id="ftMoveApply" title="Applica spostamento">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          </button>
+        </div>
+        <div class="cad-float-divider"></div>
+        <!-- Actions -->
+        <button type="button" class="cad-float-btn" id="ftCopy" title="Copia (Ctrl+C)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+        </button>
+        <button type="button" class="cad-float-btn cad-float-btn-danger" id="ftDelete" title="Elimina (Del)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+        </button>
+      </div>
     </div>
 
     <!-- Right Panel - Output -->
@@ -287,11 +366,12 @@
 
   <!-- Command Line -->
   <div class="cad-command-bar" id="commandBar">
+    <div class="cad-command-autocomplete" id="commandAutocomplete"></div>
     <div class="cad-command-prompt">
       <span class="cad-prompt-symbol">&gt;</span>
       <input type="text" id="commandInput" class="cad-command-input" placeholder="Digita comando o coordinate..." autocomplete="off" spellcheck="false">
     </div>
-    <div class="cad-command-hint" id="commandHint">Seleziona uno strumento o digita un comando</div>
+    <div class="cad-command-hint" id="commandHint">Digita un comando (es: LINE, CIRCLE) o premi TAB per vedere tutti i comandi</div>
   </div>
 
   <!-- Status Bar -->
@@ -329,8 +409,12 @@
           <div class="cad-shortcut"><kbd>R</kbd> Rettangolo</div>
           <div class="cad-shortcut"><kbd>P</kbd> Poligono</div>
           <div class="cad-shortcut"><kbd>S</kbd> Seleziona</div>
-          <div class="cad-shortcut"><kbd>DEL</kbd> Elimina</div>
+          <div class="cad-shortcut"><kbd>DEL</kbd> Elimina selezione</div>
+          <div class="cad-shortcut"><kbd>Frecce</kbd> Sposta selezione</div>
+          <div class="cad-shortcut"><kbd>Shift+Frecce</kbd> Sposta 10mm</div>
           <div class="cad-shortcut"><kbd>ESC</kbd> Annulla</div>
+          <div class="cad-shortcut"><kbd>Ctrl+S</kbd> Salva disegno</div>
+          <div class="cad-shortcut"><kbd>Ctrl+O</kbd> Apri disegno</div>
           <div class="cad-shortcut"><kbd>Ctrl+Z</kbd> Annulla azione</div>
           <div class="cad-shortcut"><kbd>Ctrl+Y</kbd> Ripeti azione</div>
           <div class="cad-shortcut"><kbd>+/-</kbd> Zoom In/Out</div>

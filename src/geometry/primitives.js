@@ -79,6 +79,77 @@ export class Primitive {
   }
 
   /**
+   * Translate primitive by dx, dy - override in subclasses
+   */
+  translate(dx, dy) {
+    throw new Error('translate() must be implemented by subclass');
+  }
+
+  /**
+   * Rotate primitive around a center point - override in subclasses
+   */
+  rotate(cx, cy, radians) {
+    throw new Error('rotate() must be implemented by subclass');
+  }
+
+  /**
+   * Scale primitive from a center point - override in subclasses
+   */
+  scale(cx, cy, factor) {
+    throw new Error('scale() must be implemented by subclass');
+  }
+
+  /**
+   * Mirror primitive around a center point - override in subclasses
+   * @param {string} axis - 'x' for horizontal, 'y' for vertical
+   */
+  mirror(cx, cy, axis) {
+    throw new Error('mirror() must be implemented by subclass');
+  }
+
+  /**
+   * Helper: rotate a point around a center
+   */
+  static rotatePoint(px, py, cx, cy, radians) {
+    const cos = Math.cos(radians);
+    const sin = Math.sin(radians);
+    const dx = px - cx;
+    const dy = py - cy;
+    return {
+      x: cx + dx * cos - dy * sin,
+      y: cy + dx * sin + dy * cos
+    };
+  }
+
+  /**
+   * Helper: scale a point from a center
+   */
+  static scalePoint(px, py, cx, cy, factor) {
+    return {
+      x: cx + (px - cx) * factor,
+      y: cy + (py - cy) * factor
+    };
+  }
+
+  /**
+   * Helper: mirror a point around a center
+   */
+  static mirrorPoint(px, py, cx, cy, axis) {
+    if (axis === 'x') {
+      return { x: 2 * cx - px, y: py };
+    } else {
+      return { x: px, y: 2 * cy - py };
+    }
+  }
+
+  /**
+   * Check if primitive intersects with a box - override in subclasses
+   */
+  intersectsBox(minX, minY, maxX, maxY) {
+    return false;
+  }
+
+  /**
    * Serialize to JSON - override in subclasses
    */
   toJSON() {
@@ -237,6 +308,69 @@ export class Line extends Primitive {
     line.style = { ...this.style };
     line.layer = this.layer;
     return line;
+  }
+
+  translate(dx, dy) {
+    this.a = new Point(this.a.x + dx, this.a.y + dy, this.a.id);
+    this.a.parent = this;
+    this.b = new Point(this.b.x + dx, this.b.y + dy, this.b.id);
+    this.b.parent = this;
+  }
+
+  rotate(cx, cy, radians) {
+    const newA = Primitive.rotatePoint(this.a.x, this.a.y, cx, cy, radians);
+    const newB = Primitive.rotatePoint(this.b.x, this.b.y, cx, cy, radians);
+    this.a = new Point(newA.x, newA.y, this.a.id);
+    this.a.parent = this;
+    this.b = new Point(newB.x, newB.y, this.b.id);
+    this.b.parent = this;
+  }
+
+  scale(cx, cy, factor) {
+    const newA = Primitive.scalePoint(this.a.x, this.a.y, cx, cy, factor);
+    const newB = Primitive.scalePoint(this.b.x, this.b.y, cx, cy, factor);
+    this.a = new Point(newA.x, newA.y, this.a.id);
+    this.a.parent = this;
+    this.b = new Point(newB.x, newB.y, this.b.id);
+    this.b.parent = this;
+  }
+
+  mirror(cx, cy, axis) {
+    const newA = Primitive.mirrorPoint(this.a.x, this.a.y, cx, cy, axis);
+    const newB = Primitive.mirrorPoint(this.b.x, this.b.y, cx, cy, axis);
+    this.a = new Point(newA.x, newA.y, this.a.id);
+    this.a.parent = this;
+    this.b = new Point(newB.x, newB.y, this.b.id);
+    this.b.parent = this;
+  }
+
+  intersectsBox(minX, minY, maxX, maxY) {
+    // Check if either endpoint is inside
+    const aInside = this.a.x >= minX && this.a.x <= maxX && this.a.y >= minY && this.a.y <= maxY;
+    const bInside = this.b.x >= minX && this.b.x <= maxX && this.b.y >= minY && this.b.y <= maxY;
+    if (aInside || bInside) return true;
+
+    // Check line-box intersection using Liang-Barsky algorithm
+    const dx = this.b.x - this.a.x;
+    const dy = this.b.y - this.a.y;
+    let t0 = 0, t1 = 1;
+    const p = [-dx, dx, -dy, dy];
+    const q = [this.a.x - minX, maxX - this.a.x, this.a.y - minY, maxY - this.a.y];
+
+    for (let i = 0; i < 4; i++) {
+      if (p[i] === 0) {
+        if (q[i] < 0) return false;
+      } else {
+        const t = q[i] / p[i];
+        if (p[i] < 0) {
+          t0 = Math.max(t0, t);
+        } else {
+          t1 = Math.min(t1, t);
+        }
+        if (t0 > t1) return false;
+      }
+    }
+    return true;
   }
 
   toJSON() {
@@ -542,6 +676,66 @@ export class Arc extends Primitive {
     return arc;
   }
 
+  translate(dx, dy) {
+    this.a = new Point(this.a.x + dx, this.a.y + dy, this.a.id);
+    this.a.parent = this;
+    this.b = new Point(this.b.x + dx, this.b.y + dy, this.b.id);
+    this.b.parent = this;
+    this.c = new Point(this.c.x + dx, this.c.y + dy, this.c.id);
+    this.c.parent = this;
+    this.syncGeometry();
+  }
+
+  rotate(cx, cy, radians) {
+    const newA = Primitive.rotatePoint(this.a.x, this.a.y, cx, cy, radians);
+    const newB = Primitive.rotatePoint(this.b.x, this.b.y, cx, cy, radians);
+    const newC = Primitive.rotatePoint(this.c.x, this.c.y, cx, cy, radians);
+    this.a = new Point(newA.x, newA.y, this.a.id);
+    this.a.parent = this;
+    this.b = new Point(newB.x, newB.y, this.b.id);
+    this.b.parent = this;
+    this.c = new Point(newC.x, newC.y, this.c.id);
+    this.c.parent = this;
+    this.syncGeometry();
+  }
+
+  scale(cx, cy, factor) {
+    const newA = Primitive.scalePoint(this.a.x, this.a.y, cx, cy, factor);
+    const newB = Primitive.scalePoint(this.b.x, this.b.y, cx, cy, factor);
+    const newC = Primitive.scalePoint(this.c.x, this.c.y, cx, cy, factor);
+    this.a = new Point(newA.x, newA.y, this.a.id);
+    this.a.parent = this;
+    this.b = new Point(newB.x, newB.y, this.b.id);
+    this.b.parent = this;
+    this.c = new Point(newC.x, newC.y, this.c.id);
+    this.c.parent = this;
+    this.syncGeometry();
+  }
+
+  mirror(cx, cy, axis) {
+    const newA = Primitive.mirrorPoint(this.a.x, this.a.y, cx, cy, axis);
+    const newB = Primitive.mirrorPoint(this.b.x, this.b.y, cx, cy, axis);
+    const newC = Primitive.mirrorPoint(this.c.x, this.c.y, cx, cy, axis);
+    this.a = new Point(newA.x, newA.y, this.a.id);
+    this.a.parent = this;
+    this.b = new Point(newB.x, newB.y, this.b.id);
+    this.b.parent = this;
+    this.c = new Point(newC.x, newC.y, this.c.id);
+    this.c.parent = this;
+    this.syncGeometry();
+  }
+
+  intersectsBox(minX, minY, maxX, maxY) {
+    // Sample points along arc and check if any are inside the box
+    const samples = this.samplePoints(32);
+    for (const p of samples) {
+      if (p.x >= minX && p.x <= maxX && p.y >= minY && p.y <= maxY) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   toJSON() {
     return {
       ...super.toJSON(),
@@ -657,6 +851,39 @@ export class Circle extends Primitive {
     circle.style = { ...this.style };
     circle.layer = this.layer;
     return circle;
+  }
+
+  translate(dx, dy) {
+    this.center = new Point(this.center.x + dx, this.center.y + dy, this.center.id);
+    this.center.parent = this;
+  }
+
+  rotate(cx, cy, radians) {
+    const newCenter = Primitive.rotatePoint(this.center.x, this.center.y, cx, cy, radians);
+    this.center = new Point(newCenter.x, newCenter.y, this.center.id);
+    this.center.parent = this;
+  }
+
+  scale(cx, cy, factor) {
+    const newCenter = Primitive.scalePoint(this.center.x, this.center.y, cx, cy, factor);
+    this.center = new Point(newCenter.x, newCenter.y, this.center.id);
+    this.center.parent = this;
+    this._radius *= factor;
+  }
+
+  mirror(cx, cy, axis) {
+    const newCenter = Primitive.mirrorPoint(this.center.x, this.center.y, cx, cy, axis);
+    this.center = new Point(newCenter.x, newCenter.y, this.center.id);
+    this.center.parent = this;
+  }
+
+  intersectsBox(minX, minY, maxX, maxY) {
+    // Find closest point on box to circle center
+    const closestX = Math.max(minX, Math.min(this.center.x, maxX));
+    const closestY = Math.max(minY, Math.min(this.center.y, maxY));
+    const dx = this.center.x - closestX;
+    const dy = this.center.y - closestY;
+    return (dx * dx + dy * dy) <= (this._radius * this._radius);
   }
 
   toJSON() {
@@ -790,6 +1017,50 @@ export class Rectangle extends Primitive {
     rect.style = { ...this.style };
     rect.layer = this.layer;
     return rect;
+  }
+
+  translate(dx, dy) {
+    this._x += dx;
+    this._y += dy;
+  }
+
+  rotate(cx, cy, radians) {
+    // Rotate center, keep dimensions (axis-aligned rectangle limitation)
+    const rectCenter = this.center;
+    const newCenter = Primitive.rotatePoint(rectCenter.x, rectCenter.y, cx, cy, radians);
+    this._x = newCenter.x - this._width / 2;
+    this._y = newCenter.y - this._height / 2;
+    // For 90-degree rotations, swap dimensions
+    const degrees = Math.round((radians * 180 / Math.PI) % 360);
+    if (degrees === 90 || degrees === -270 || degrees === 270 || degrees === -90) {
+      const temp = this._width;
+      this._width = this._height;
+      this._height = temp;
+    }
+  }
+
+  scale(cx, cy, factor) {
+    const rectCenter = this.center;
+    const newCenter = Primitive.scalePoint(rectCenter.x, rectCenter.y, cx, cy, factor);
+    this._width *= factor;
+    this._height *= factor;
+    this._x = newCenter.x - this._width / 2;
+    this._y = newCenter.y - this._height / 2;
+  }
+
+  mirror(cx, cy, axis) {
+    const rectCenter = this.center;
+    const newCenter = Primitive.mirrorPoint(rectCenter.x, rectCenter.y, cx, cy, axis);
+    this._x = newCenter.x - this._width / 2;
+    this._y = newCenter.y - this._height / 2;
+  }
+
+  intersectsBox(minX, minY, maxX, maxY) {
+    // Simple AABB overlap test
+    return !(this._x + this._width < minX ||
+             this._x > maxX ||
+             this._y + this._height < minY ||
+             this._y > maxY);
   }
 
   toJSON() {
@@ -1008,6 +1279,57 @@ export class Polygon extends Primitive {
     return poly;
   }
 
+  translate(dx, dy) {
+    this.points = this.points.map((p, i) => {
+      const pt = new Point(p.x + dx, p.y + dy, `${this.id}:P${i}`);
+      pt.parent = this;
+      return pt;
+    });
+  }
+
+  rotate(cx, cy, radians) {
+    this.points = this.points.map((p, i) => {
+      const newP = Primitive.rotatePoint(p.x, p.y, cx, cy, radians);
+      const pt = new Point(newP.x, newP.y, `${this.id}:P${i}`);
+      pt.parent = this;
+      return pt;
+    });
+  }
+
+  scale(cx, cy, factor) {
+    this.points = this.points.map((p, i) => {
+      const newP = Primitive.scalePoint(p.x, p.y, cx, cy, factor);
+      const pt = new Point(newP.x, newP.y, `${this.id}:P${i}`);
+      pt.parent = this;
+      return pt;
+    });
+  }
+
+  mirror(cx, cy, axis) {
+    this.points = this.points.map((p, i) => {
+      const newP = Primitive.mirrorPoint(p.x, p.y, cx, cy, axis);
+      const pt = new Point(newP.x, newP.y, `${this.id}:P${i}`);
+      pt.parent = this;
+      return pt;
+    });
+  }
+
+  intersectsBox(minX, minY, maxX, maxY) {
+    // Check if any vertex is inside the box
+    for (const p of this.points) {
+      if (p.x >= minX && p.x <= maxX && p.y >= minY && p.y <= maxY) {
+        return true;
+      }
+    }
+    // Check if any edge intersects the box
+    for (const edge of this.edges) {
+      if (edge.intersectsBox(minX, minY, maxX, maxY)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   toJSON() {
     return {
       ...super.toJSON(),
@@ -1054,6 +1376,13 @@ export class Polyline extends Polygon {
     const poly = new Polyline(this.points.map(p => ({ x: p.x, y: p.y })));
     poly.style = { ...this.style };
     poly.layer = this.layer;
+    return poly;
+  }
+
+  static fromJSON(data) {
+    const poly = new Polyline(data.points, data.id);
+    if (data.style) poly.style = { ...data.style };
+    if (data.layer !== undefined) poly.layer = data.layer;
     return poly;
   }
 }

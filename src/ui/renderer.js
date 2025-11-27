@@ -106,17 +106,9 @@ export class CanvasRenderer {
     let width = rect.width || this.canvas.clientWidth;
     let height = rect.height || this.canvas.clientHeight;
 
-    console.log('resizeCanvas called - rect:', rect.width, 'x', rect.height);
-
     // Fallback if container has no size yet
-    if (width < 10) {
-      console.warn('Width too small, using fallback');
-      width = 800;
-    }
-    if (height < 10) {
-      console.warn('Height too small, using fallback');
-      height = 600;
-    }
+    if (width < 10) width = 800;
+    if (height < 10) height = 600;
 
     this.canvas.width = Math.floor(width * this.dpr);
     this.canvas.height = Math.floor(height * this.dpr);
@@ -129,8 +121,6 @@ export class CanvasRenderer {
     // Center the workspace
     this.view.panX = (width - this.workspace.width * this.view.scaleFactor) / 2;
     this.view.panY = (height - this.workspace.height * this.view.scaleFactor) / 2;
-
-    console.log('resizeCanvas - scaleFactor:', this.view.scaleFactor, 'pan:', this.view.panX, this.view.panY);
 
     this.render();
   }
