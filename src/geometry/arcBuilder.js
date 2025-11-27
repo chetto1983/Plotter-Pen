@@ -46,12 +46,13 @@ export class ArcBuilder {
     const distToThrough = distance(midpoint.x, midpoint.y, through.x, through.y);
 
     // If midpoint is far from through point, the arc goes the wrong way
-    // Swap start and end to reverse direction
+    // Create new arc with explicitly opposite direction
     if (distToThrough > circle.r * 0.3) {
       return new Arc(
-        end.x, end.y,
         start.x, start.y,
-        circle.cx, circle.cy
+        end.x, end.y,
+        circle.cx, circle.cy,
+        !arc._clockwise  // Explicitly set opposite direction
       );
     }
 
@@ -204,12 +205,9 @@ export class ArcBuilder {
     const cx = midX + midToCenter * perpX * sign;
     const cy = midY + midToCenter * perpY * sign;
 
-    // If bulge is negative, we want CW arc
-    if (bulge < 0) {
-      return new Arc(end.x, end.y, start.x, start.y, cx, cy);
-    }
-
-    return new Arc(start.x, start.y, end.x, end.y, cx, cy);
+    // Explicitly set direction: positive bulge = CCW (false), negative bulge = CW (true)
+    const clockwise = bulge < 0;
+    return new Arc(start.x, start.y, end.x, end.y, cx, cy, clockwise);
   }
 
   /**
