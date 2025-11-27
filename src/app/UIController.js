@@ -101,14 +101,14 @@ export class UIController {
       return Math.max(0.1, Math.min(10, val));
     };
 
-    // Rotate CCW (negative angle)
+    // Rotate CCW (positive angle in math convention)
     document.getElementById('ftRotateCCW')?.addEventListener('click', () => {
-      this.app.rotateSelected(-getRotateAngle());
+      this.app.rotateSelected(getRotateAngle());
     });
 
-    // Rotate CW (positive angle)
+    // Rotate CW (negative angle in math convention)
     document.getElementById('ftRotateCW')?.addEventListener('click', () => {
-      this.app.rotateSelected(getRotateAngle());
+      this.app.rotateSelected(-getRotateAngle());
     });
 
     // Mirror X (horizontal)

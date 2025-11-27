@@ -362,23 +362,23 @@ export class InputHandler {
         this.app.selectTool('arc');
         break;
       case 'r':
-        // R = Rotate if selection exists, otherwise Rectangle tool
+        // R = Rotate CW if selection exists, otherwise Rectangle tool
         if (this.app.selectedPrimitives.size > 0) {
-          this.app.rotateSelected(90);
+          this.app.rotateSelected(-90);  // CW = negative in math convention
         } else {
           this.app.selectTool('rectangle');
         }
         break;
       case 'q':
-        // Q = Rotate 90° CCW (counter-clockwise)
+        // Q = Rotate 90° CCW (counter-clockwise, positive in math convention)
         if (this.app.selectedPrimitives.size > 0) {
-          this.app.rotateSelected(-90);
+          this.app.rotateSelected(90);
         }
         break;
       case 'e':
-        // E = Rotate 90° CW (clockwise)
+        // E = Rotate 90° CW (clockwise, negative in math convention)
         if (this.app.selectedPrimitives.size > 0) {
-          this.app.rotateSelected(90);
+          this.app.rotateSelected(-90);
         }
         break;
       case 'm':

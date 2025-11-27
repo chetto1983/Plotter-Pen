@@ -4,7 +4,7 @@
  */
 
 import {
-  TWO_PI, TOLERANCE, VISUAL_TOLERANCE,
+  TWO_PI, HALF_PI, TOLERANCE, VISUAL_TOLERANCE,
   normalizeAngle, normalizeAngleSigned,
   distance, areEqual, clamp,
   Vector2, Point, BoundingBox
@@ -395,7 +395,7 @@ export class Line extends Primitive {
  * Arc primitive - Three point model (start, end, center)
  */
 export class Arc extends Primitive {
-  constructor(ax, ay, bx, by, cx, cy, id = null) {
+  constructor(ax, ay, bx, by, cx, cy, clockwise = null, id = null) {
     super('arc', id);
 
     // Three defining points
@@ -412,6 +412,9 @@ export class Arc extends Primitive {
     this._startAngle = 0;
     this._endAngle = 0;
     this._sweep = 0;
+
+    // Explicit direction flag (null = auto-detect on first sync)
+    this._clockwise = clockwise;
 
     this.syncGeometry();
   }
@@ -436,9 +439,28 @@ export class Arc extends Primitive {
 
   calcSweep() {
     let sweep = this._endAngle - this._startAngle;
-    // Normalize to smaller arc by default
-    if (sweep > Math.PI) sweep -= TWO_PI;
-    if (sweep < -Math.PI) sweep += TWO_PI;
+
+    // If direction is already set, preserve it
+    if (this._clockwise !== null) {
+      // For clockwise: sweep should be negative
+      // For counter-clockwise: sweep should be positive
+      if (this._clockwise) {
+        // Want clockwise (negative sweep)
+        while (sweep > 0) sweep -= TWO_PI;
+        if (sweep < -TWO_PI + TOLERANCE) sweep += TWO_PI;
+      } else {
+        // Want counter-clockwise (positive sweep)
+        while (sweep < 0) sweep += TWO_PI;
+        if (sweep > TWO_PI - TOLERANCE) sweep -= TWO_PI;
+      }
+    } else {
+      // First time: auto-detect based on smaller arc
+      if (sweep > Math.PI) sweep -= TWO_PI;
+      if (sweep < -Math.PI) sweep += TWO_PI;
+      // Store detected direction
+      this._clockwise = sweep < 0;
+    }
+
     return sweep;
   }
 
@@ -669,7 +691,8 @@ export class Arc extends Primitive {
     const arc = new Arc(
       this.a.x, this.a.y,
       this.b.x, this.b.y,
-      this.c.x, this.c.y
+      this.c.x, this.c.y,
+      this._clockwise
     );
     arc.style = { ...this.style };
     arc.layer = this.layer;
@@ -722,6 +745,8 @@ export class Arc extends Primitive {
     this.b.parent = this;
     this.c = new Point(newC.x, newC.y, this.c.id);
     this.c.parent = this;
+    // Mirror reverses direction (CW <-> CCW)
+    this._clockwise = !this._clockwise;
     this.syncGeometry();
   }
 
@@ -744,7 +769,8 @@ export class Arc extends Primitive {
       bx: this.b.x,
       by: this.b.y,
       cx: this.c.x,
-      cy: this.c.y
+      cy: this.c.y,
+      clockwise: this._clockwise
     };
   }
 
@@ -753,6 +779,7 @@ export class Arc extends Primitive {
       data.ax, data.ay,
       data.bx, data.by,
       data.cx, data.cy,
+      data.clockwise !== undefined ? data.clockwise : null,
       data.id
     );
     if (data.style) arc.style = { ...data.style };
