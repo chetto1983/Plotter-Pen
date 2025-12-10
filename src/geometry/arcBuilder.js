@@ -30,31 +30,50 @@ export class ArcBuilder {
    * Most intuitive - pick three points on the arc
    */
   static fromThreePoints(start, through, end) {
+    console.log('fromThreePoints called with:',
+      'start:', start.x?.toFixed(1), start.y?.toFixed(1),
+      'through:', through.x?.toFixed(1), through.y?.toFixed(1),
+      'end:', end.x?.toFixed(1), end.y?.toFixed(1));
     const circle = ArcBuilder.circleFromThreePoints(start, through, end);
     if (!circle) return null;
 
-    // Create initial arc
+    // Calculate angles from center to each point
+    const startAngle = Math.atan2(start.y - circle.cy, start.x - circle.cx);
+    const throughAngle = Math.atan2(through.y - circle.cy, through.x - circle.cx);
+    const endAngle = Math.atan2(end.y - circle.cy, end.x - circle.cx);
+
+    // Determine direction by checking which way around the circle
+    // we need to go from start to end to pass through the 'through' point
+
+    // Normalize angles relative to start (all in [0, 2π))
+    let throughRel = throughAngle - startAngle;
+    let endRel = endAngle - startAngle;
+
+    while (throughRel < 0) throughRel += 2 * Math.PI;
+    while (throughRel >= 2 * Math.PI) throughRel -= 2 * Math.PI;
+    while (endRel < 0) endRel += 2 * Math.PI;
+    while (endRel >= 2 * Math.PI) endRel -= 2 * Math.PI;
+
+    // If throughRel < endRel, then going CCW (positive angle direction)
+    // from start, we hit 'through' before 'end' - this is the CCW arc
+    // If throughRel > endRel, then going CW (negative angle direction)
+    // from start, we hit 'through' before 'end' - this is the CW arc
+    //
+    // clockwise = true means negative sweep (CW in math coords)
+    // In screen coordinates with Y down, this visually appears CCW
+    const clockwise = throughRel > endRel;
+
     const arc = new Arc(
       start.x, start.y,
       end.x, end.y,
-      circle.cx, circle.cy
+      circle.cx, circle.cy,
+      clockwise
     );
 
-    // Verify the arc passes through the 'through' point
-    // If not, we need to reverse direction
-    const midpoint = arc.midpoint;
-    const distToThrough = distance(midpoint.x, midpoint.y, through.x, through.y);
-
-    // If midpoint is far from through point, the arc goes the wrong way
-    // Create new arc with explicitly opposite direction
-    if (distToThrough > circle.r * 0.3) {
-      return new Arc(
-        start.x, start.y,
-        end.x, end.y,
-        circle.cx, circle.cy,
-        !arc._clockwise  // Explicitly set opposite direction
-      );
-    }
+    // Store the through point as the actual midpoint/aux point
+    // This is the point the user clicked, so it's definitely on the correct side
+    arc._throughPoint = { x: through.x, y: through.y };
+    console.log('fromThreePoints: set _throughPoint to', arc._throughPoint);
 
     return arc;
   }
@@ -524,6 +543,13 @@ export class ArcToolState {
           const through = this.points[2];
           const bulge = ArcBuilder.calculateBulge(start, end, through);
           arc = ArcBuilder.fromStartEndBulge(start, end, bulge);
+          // Calculate the actual point ON the arc for PLC output
+          // The click position (through) is not exactly on the arc
+          if (arc) {
+            // Project the click point onto the arc to get the true aux point
+            const mp = arc.midpoint;
+            arc._throughPoint = { x: mp.x, y: mp.y };
+          }
         }
         break;
 

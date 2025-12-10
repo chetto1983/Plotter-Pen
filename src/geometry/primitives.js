@@ -508,10 +508,31 @@ export class Arc extends Primitive {
   }
 
   /**
-   * Get midpoint on arc
+   * Get midpoint on arc (the point halfway along the drawn arc)
+   * Must match exactly how canvas renders the arc visually on screen (Y-axis down)
    */
   get midpoint() {
-    const midAngle = this._startAngle + this._sweep / 2;
+    const { startAngle, endAngle, anticlockwise } = this.getRenderData();
+
+    // Canvas arc() draws from startAngle to endAngle:
+    // - anticlockwise=true: goes in INCREASING angle direction (math CCW)
+    // - anticlockwise=false: goes in DECREASING angle direction (math CW)
+    //
+    // To find the midpoint ON THE DRAWN ARC, we must follow the same direction.
+
+    let midAngle;
+    if (anticlockwise) {
+      // Canvas goes in DECREASING angle direction
+      let sweep = startAngle - endAngle;
+      if (sweep < 0) sweep += TWO_PI;
+      midAngle = startAngle - sweep / 2;
+    } else {
+      // Canvas goes in INCREASING angle direction
+      let sweep = endAngle - startAngle;
+      if (sweep < 0) sweep += TWO_PI;
+      midAngle = startAngle + sweep / 2;
+    }
+
     return new Vector2(
       this.c.x + this.radius * Math.cos(midAngle),
       this.c.y + this.radius * Math.sin(midAngle)

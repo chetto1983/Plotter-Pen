@@ -7,7 +7,7 @@ import { Vector2 } from './geometry/core.js';
 import { SnapManager } from './geometry/snap.js';
 import { LineTool, ArcTool, CircleTool, RectangleTool, PolygonTool } from './tools/toolManager.js';
 import { CanvasRenderer } from './ui/renderer.js';
-import { PLCOutputGenerator } from './plc/extraction.js';
+import { PLCOutputGenerator, PathOptimizer } from './plc/extraction.js';
 import { InputHandler } from './app/InputHandler.js';
 import { UIController } from './app/UIController.js';
 import { StateManager } from './app/StateManager.js';
@@ -296,6 +296,7 @@ class CADApplication {
    * Add a primitive
    */
   addPrimitive(primitive) {
+    console.log('addPrimitive:', primitive.type, '_throughPoint:', primitive._throughPoint);
     this.state.pushState();
     this.primitives.push(primitive);
     this.ui.updateStats();
@@ -649,10 +650,11 @@ class CADApplication {
       if (p.type === 'line') {
         p.plcData = { type: 1, x1: p.x1, y1: p.y1, x2: p.x2, y2: p.y2 };
       } else if (p.type === 'arc') {
+        // Robot post-processor style: end point + aux point (midpoint on arc)
         p.plcData = {
           type: p.isClockwise ? 2 : 3,
           x1: p.x1, y1: p.y1, x2: p.x2, y2: p.y2,
-          cx: p.cx, cy: p.cy, r: p.radius
+          cx: p.cx, cy: p.cy
         };
       } else if (p.type === 'circle') {
         // Circle is an arc from 0 to 360 degrees
@@ -660,7 +662,7 @@ class CADApplication {
           type: 3, // CCW full circle
           x1: p.center.x + p.radius, y1: p.center.y,
           x2: p.center.x + p.radius, y2: p.center.y,
-          cx: p.center.x, cy: p.center.y, r: p.radius
+          cx: p.center.x, cy: p.center.y
         };
       } else if (p.type === 'rectangle') {
         // Rectangle becomes 4 lines - handle separately
@@ -703,9 +705,12 @@ class CADApplication {
       }
     }
 
-    // Generate PLC commands (skip path optimization as it requires full primitive objects)
+    // Optimize path order to minimize Z movements
+    const optimizedPrimitives = PathOptimizer.optimizeOrder(expandedPrimitives);
+
+    // Generate PLC commands
     const generator = new PLCOutputGenerator();
-    const commands = generator.generate(expandedPrimitives);
+    const commands = generator.generate(optimizedPrimitives);
     this.plcCommands = commands; // Store full commands with primitive references
     this.plcOutput = commands.map(c => c.command);
 
@@ -749,6 +754,35 @@ class CADApplication {
     URL.revokeObjectURL(url);
 
     this.ui.updateStatus('File scaricato');
+  }
+
+  /**
+   * Simulate the PLC path execution
+   */
+  simulatePath() {
+    if (!this.plcCommands || this.plcCommands.length === 0) {
+      this.ui.updateStatus('Nessun percorso da simulare');
+      return;
+    }
+
+    // Check if simulation is already running
+    if (this.renderer.simulation && this.renderer.simulation.running) {
+      this.renderer.stopSimulation();
+      this.ui.updateStatus('Simulazione fermata');
+      return;
+    }
+
+    this.ui.updateStatus('Simulazione in corso...');
+
+    this.renderer.startSimulation(this.plcCommands, {
+      speed: 80,  // pixels per second (slower for better visualization)
+      onComplete: () => {
+        this.ui.updateStatus('Simulazione completata');
+      },
+      onUpdate: () => {
+        // Could update UI with progress here
+      }
+    });
   }
 
   /**

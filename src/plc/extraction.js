@@ -81,10 +81,11 @@ export class PrimitiveExtractor {
       info.start.x, info.start.y,
       info.end.x, info.end.y,
       info.center.x, info.center.y,
-      `arc_${id}`
+      null,           // clockwise - auto-detect
+      `arc_${id}`     // id
     );
 
-    // Add PLC-specific data
+    // Add PLC-specific data (robot post-processor style: end point + center)
     arc.plcData = {
       type: arc.isClockwise ? PLC_TYPES.ARC_CW : PLC_TYPES.ARC_CCW,
       x1: info.start.x,
@@ -92,9 +93,7 @@ export class PrimitiveExtractor {
       x2: info.end.x,
       y2: info.end.y,
       cx: info.center.x,
-      cy: info.center.y,
-      r: info.radius,
-      dir: arc.isClockwise ? 'CW' : 'CCW'
+      cy: info.center.y
     };
 
     return arc;
@@ -341,6 +340,7 @@ export class PrimitiveExtractor {
         }
       }
 
+      // Robot post-processor style: end point + center (no radius/direction)
       arc.plcData = {
         type: arc.isClockwise ? PLC_TYPES.ARC_CW : PLC_TYPES.ARC_CCW,
         x1: arc.x1,
@@ -348,9 +348,7 @@ export class PrimitiveExtractor {
         x2: arc.x2,
         y2: arc.y2,
         cx: arc.cx,
-        cy: arc.cy,
-        r: arc.radius,
-        dir: arc.isClockwise ? 'CW' : 'CCW'
+        cy: arc.cy
       };
 
       return { primitive: arc, endIndex: bestEnd, rms };
@@ -438,19 +436,49 @@ export class PathOptimizer {
 
       const selected = remaining.splice(nearestIndex, 1)[0];
 
-      // Reverse if needed (for lines, swap start/end)
-      if (reverseNearest && selected.type === 'line') {
-        const temp = { x: selected.x1, y: selected.y1 };
-        selected.a.x = selected.x2;
-        selected.a.y = selected.y2;
-        selected.b.x = temp.x;
-        selected.b.y = temp.y;
+      // Reverse if needed
+      if (reverseNearest) {
+        if (selected.type === 'line') {
+          // For lines, swap start/end
+          const temp = { x: selected.x1, y: selected.y1 };
+          selected.a.x = selected.x2;
+          selected.a.y = selected.y2;
+          selected.b.x = temp.x;
+          selected.b.y = temp.y;
 
-        if (selected.plcData) {
-          selected.plcData.x1 = selected.x1;
-          selected.plcData.y1 = selected.y1;
-          selected.plcData.x2 = selected.x2;
-          selected.plcData.y2 = selected.y2;
+          if (selected.plcData) {
+            selected.plcData.x1 = selected.x1;
+            selected.plcData.y1 = selected.y1;
+            selected.plcData.x2 = selected.x2;
+            selected.plcData.y2 = selected.y2;
+          }
+        } else if (selected.type === 'arc') {
+          // For arcs, swap start/end and flip direction
+          const tempA = { x: selected.a.x, y: selected.a.y };
+          selected.a.x = selected.b.x;
+          selected.a.y = selected.b.y;
+          selected.b.x = tempA.x;
+          selected.b.y = tempA.y;
+
+          // Flip clockwise flag
+          selected._clockwise = !selected._clockwise;
+          selected.syncGeometry();
+
+          // Recalculate _throughPoint (midpoint will be same point, just traversed opposite direction)
+          if (selected._throughPoint) {
+            // The through point stays the same position on the arc
+            // but we need to recalculate it from the new midpoint
+            const mp = selected.midpoint;
+            selected._throughPoint = { x: mp.x, y: mp.y };
+          }
+
+          if (selected.plcData) {
+            selected.plcData.x1 = selected.x1;
+            selected.plcData.y1 = selected.y1;
+            selected.plcData.x2 = selected.x2;
+            selected.plcData.y2 = selected.y2;
+            selected.plcData.type = selected.isClockwise ? PLC_TYPES.ARC_CW : PLC_TYPES.ARC_CCW;
+          }
         }
       }
 
@@ -576,11 +604,45 @@ export class PLCOutputGenerator {
       const y2 = data.y2 ?? primitive.y2;
       command = `L X ${fmt(x2)}, Y ${fmt(y2)}`;
     } else if (primitive.type === 'arc') {
+      // Robot post-processor style: end point (X, Y) + aux point on arc (I, J)
       const x2 = data.x2 ?? primitive.x2;
       const y2 = data.y2 ?? primitive.y2;
-      const r = data.r ?? primitive.radius;
-      const dir = primitive.isClockwise ? 'CW' : 'CCW';
-      command = `A X ${fmt(x2)}, Y ${fmt(y2)}, R ${fmt(r)}, DIR ${dir}`;
+
+      // Use the through point if available (from 3-point arc creation), otherwise calculate midpoint
+      let auxX, auxY;
+      console.log('DEBUG: _throughPoint =', primitive._throughPoint, 'midpoint =', primitive.midpoint);
+      if (primitive._throughPoint) {
+        // Use the through point - this is exactly on the arc where user clicked
+        auxX = primitive._throughPoint.x;
+        auxY = primitive._throughPoint.y;
+        console.log('DEBUG: Using _throughPoint:', auxX, auxY);
+      } else if (primitive.midpoint && typeof primitive.midpoint.x === 'number') {
+        // Arc class has midpoint getter - use it directly
+        auxX = primitive.midpoint.x;
+        auxY = primitive.midpoint.y;
+        console.log('DEBUG: Using midpoint:', auxX, auxY);
+      } else {
+        // Fallback: calculate from available data
+        const cx = primitive.cx ?? data.cx;
+        const cy = primitive.cy ?? data.cy;
+        const x1 = data.x1 ?? primitive.x1;
+        const y1 = data.y1 ?? primitive.y1;
+        const radius = primitive.radius ?? Math.sqrt((x1 - cx) ** 2 + (y1 - cy) ** 2);
+        const startAngle = primitive.startAngle ?? Math.atan2(y1 - cy, x1 - cx);
+        const sweep = primitive.sweep ?? primitive._sweep;
+
+        if (sweep !== undefined) {
+          const midAngle = startAngle + sweep / 2;
+          auxX = cx + radius * Math.cos(midAngle);
+          auxY = cy + radius * Math.sin(midAngle);
+        } else {
+          // Last resort: use center point (this will be wrong but at least won't crash)
+          auxX = cx;
+          auxY = cy;
+        }
+      }
+
+      command = `A X ${fmt(x2)}, Y ${fmt(y2)}, I ${fmt(auxX)}, J ${fmt(auxY)}`;
     } else if (primitive.type === 'circle') {
       // Circle is drawn as a full arc
       const cx = data.cx ?? primitive.cx;
@@ -641,15 +703,16 @@ export class PLCOutputGenerator {
       };
     }
 
-    // Parse arc: A X 100.000, Y 200.000, R 50.000, DIR CW
-    const arcMatch = cmd.match(/^A\s+X\s+([\d.-]+),\s*Y\s+([\d.-]+),\s*R\s+([\d.-]+),\s*DIR\s+(CW|CCW)$/);
+    // Parse arc: A X 100.000, Y 200.000, I 50.000, J 75.000 (robot post-processor style)
+    // I, J are the aux point coordinates (point on arc that defines the bulge)
+    const arcMatch = cmd.match(/^A\s+X\s+([\d.-]+),\s*Y\s+([\d.-]+),\s*I\s+([\d.-]+),\s*J\s+([\d.-]+)$/);
     if (arcMatch) {
       return {
         type: 'arc',
         x2: parseFloat(arcMatch[1]),
         y2: parseFloat(arcMatch[2]),
-        r: parseFloat(arcMatch[3]),
-        dir: arcMatch[4]
+        auxX: parseFloat(arcMatch[3]),  // aux point X (point on arc)
+        auxY: parseFloat(arcMatch[4])   // aux point Y (point on arc)
       };
     }
 

@@ -50,6 +50,7 @@ export class UIController {
 
       // Output
       { name: 'EXTRACT', aliases: ['PLC', 'OUTPUT'], desc: 'Estrai comandi PLC', shortcut: '', category: 'Output', action: () => this.app.extractPLC() },
+      { name: 'SIMULATE', aliases: ['SIM', 'SIMULA'], desc: 'Simula percorso utensile', shortcut: '', category: 'Output', action: () => this.app.simulatePath() },
       { name: 'COPY', aliases: ['COPIA'], desc: 'Copia output negli appunti', shortcut: '', category: 'Output', action: () => this.app.copyOutput() },
       { name: 'DOWNLOAD', aliases: ['SCARICA'], desc: 'Scarica output come file', shortcut: '', category: 'Output', action: () => this.app.downloadOutput() },
       { name: 'SEND', aliases: ['INVIA'], desc: 'Invia a PLC via OPC UA', shortcut: '', category: 'Output', action: () => this.app.sendToPLC() },
@@ -212,6 +213,7 @@ export class UIController {
     document.getElementById('btnZoomIn')?.addEventListener('click', () => this.app.zoomIn());
     document.getElementById('btnZoomOut')?.addEventListener('click', () => this.app.zoomOut());
     document.getElementById('btnZoomFit')?.addEventListener('click', () => this.app.zoomFit());
+    document.getElementById('btnSimulate')?.addEventListener('click', () => this.app.simulatePath());
     document.getElementById('btnCopyOutput')?.addEventListener('click', () => this.app.copyOutput());
     document.getElementById('btnDownloadOutput')?.addEventListener('click', () => this.app.downloadOutput());
     document.getElementById('btnSendPLC')?.addEventListener('click', () => this.app.sendToPLC());
