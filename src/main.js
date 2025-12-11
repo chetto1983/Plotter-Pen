@@ -293,15 +293,60 @@ class CADApplication {
   }
 
   /**
-   * Add a primitive
+   * Add a primitive (with boundary validation)
    */
   addPrimitive(primitive) {
     console.log('addPrimitive:', primitive.type, '_throughPoint:', primitive._throughPoint);
+
+    // Validate primitive fits within workspace boundaries
+    if (!this.validateBoundaries(primitive)) {
+      this.ui.updateStatus('Primitiva fuori dai limiti del workspace');
+      return;
+    }
+
     this.state.pushState();
     this.primitives.push(primitive);
     this.ui.updateStats();
     this.render();
     this.refreshPLCOutput();
+  }
+
+  /**
+   * Validate that a primitive fits within workspace boundaries
+   */
+  validateBoundaries(primitive) {
+    const w = this.workspaceWidth;
+    const h = this.workspaceHeight;
+
+    if (primitive.type === 'circle') {
+      const cx = primitive.cx ?? primitive.center?.x;
+      const cy = primitive.cy ?? primitive.center?.y;
+      const r = primitive.radius ?? primitive._radius;
+
+      // Check if circle fits within workspace
+      if (cx - r < 0 || cx + r > w || cy - r < 0 || cy + r > h) {
+        return false;
+      }
+    } else if (primitive.type === 'arc') {
+      // Check arc bounding box
+      const bb = primitive.getBoundingBox();
+      if (bb.minX < 0 || bb.maxX > w || bb.minY < 0 || bb.maxY > h) {
+        return false;
+      }
+    } else if (primitive.type === 'line') {
+      // Lines should already be clamped by input handler
+      if (primitive.x1 < 0 || primitive.x1 > w || primitive.x2 < 0 || primitive.x2 > w ||
+          primitive.y1 < 0 || primitive.y1 > h || primitive.y2 < 0 || primitive.y2 > h) {
+        return false;
+      }
+    } else if (primitive.type === 'rectangle') {
+      if (primitive.x < 0 || primitive.x + primitive.width > w ||
+          primitive.y < 0 || primitive.y + primitive.height > h) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   /**
@@ -765,19 +810,34 @@ class CADApplication {
       return;
     }
 
+    const controlsEl = document.getElementById('simulationControls');
+    const sliderEl = document.getElementById('simSpeedSlider');
+    const btnSimulate = document.getElementById('btnSimulate');
+
     // Check if simulation is already running
     if (this.renderer.simulation && this.renderer.simulation.running) {
       this.renderer.stopSimulation();
       this.ui.updateStatus('Simulazione fermata');
+      if (controlsEl) controlsEl.style.display = 'none';
+      if (btnSimulate) btnSimulate.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
       return;
     }
+
+    // Show speed controls
+    if (controlsEl) controlsEl.style.display = 'block';
+    if (btnSimulate) btnSimulate.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
+
+    // Get speed from slider
+    const speed = sliderEl ? parseInt(sliderEl.value) : 80;
 
     this.ui.updateStatus('Simulazione in corso...');
 
     this.renderer.startSimulation(this.plcCommands, {
-      speed: 80,  // pixels per second (slower for better visualization)
+      speed: speed,
       onComplete: () => {
         this.ui.updateStatus('Simulazione completata');
+        if (controlsEl) controlsEl.style.display = 'none';
+        if (btnSimulate) btnSimulate.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
       },
       onUpdate: () => {
         // Could update UI with progress here

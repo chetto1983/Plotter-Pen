@@ -53,6 +53,7 @@ export class InputHandler {
 
   /**
    * Convert screen coordinates to world coordinates
+   * Clamps result to workspace boundaries
    */
   screenToWorld(screenX, screenY) {
     const rect = this.app.canvas.getBoundingClientRect();
@@ -60,7 +61,12 @@ export class InputHandler {
       x: screenX - rect.left,
       y: screenY - rect.top
     });
-    return new Vector2(point.x, point.y);
+
+    // Clamp to workspace boundaries
+    const x = Math.max(0, Math.min(this.app.workspaceWidth, point.x));
+    const y = Math.max(0, Math.min(this.app.workspaceHeight, point.y));
+
+    return new Vector2(x, y);
   }
 
   /**

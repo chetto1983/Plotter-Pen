@@ -412,12 +412,19 @@ export class PathOptimizer {
       // Find nearest primitive start/end point
       for (let i = 0; i < remaining.length; i++) {
         const prim = remaining[i];
-        const startPt = prim.type === 'arc'
-          ? { x: prim.x1, y: prim.y1 }
-          : { x: prim.x1, y: prim.y1 };
-        const endPt = prim.type === 'arc'
-          ? { x: prim.x2, y: prim.y2 }
-          : { x: prim.x2, y: prim.y2 };
+        let startPt, endPt;
+
+        if (prim.type === 'circle') {
+          // Circle starts and ends at same point (right side)
+          const cx = prim.cx ?? prim.center?.x;
+          const cy = prim.cy ?? prim.center?.y;
+          const r = prim.radius ?? prim._radius;
+          startPt = { x: cx + r, y: cy };
+          endPt = startPt;  // Circle is closed
+        } else {
+          startPt = { x: prim.x1, y: prim.y1 };
+          endPt = { x: prim.x2, y: prim.y2 };
+        }
 
         const distToStart = distance(currentPoint.x, currentPoint.y, startPt.x, startPt.y);
         const distToEnd = distance(currentPoint.x, currentPoint.y, endPt.x, endPt.y);
@@ -485,9 +492,15 @@ export class PathOptimizer {
       optimized.push(selected);
 
       // Update current point
-      currentPoint = selected.type === 'arc'
-        ? { x: selected.x2, y: selected.y2 }
-        : { x: selected.x2, y: selected.y2 };
+      if (selected.type === 'circle') {
+        // Circle ends where it started
+        const cx = selected.cx ?? selected.center?.x;
+        const cy = selected.cy ?? selected.center?.y;
+        const r = selected.radius ?? selected._radius;
+        currentPoint = { x: cx + r, y: cy };
+      } else {
+        currentPoint = { x: selected.x2, y: selected.y2 };
+      }
     }
 
     return optimized;
@@ -536,8 +549,19 @@ export class PLCOutputGenerator {
     for (let i = 0; i < primitives.length; i++) {
       const prim = primitives[i];
       const data = prim.plcData || {};
-      const x1 = data.x1 ?? prim.x1;
-      const y1 = data.y1 ?? prim.y1;
+
+      // Get start point - circles start at right side (cx + r, cy)
+      let x1, y1;
+      if (prim.type === 'circle') {
+        const cx = data.cx ?? prim.cx ?? prim.center?.x;
+        const cy = data.cy ?? prim.cy ?? prim.center?.y;
+        const r = data.r ?? prim.radius ?? prim._radius;
+        x1 = cx + r;
+        y1 = cy;
+      } else {
+        x1 = data.x1 ?? prim.x1;
+        y1 = data.y1 ?? prim.y1;
+      }
 
       // Check if we need a jump to the start point
       const needsJump = Math.abs(lastPoint.x - x1) > 0.01 || Math.abs(lastPoint.y - y1) > 0.01;
@@ -568,12 +592,19 @@ export class PLCOutputGenerator {
         });
       }
 
-      // Add the drawing command
+      // Add the drawing command(s)
       const cmd = this.primitiveToCommand(prim, commands.length);
       if (cmd) {
-        commands.push(cmd);
-        // Update last point to end of this primitive
-        lastPoint = { x: data.x2 ?? prim.x2, y: data.y2 ?? prim.y2 };
+        // Circle returns an array of commands
+        if (Array.isArray(cmd)) {
+          commands.push(...cmd);
+          // Circle ends where it started (closed shape)
+          lastPoint = { x: x1, y: y1 };
+        } else {
+          commands.push(cmd);
+          // Update last point to end of this primitive
+          lastPoint = { x: data.x2 ?? prim.x2, y: data.y2 ?? prim.y2 };
+        }
       }
     }
 
@@ -644,11 +675,9 @@ export class PLCOutputGenerator {
 
       command = `A X ${fmt(x2)}, Y ${fmt(y2)}, I ${fmt(auxX)}, J ${fmt(auxY)}`;
     } else if (primitive.type === 'circle') {
-      // Circle is drawn as a full arc
-      const cx = data.cx ?? primitive.cx;
-      const cy = data.cy ?? primitive.cy;
-      const r = data.r ?? primitive.radius;
-      command = `C X ${fmt(cx)}, Y ${fmt(cy)}, R ${fmt(r)}`;
+      // Circle is drawn as two semicircular arcs (robot 3-point style)
+      // This method returns an array of commands for circles
+      return this.circleToCommands(primitive, index);
     } else {
       return null;
     }
@@ -659,6 +688,53 @@ export class PLCOutputGenerator {
       command: command,
       primitive: primitive
     };
+  }
+
+  /**
+   * Convert circle to two arc commands (robot 3-point style)
+   * A circle is split into two 180° arcs
+   */
+  circleToCommands(primitive, startIndex) {
+    const data = primitive.plcData || {};
+    const fmt = (v) => v.toFixed(this.precision);
+
+    const cx = data.cx ?? primitive.cx ?? primitive.center?.x;
+    const cy = data.cy ?? primitive.cy ?? primitive.center?.y;
+    const r = data.r ?? primitive.radius ?? primitive._radius;
+
+    // Circle split into two semicircles:
+    // Start point: right side (cx + r, cy)
+    // Middle point: left side (cx - r, cy)
+    // End point: back to start (cx + r, cy)
+
+    const startX = cx + r;
+    const startY = cy;
+    const midX = cx - r;
+    const midY = cy;
+
+    // Aux points for each semicircle (top and bottom of circle)
+    const aux1X = cx;
+    const aux1Y = cy - r;  // Top of circle (first arc goes up)
+    const aux2X = cx;
+    const aux2Y = cy + r;  // Bottom of circle (second arc goes down)
+
+    // Return array of two arc commands
+    return [
+      {
+        index: startIndex,
+        type: 'arc',
+        command: `A X ${fmt(midX)}, Y ${fmt(midY)}, I ${fmt(aux1X)}, J ${fmt(aux1Y)}`,
+        primitive: primitive,
+        isCirclePart: 1
+      },
+      {
+        index: startIndex + 1,
+        type: 'arc',
+        command: `A X ${fmt(startX)}, Y ${fmt(startY)}, I ${fmt(aux2X)}, J ${fmt(aux2Y)}`,
+        primitive: primitive,
+        isCirclePart: 2
+      }
+    ];
   }
 
   /**

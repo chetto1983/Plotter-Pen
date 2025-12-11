@@ -15,7 +15,7 @@
       </button>
       <div class="cad-brand">
         <span class="cad-brand-name">Sacchi Plotter Pen</span>
-        <span class="cad-brand-version">v2.0</span>
+        <span class="cad-brand-version">v2.2</span>
       </div>
     </div>
     <nav class="cad-nav" id="mainNav">
@@ -336,6 +336,13 @@
         <div class="cad-panel-content cad-output-content">
           <div class="cad-output-grid" id="outputGrid">
             <div class="cad-output-empty">Disegna primitive per generare i comandi PLC</div>
+          </div>
+        </div>
+        <div class="cad-simulation-controls" id="simulationControls" style="display: none; padding: 8px; border-top: 1px solid rgba(255,255,255,0.1);">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 11px; color: #8899aa;">Velocità:</span>
+            <input type="range" id="simSpeedSlider" min="20" max="400" value="80" style="flex: 1; height: 4px;">
+            <span id="simSpeedValue" style="font-size: 11px; color: #8899aa; min-width: 45px;">80 px/s</span>
           </div>
         </div>
       </div>

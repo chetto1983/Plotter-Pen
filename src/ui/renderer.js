@@ -924,9 +924,23 @@ export class CanvasRenderer {
    * Update linear movement
    */
   updateLinearMovement(sim, target, moveDistance) {
-    const dx = target.x - sim.toolPosition.x;
-    const dy = target.y - sim.toolPosition.y;
-    const totalDist = Math.sqrt(dx * dx + dy * dy);
+    // Store start position on first frame of this movement
+    if (!sim.lineStart) {
+      sim.lineStart = { x: sim.toolPosition.x, y: sim.toolPosition.y };
+      sim.lineLength = null;
+    }
+
+    const startX = sim.lineStart.x;
+    const startY = sim.lineStart.y;
+    const dx = target.x - startX;
+    const dy = target.y - startY;
+
+    // Calculate total distance once and cache it
+    if (!sim.lineLength) {
+      sim.lineLength = Math.sqrt(dx * dx + dy * dy);
+    }
+
+    const totalDist = sim.lineLength;
 
     if (totalDist < 0.1) {
       // Arrived at target
@@ -934,6 +948,8 @@ export class CanvasRenderer {
       sim.toolPosition.y = target.y;
       sim.currentIndex++;
       sim.progress = 0;
+      sim.lineStart = null;
+      sim.lineLength = null;
       return;
     }
 
@@ -941,15 +957,10 @@ export class CanvasRenderer {
     const oldPos = { ...sim.toolPosition };
 
     sim.progress += step;
-    sim.toolPosition.x = oldPos.x + dx * step / (1 - (sim.progress - step));
-    sim.toolPosition.y = oldPos.y + dy * step / (1 - (sim.progress - step));
 
-    // Simpler interpolation
-    const t = sim.progress;
-    const startX = target.x - dx;
-    const startY = target.y - dy;
-    sim.toolPosition.x = startX + dx * t;
-    sim.toolPosition.y = startY + dy * t;
+    // Interpolate from stored start position
+    sim.toolPosition.x = startX + dx * sim.progress;
+    sim.toolPosition.y = startY + dy * sim.progress;
 
     // Add to trail if tool is down
     if (sim.toolDown) {
@@ -967,6 +978,8 @@ export class CanvasRenderer {
       sim.toolPosition.y = target.y;
       sim.currentIndex++;
       sim.progress = 0;
+      sim.lineStart = null;
+      sim.lineLength = null;
     }
   }
 

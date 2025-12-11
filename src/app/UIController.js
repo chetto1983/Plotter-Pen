@@ -217,6 +217,20 @@ export class UIController {
     document.getElementById('btnCopyOutput')?.addEventListener('click', () => this.app.copyOutput());
     document.getElementById('btnDownloadOutput')?.addEventListener('click', () => this.app.downloadOutput());
     document.getElementById('btnSendPLC')?.addEventListener('click', () => this.app.sendToPLC());
+
+    // Simulation speed slider
+    const simSpeedSlider = document.getElementById('simSpeedSlider');
+    const simSpeedValue = document.getElementById('simSpeedValue');
+    if (simSpeedSlider) {
+      simSpeedSlider.addEventListener('input', (e) => {
+        const speed = parseInt(e.target.value);
+        if (simSpeedValue) simSpeedValue.textContent = `${speed} px/s`;
+        // Update simulation speed in real-time
+        if (this.app.renderer.simulation) {
+          this.app.renderer.setSimulationSpeed(speed);
+        }
+      });
+    }
   }
 
   /**
