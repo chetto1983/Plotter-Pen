@@ -641,17 +641,17 @@ export class PLCOutputGenerator {
 
       // Use the through point if available (from 3-point arc creation), otherwise calculate midpoint
       let auxX, auxY;
-      console.log('DEBUG: _throughPoint =', primitive._throughPoint, 'midpoint =', primitive.midpoint);
+      //console.log('DEBUG: _throughPoint =', primitive._throughPoint, 'midpoint =', primitive.midpoint);
       if (primitive._throughPoint) {
         // Use the through point - this is exactly on the arc where user clicked
         auxX = primitive._throughPoint.x;
         auxY = primitive._throughPoint.y;
-        console.log('DEBUG: Using _throughPoint:', auxX, auxY);
+        //console.log('DEBUG: Using _throughPoint:', auxX, auxY);
       } else if (primitive.midpoint && typeof primitive.midpoint.x === 'number') {
         // Arc class has midpoint getter - use it directly
         auxX = primitive.midpoint.x;
         auxY = primitive.midpoint.y;
-        console.log('DEBUG: Using midpoint:', auxX, auxY);
+        //console.log('DEBUG: Using midpoint:', auxX, auxY);
       } else {
         // Fallback: calculate from available data
         const cx = primitive.cx ?? data.cx;
