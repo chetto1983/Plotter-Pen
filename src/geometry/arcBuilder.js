@@ -30,10 +30,10 @@ export class ArcBuilder {
    * Most intuitive - pick three points on the arc
    */
   static fromThreePoints(start, through, end) {
-    console.log('fromThreePoints called with:',
+    //console.log('fromThreePoints called with:',
       'start:', start.x?.toFixed(1), start.y?.toFixed(1),
       'through:', through.x?.toFixed(1), through.y?.toFixed(1),
-      'end:', end.x?.toFixed(1), end.y?.toFixed(1));
+      'end:', end.x?.toFixed(1), end.y?.toFixed(1);
     const circle = ArcBuilder.circleFromThreePoints(start, through, end);
     if (!circle) return null;
 
@@ -73,7 +73,7 @@ export class ArcBuilder {
     // Store the through point as the actual midpoint/aux point
     // This is the point the user clicked, so it's definitely on the correct side
     arc._throughPoint = { x: through.x, y: through.y };
-    console.log('fromThreePoints: set _throughPoint to', arc._throughPoint);
+    //console.log('fromThreePoints: set _throughPoint to', arc._throughPoint);
 
     return arc;
   }
