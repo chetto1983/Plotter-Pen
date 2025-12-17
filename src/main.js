@@ -65,7 +65,7 @@ class CADApplication {
     // Get canvas element
     this.canvas = document.getElementById('cadCanvas');
     if (!this.canvas) {
-      console.error('Canvas element not found');
+      //console.error('Canvas element not found');
       return;
     }
 
@@ -296,7 +296,7 @@ class CADApplication {
    * Add a primitive (with boundary validation)
    */
   addPrimitive(primitive) {
-    console.log('addPrimitive:', primitive.type, '_throughPoint:', primitive._throughPoint);
+    //console.log('addPrimitive:', primitive.type, '_throughPoint:', primitive._throughPoint);
 
     // Validate primitive fits within workspace boundaries
     if (!this.validateBoundaries(primitive)) {
@@ -977,7 +977,7 @@ class CADApplication {
         throw new Error('Primitives deve essere un array');
       }
     } catch (err) {
-      console.error('Error deserializing primitives:', err);
+      //console.error('Error deserializing primitives:', err);
       throw new Error(`Errore caricamento primitive: ${err.message}`);
     }
 
