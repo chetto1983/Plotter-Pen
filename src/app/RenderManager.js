@@ -76,10 +76,10 @@ export class RenderManager {
   toRenderFormat(p) {
     const isHighlighted = this.app.highlightedPrimitive === p ||
       (this.app.highlightedPrimitive &&
-       this.app.highlightedPrimitive.x1 === p.x1 &&
-       this.app.highlightedPrimitive.y1 === p.y1 &&
-       this.app.highlightedPrimitive.x2 === p.x2 &&
-       this.app.highlightedPrimitive.y2 === p.y2);
+        this.app.highlightedPrimitive.x1 === p.x1 &&
+        this.app.highlightedPrimitive.y1 === p.y1 &&
+        this.app.highlightedPrimitive.x2 === p.x2 &&
+        this.app.highlightedPrimitive.y2 === p.y2);
     const base = { visible: true, type: p.type, selected: this.app.selectedPrimitives.has(p), highlighted: isHighlighted };
 
     switch (p.type) {
@@ -95,11 +95,9 @@ export class RenderManager {
           x2: p.x2, y2: p.y2,
           startAngle: p.startAngle, endAngle: p.endAngle,
           isClockwise: p.isClockwise,
-          getRenderData: () => ({
-            cx: p.cx, cy: p.cy, r: p.radius,
-            startAngle: p.startAngle, endAngle: p.endAngle,
-            anticlockwise: !p.isClockwise
-          })
+          midpoint: p.midpoint,
+          _throughPoint: p._throughPoint,
+          getRenderData: () => p.getRenderData()  // Delegate to Arc class (single source of truth)
         };
       case 'circle':
         return { ...base, cx: p.center.x, cy: p.center.y, radius: p.radius };

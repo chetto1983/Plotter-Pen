@@ -130,29 +130,10 @@ export class Arc extends Primitive {
 
   /**
    * Get midpoint on arc (the point halfway along the drawn arc)
-   * Must match exactly how canvas renders the arc visually on screen (Y-axis down)
    */
   get midpoint() {
-    const { startAngle, endAngle, anticlockwise } = this.getRenderData();
-
-    // Canvas arc() draws from startAngle to endAngle:
-    // - anticlockwise=true: goes in INCREASING angle direction (math CCW)
-    // - anticlockwise=false: goes in DECREASING angle direction (math CW)
-    //
-    // To find the midpoint ON THE DRAWN ARC, we must follow the same direction.
-
-    let midAngle;
-    if (anticlockwise) {
-      // Canvas goes in DECREASING angle direction
-      let sweep = startAngle - endAngle;
-      if (sweep < 0) sweep += TWO_PI;
-      midAngle = startAngle - sweep / 2;
-    } else {
-      // Canvas goes in INCREASING angle direction
-      let sweep = endAngle - startAngle;
-      if (sweep < 0) sweep += TWO_PI;
-      midAngle = startAngle + sweep / 2;
-    }
+    // The midpoint is simply at halfway through the sweep
+    const midAngle = this._startAngle + this._sweep / 2;
 
     return new Vector2(
       this.c.x + this.radius * Math.cos(midAngle),
@@ -307,18 +288,32 @@ export class Arc extends Primitive {
 
   /**
    * Get render data for canvas arc() method
+   * This is the SINGLE SOURCE OF TRUTH for arc rendering
+   * 
+   * Uses sweep angle to determine direction:
+   * - Positive sweep (CCW) → draw from startAngle to endAngle
+   * - Negative sweep (CW) → swap angles to draw correctly
    */
   getRenderData() {
-    const startNorm = normalizeAngle(this._startAngle);
-    const isFullCircle = areEqual(this.a.x, this.b.x) && areEqual(this.a.y, this.b.y);
-
+    // Canvas always draws in the direction from startAngle to endAngle
+    // For negative sweep (CW), we need to swap the angles
+    if (this._sweep < 0) {
+      return {
+        cx: this.c.x,
+        cy: this.c.y,
+        r: this.radius,
+        startAngle: this._endAngle,
+        endAngle: this._startAngle,
+        anticlockwise: false
+      };
+    }
     return {
       cx: this.c.x,
       cy: this.c.y,
       r: this.radius,
-      startAngle: startNorm,
-      endAngle: isFullCircle ? startNorm + TWO_PI : normalizeAngle(this._endAngle),
-      anticlockwise: this._sweep >= 0  // CCW when sweep is positive
+      startAngle: this._startAngle,
+      endAngle: this._endAngle,
+      anticlockwise: false
     };
   }
 

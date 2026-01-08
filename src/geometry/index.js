@@ -18,6 +18,7 @@ export {
   lerp,
   distance,
   distanceSquared,
+  pointToSegmentDistance,
   Vector2,
   Point,
   BoundingBox,

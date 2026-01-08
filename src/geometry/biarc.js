@@ -11,6 +11,9 @@
  * - Fit arcs to curves with adaptive subdivision
  */
 
+import { ArcBuilder } from './arcBuilder.js';
+import { pointToSegmentDistance } from './core.js';
+
 // ============================================================================
 // Vector2D utilities
 // ============================================================================
@@ -351,20 +354,10 @@ export function bezierToBiarcs(p1, c1, c2, p2, options = {}) {
 
 /**
  * Fit circle through 3 points (circumcircle)
+ * Delegates to ArcBuilder's canonical implementation
  */
 export function circleFrom3Points(p1, p2, p3) {
-    const ax = p1.x, ay = p1.y;
-    const bx = p2.x, by = p2.y;
-    const cx = p3.x, cy = p3.y;
-
-    const d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
-    if (Math.abs(d) < 1e-10) return null;
-
-    const ux = ((ax * ax + ay * ay) * (by - cy) + (bx * bx + by * by) * (cy - ay) + (cx * cx + cy * cy) * (ay - by)) / d;
-    const uy = ((ax * ax + ay * ay) * (cx - bx) + (bx * bx + by * by) * (ax - cx) + (cx * cx + cy * cy) * (bx - ax)) / d;
-    const r = Math.sqrt((ax - ux) ** 2 + (ay - uy) ** 2);
-
-    return { cx: ux, cy: uy, r };
+    return ArcBuilder.circleFromThreePoints(p1, p2, p3);
 }
 
 /**
@@ -469,15 +462,10 @@ export function fitArcsAndLines(points, options = {}) {
 
 /**
  * Distance from point to line segment
+ * Delegates to core.js canonical implementation
  */
 function pointToLineDistance(pt, start, end) {
-    const dx = end.x - start.x;
-    const dy = end.y - start.y;
-    const len2 = dx * dx + dy * dy;
-    if (len2 < 1e-10) return Vec2.dist(pt, start);
-
-    const t = Math.max(0, Math.min(1, ((pt.x - start.x) * dx + (pt.y - start.y) * dy) / len2));
-    return Vec2.dist(pt, { x: start.x + t * dx, y: start.y + t * dy });
+    return pointToSegmentDistance(pt.x, pt.y, start.x, start.y, end.x, end.y);
 }
 
 // ============================================================================

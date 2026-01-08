@@ -292,6 +292,34 @@ export class ArcBuilder {
   }
 
   /**
+   * Calculate sweep angle that passes through an auxiliary point
+   * Used for determining arc direction from 3 points (start, aux, end)
+   * 
+   * @param {number} startAngle - Start angle in radians
+   * @param {number} auxAngle - Auxiliary point angle in radians  
+   * @param {number} endAngle - End angle in radians
+   * @returns {number} Sweep angle (positive = CCW, negative = CW)
+   */
+  static calculateSweepThroughPoint(startAngle, auxAngle, endAngle) {
+    // Normalize angles relative to start
+    let auxRel = auxAngle - startAngle;
+    let endRel = endAngle - startAngle;
+
+    // Use while loops for exact normalization behavior
+    while (auxRel < 0) auxRel += TWO_PI;
+    while (auxRel >= TWO_PI) auxRel -= TWO_PI;
+    while (endRel < 0) endRel += TWO_PI;
+    while (endRel >= TWO_PI) endRel -= TWO_PI;
+
+    // If aux comes before end in CCW direction, go CCW (positive sweep)
+    if (auxRel < endRel) {
+      return endRel;
+    }
+    // Go CW (negative direction)
+    return endRel - TWO_PI;
+  }
+
+  /**
    * Calculate the signed distance from a point to the chord (start-end line)
    * Positive = left of chord, Negative = right of chord
    */

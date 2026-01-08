@@ -6,11 +6,20 @@
 import bSpline from '../geometry/b-spline.js';
 import { Line, Arc, Circle, Polygon, Polyline } from '../geometry/primitives.js';
 import { ArcBuilder } from '../geometry/arcBuilder.js';
+import { pointToSegmentDistance } from '../geometry/core.js';
 
 export class DXFImporter {
     constructor() {
         this.parser = new DxfParser();
         this.scaleFactor = 1.0;
+    }
+
+
+    toModelPoint(x, y) {
+        return {
+            x: x * this.scaleFactor,
+            y: -y * this.scaleFactor
+        };
     }
 
     async parse(dxfContent) {
@@ -67,33 +76,41 @@ export class DXFImporter {
 
     convertLine(entity) {
         const v = entity.vertices;
-        const s = this.scaleFactor;
-        return new Line(v[0].x * s, -v[0].y * s, v[1].x * s, -v[1].y * s);
+        const start = this.toModelPoint(v[0].x, v[0].y);
+        const end = this.toModelPoint(v[1].x, v[1].y);
+        return new Line(start.x, start.y, end.x, end.y);
     }
 
     convertCircle(entity) {
-        const s = this.scaleFactor;
-        return new Circle(entity.center.x * s, -entity.center.y * s, entity.radius * s);
+        const center = this.toModelPoint(entity.center.x, entity.center.y);
+        return new Circle(center.x, center.y, entity.radius * this.scaleFactor);
     }
 
     convertArc(entity) {
-        const s = this.scaleFactor;
-        const cx = entity.center.x * s;
-        const cy = -entity.center.y * s;
-        const r = entity.radius * s;
-        const startRad = -entity.startAngle * (Math.PI / 180);
-        const endRad = -entity.endAngle * (Math.PI / 180);
-        return new Arc(
-            cx + r * Math.cos(startRad), cy + r * Math.sin(startRad),
-            cx + r * Math.cos(endRad), cy + r * Math.sin(endRad),
-            cx, cy, true
-        );
+        const cx = entity.center.x;
+        const cy = entity.center.y;
+        const r = entity.radius;
+        const startRad = entity.startAngle * (Math.PI / 180);
+        const endRad = entity.endAngle * (Math.PI / 180);
+
+        let sweep = endRad - startRad;
+        if (sweep < 0) sweep += Math.PI * 2;
+        const midRad = startRad + sweep / 2;
+
+        const start = this.toModelPoint(cx + r * Math.cos(startRad), cy + r * Math.sin(startRad));
+        const mid = this.toModelPoint(cx + r * Math.cos(midRad), cy + r * Math.sin(midRad));
+        const end = this.toModelPoint(cx + r * Math.cos(endRad), cy + r * Math.sin(endRad));
+
+        const arc = ArcBuilder.fromThreePoints(start, mid, end);
+        if (arc) return arc;
+
+        const center = this.toModelPoint(cx, cy);
+        return new Arc(start.x, start.y, end.x, end.y, center.x, center.y);
     }
 
     convertPolyline(entity) {
         if (!entity.vertices || entity.vertices.length < 2) return null;
-        const s = this.scaleFactor;
-        const points = entity.vertices.map(v => ({ x: v.x * s, y: -v.y * s }));
+        const points = entity.vertices.map(v => this.toModelPoint(v.x, v.y));
         const isClosed = entity.shape || entity.closed === true;
         return isClosed ? new Polygon(points) : new Polyline(points);
     }
@@ -122,7 +139,7 @@ export class DXFImporter {
             for (let i = 0; i <= samples; i++) {
                 const t = minT + (i / samples) * (maxT - minT);
                 const pt = bSpline(t, degree, controlPoints, knots);
-                points.push({ x: pt[0], y: -pt[1] });
+                points.push(this.toModelPoint(pt[0] / s, pt[1] / s));
             }
 
             const isClosed = entity.closed || entity.closedSpline;
@@ -158,7 +175,7 @@ export class DXFImporter {
 
         } catch (err) {
             console.warn('Spline conversion failed:', err);
-            const fallback = entity.controlPoints.map(p => ({ x: p.x * s, y: -p.y * s }));
+            const fallback = entity.controlPoints.map(p => this.toModelPoint(p.x, p.y));
             return new Polyline(fallback);
         }
     }
@@ -199,8 +216,7 @@ export class DXFImporter {
             }
 
             if (bestArcEnd > i + 1 && bestCircle) {
-                // Determine arc direction using common logic
-                // Construct a temporary arc to deduce properties consistently
+                // Determine arc direction from the three points
                 const midIdx = Math.floor((i + bestArcEnd) / 2);
                 const tempArc = ArcBuilder.fromThreePoints(points[i], points[midIdx], points[bestArcEnd]);
 
@@ -288,13 +304,12 @@ export class DXFImporter {
         return [points[0], points[end]];
     }
 
+    /**
+     * Perpendicular distance from point to line segment
+     * Delegates to core.js canonical implementation
+     */
     perpDist(pt, lineStart, lineEnd) {
-        const dx = lineEnd.x - lineStart.x;
-        const dy = lineEnd.y - lineStart.y;
-        const len = Math.sqrt(dx * dx + dy * dy);
-        if (len < 0.0001) return Math.sqrt((pt.x - lineStart.x) ** 2 + (pt.y - lineStart.y) ** 2);
-        const t = ((pt.x - lineStart.x) * dx + (pt.y - lineStart.y) * dy) / (len * len);
-        return Math.sqrt((pt.x - (lineStart.x + t * dx)) ** 2 + (pt.y - (lineStart.y + t * dy)) ** 2);
+        return pointToSegmentDistance(pt.x, pt.y, lineStart.x, lineStart.y, lineEnd.x, lineEnd.y);
     }
 
     calculateBounds(primitives) {

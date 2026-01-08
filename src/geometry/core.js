@@ -81,6 +81,31 @@ export function distanceSquared(x1, y1, x2, y2) {
 }
 
 /**
+ * Calculate perpendicular distance from point to line segment
+ * @param {number} px - Point x
+ * @param {number} py - Point y
+ * @param {number} x1 - Segment start x
+ * @param {number} y1 - Segment start y
+ * @param {number} x2 - Segment end x
+ * @param {number} y2 - Segment end y
+ * @returns {number} Distance from point to nearest point on segment
+ */
+export function pointToSegmentDistance(px, py, x1, y1, x2, y2) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const lenSq = dx * dx + dy * dy;
+
+  if (lenSq < TOLERANCE) {
+    return distance(px, py, x1, y1);
+  }
+
+  // Project point onto line, clamped to segment
+  const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / lenSq));
+  return distance(px, py, x1 + t * dx, y1 + t * dy);
+}
+
+
+/**
  * 2D Vector class with chainable operations
  */
 export class Vector2 {
@@ -325,12 +350,12 @@ export class BoundingBox {
 
   containsPoint(p) {
     return p.x >= this.minX && p.x <= this.maxX &&
-           p.y >= this.minY && p.y <= this.maxY;
+      p.y >= this.minY && p.y <= this.maxY;
   }
 
   intersects(box) {
     return this.maxX >= box.minX && this.minX <= box.maxX &&
-           this.maxY >= box.minY && this.minY <= box.maxY;
+      this.maxY >= box.minY && this.minY <= box.maxY;
   }
 
   clone() {

@@ -276,42 +276,18 @@ export class SimulationManager {
 
   /**
    * Calculate sweep angle that passes through aux point
+   * Delegates to ArcBuilder's canonical implementation
    */
   calculateSweepThroughPoint(startAngle, auxAngle, endAngle) {
-    // Normalize angles relative to start
-    let auxRel = auxAngle - startAngle;
-    let endRel = endAngle - startAngle;
-
-    while (auxRel < 0) auxRel += Math.PI * 2;
-    while (auxRel >= Math.PI * 2) auxRel -= Math.PI * 2;
-    while (endRel < 0) endRel += Math.PI * 2;
-    while (endRel >= Math.PI * 2) endRel -= Math.PI * 2;
-
-    // If aux comes before end in CCW direction, go CCW
-    if (auxRel < endRel) {
-      return endRel;
-    }
-
-    // Go CW (negative direction)
-    return endRel - Math.PI * 2;
+    return ArcBuilder.calculateSweepThroughPoint(startAngle, auxAngle, endAngle);
   }
 
   /**
    * Calculate circle from 3 points
+   * Delegates to ArcBuilder's canonical implementation
    */
   circleFromThreePoints(p1, p2, p3) {
-    const ax = p1.x, ay = p1.y;
-    const bx = p2.x, by = p2.y;
-    const cx = p3.x, cy = p3.y;
-
-    const d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
-    if (Math.abs(d) < 0.0001) return null;
-
-    const ux = ((ax * ax + ay * ay) * (by - cy) + (bx * bx + by * by) * (cy - ay) + (cx * cx + cy * cy) * (ay - by)) / d;
-    const uy = ((ax * ax + ay * ay) * (cx - bx) + (bx * bx + by * by) * (ax - cx) + (cx * cx + cy * cy) * (bx - ax)) / d;
-    const r = Math.sqrt((ax - ux) ** 2 + (ay - uy) ** 2);
-
-    return { cx: ux, cy: uy, r };
+    return ArcBuilder.circleFromThreePoints(p1, p2, p3);
   }
 
   /**
