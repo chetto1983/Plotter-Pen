@@ -1,0 +1,312 @@
+/**
+ * DXF Importer - Parses DXF files and converts to Primitives
+ * Uses dxf-parser library (loaded via script tag)
+ */
+
+import bSpline from '../geometry/b-spline.js';
+import { Line, Arc, Circle, Polygon, Polyline } from '../geometry/primitives.js';
+import { ArcBuilder } from '../geometry/arcBuilder.js';
+
+export class DXFImporter {
+    constructor() {
+        this.parser = new DxfParser();
+        this.scaleFactor = 1.0;
+    }
+
+    async parse(dxfContent) {
+        let dxf;
+        try {
+            dxf = this.parser.parseSync(dxfContent);
+        } catch (e) {
+            console.error('DXF Parser Error:', e);
+            throw new Error('Errore nel parsing del file DXF. Formato non valido.');
+        }
+
+        if (!dxf || !dxf.entities) {
+            throw new Error('File DXF vuoto o non valido');
+        }
+
+        this.scaleFactor = 1.0;
+        if (dxf.header && dxf.header['$INSUNITS'] !== undefined) {
+            const units = dxf.header['$INSUNITS'];
+            switch (units) {
+                case 1: this.scaleFactor = 25.4; break;
+                case 2: this.scaleFactor = 304.8; break;
+                case 4: this.scaleFactor = 1.0; break;
+                case 5: this.scaleFactor = 10.0; break;
+                case 6: this.scaleFactor = 1000.0; break;
+                default: this.scaleFactor = 1.0; break;
+            }
+            console.log(`DXF Units: ${units}, Scale Factor: ${this.scaleFactor}`);
+        }
+
+        const primitives = [];
+        for (const entity of dxf.entities) {
+            const prim = this.convertEntity(entity);
+            if (prim) {
+                if (Array.isArray(prim)) primitives.push(...prim);
+                else primitives.push(prim);
+            }
+        }
+
+        const bounds = this.calculateBounds(primitives);
+        return { primitives, bounds };
+    }
+
+    convertEntity(entity) {
+        switch (entity.type) {
+            case 'LINE': return this.convertLine(entity);
+            case 'CIRCLE': return this.convertCircle(entity);
+            case 'ARC': return this.convertArc(entity);
+            case 'LWPOLYLINE':
+            case 'POLYLINE': return this.convertPolyline(entity);
+            case 'SPLINE': return this.convertSpline(entity);
+            default: return null;
+        }
+    }
+
+    convertLine(entity) {
+        const v = entity.vertices;
+        const s = this.scaleFactor;
+        return new Line(v[0].x * s, -v[0].y * s, v[1].x * s, -v[1].y * s);
+    }
+
+    convertCircle(entity) {
+        const s = this.scaleFactor;
+        return new Circle(entity.center.x * s, -entity.center.y * s, entity.radius * s);
+    }
+
+    convertArc(entity) {
+        const s = this.scaleFactor;
+        const cx = entity.center.x * s;
+        const cy = -entity.center.y * s;
+        const r = entity.radius * s;
+        const startRad = -entity.startAngle * (Math.PI / 180);
+        const endRad = -entity.endAngle * (Math.PI / 180);
+        return new Arc(
+            cx + r * Math.cos(startRad), cy + r * Math.sin(startRad),
+            cx + r * Math.cos(endRad), cy + r * Math.sin(endRad),
+            cx, cy, true
+        );
+    }
+
+    convertPolyline(entity) {
+        if (!entity.vertices || entity.vertices.length < 2) return null;
+        const s = this.scaleFactor;
+        const points = entity.vertices.map(v => ({ x: v.x * s, y: -v.y * s }));
+        const isClosed = entity.shape || entity.closed === true;
+        return isClosed ? new Polygon(points) : new Polyline(points);
+    }
+
+    /**
+     * Convert spline - detect circles, arcs, or use polygon
+     */
+    convertSpline(entity) {
+        const degree = entity.degreeOfSplineCurve || 3;
+        const knots = entity.knotValues;
+        const s = this.scaleFactor;
+        const controlPoints = entity.controlPoints.map(p => [p.x * s, p.y * s]);
+
+        if (!controlPoints || controlPoints.length < degree + 1) return null;
+
+        try {
+            let minT = 0, maxT = 1;
+            if (knots && knots.length > 0) {
+                minT = knots[degree];
+                maxT = knots[knots.length - 1 - degree];
+            }
+
+            // Sample spline at high resolution
+            const points = [];
+            const samples = 100;
+            for (let i = 0; i <= samples; i++) {
+                const t = minT + (i / samples) * (maxT - minT);
+                const pt = bSpline(t, degree, controlPoints, knots);
+                points.push({ x: pt[0], y: -pt[1] });
+            }
+
+            const isClosed = entity.closed || entity.closedSpline;
+
+            // Check if this closed spline is a circle
+            if (isClosed) {
+                const circle = this.detectCircle(points);
+                if (circle) {
+                    return new Circle(circle.cx, circle.cy, circle.r);
+                }
+
+                // Not a full circle - try to fit arcs and lines
+                const fitted = this.fitArcsToPoints(points);
+                if (fitted.length > 0 && fitted.length < points.length / 2) {
+                    // Close the shape if needed
+                    const first = fitted[0];
+                    const last = fitted[fitted.length - 1];
+                    const startPt = { x: first.x1, y: first.y1 };
+                    const endPt = { x: last.x2, y: last.y2 };
+                    const gap = Math.sqrt((startPt.x - endPt.x) ** 2 + (startPt.y - endPt.y) ** 2);
+                    if (gap > 0.5) {
+                        fitted.push(new Line(endPt.x, endPt.y, startPt.x, startPt.y));
+                    }
+                    return fitted;
+                }
+
+                // Fallback to polygon
+                return new Polygon(this.simplifyPoints(points, 0.5));
+            }
+
+            // Open spline - return as polyline simplified
+            return new Polyline(this.simplifyPoints(points, 0.5));
+
+        } catch (err) {
+            console.warn('Spline conversion failed:', err);
+            const fallback = entity.controlPoints.map(p => ({ x: p.x * s, y: -p.y * s }));
+            return new Polyline(fallback);
+        }
+    }
+
+    /**
+     * Fit arcs and lines to points (simplified version)
+     */
+    fitArcsToPoints(points) {
+        const tolerance = 0.5;
+        const result = [];
+        let i = 0;
+
+        while (i < points.length - 1) {
+            // Try arc fitting
+            let bestArcEnd = -1;
+            let bestCircle = null;
+
+            if (i + 2 < points.length) {
+                for (let j = i + 2; j < points.length && j < i + 60; j++) {
+                    const mid = Math.floor((i + j) / 2);
+                    // Use ArcBuilder common logic
+                    const circle = ArcBuilder.circleFromThreePoints(points[i], points[mid], points[j]);
+                    if (!circle || circle.r < 0.5 || circle.r > 50000) continue;
+
+                    let fits = true;
+                    for (let k = i; k <= j; k++) {
+                        const dist = Math.sqrt((points[k].x - circle.cx) ** 2 + (points[k].y - circle.cy) ** 2);
+                        if (Math.abs(dist - circle.r) > tolerance) {
+                            fits = false;
+                            break;
+                        }
+                    }
+                    if (fits) {
+                        bestArcEnd = j;
+                        bestCircle = circle;
+                    }
+                }
+            }
+
+            if (bestArcEnd > i + 1 && bestCircle) {
+                // Determine arc direction using common logic
+                // Construct a temporary arc to deduce properties consistently
+                const midIdx = Math.floor((i + bestArcEnd) / 2);
+                const tempArc = ArcBuilder.fromThreePoints(points[i], points[midIdx], points[bestArcEnd]);
+
+                const clockwise = tempArc ? tempArc.isClockwise : false;
+
+                result.push(new Arc(
+                    points[i].x, points[i].y,
+                    points[bestArcEnd].x, points[bestArcEnd].y,
+                    bestCircle.cx, bestCircle.cy, clockwise
+                ));
+                i = bestArcEnd;
+            } else {
+                // Line segment
+                let lineEnd = i + 1;
+                for (let j = i + 2; j < points.length && j < i + 30; j++) {
+                    let fits = true;
+                    for (let k = i + 1; k < j; k++) {
+                        const dist = this.perpDist(points[k], points[i], points[j]);
+                        if (dist > tolerance) { fits = false; break; }
+                    }
+                    if (fits) lineEnd = j;
+                    else break;
+                }
+                result.push(new Line(points[i].x, points[i].y, points[lineEnd].x, points[lineEnd].y));
+                i = lineEnd;
+            }
+        }
+        return result;
+    }
+
+    // DELETED: fitCircle3Points (replaced by ArcBuilder.circleFromThreePoints)
+
+    /**
+     * Detect if points form a circle
+     */
+    detectCircle(points) {
+        if (points.length < 10) return null;
+
+        // Use 3 points to define a candidate circle
+        const p1 = points[0];
+        const p2 = points[Math.floor(points.length / 3)];
+        const p3 = points[Math.floor(points.length * 2 / 3)];
+
+        // Use ArcBuilder common logic for circle detection
+        const circle = ArcBuilder.circleFromThreePoints(p1, p2, p3);
+
+        if (!circle) return null;
+        if (circle.r < 0.1 || circle.r > 10000) return null;
+
+        const ux = circle.cx;
+        const uy = circle.cy;
+        const r = circle.r;
+
+        // Check if all points are on this circle (tolerance based on radius)
+        const tolerance = r * 0.02; // 2% of radius
+        for (const p of points) {
+            const dist = Math.sqrt((p.x - ux) ** 2 + (p.y - uy) ** 2);
+            if (Math.abs(dist - r) > tolerance) {
+                return null;
+            }
+        }
+
+        return { cx: ux, cy: uy, r };
+    }
+
+    /**
+     * Simplify points using Douglas-Peucker algorithm
+     */
+    simplifyPoints(points, epsilon) {
+        if (points.length <= 2) return points;
+
+        let dmax = 0, index = 0;
+        const end = points.length - 1;
+
+        for (let i = 1; i < end; i++) {
+            const d = this.perpDist(points[i], points[0], points[end]);
+            if (d > dmax) { index = i; dmax = d; }
+        }
+
+        if (dmax > epsilon) {
+            const left = this.simplifyPoints(points.slice(0, index + 1), epsilon);
+            const right = this.simplifyPoints(points.slice(index), epsilon);
+            return [...left.slice(0, -1), ...right];
+        }
+        return [points[0], points[end]];
+    }
+
+    perpDist(pt, lineStart, lineEnd) {
+        const dx = lineEnd.x - lineStart.x;
+        const dy = lineEnd.y - lineStart.y;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        if (len < 0.0001) return Math.sqrt((pt.x - lineStart.x) ** 2 + (pt.y - lineStart.y) ** 2);
+        const t = ((pt.x - lineStart.x) * dx + (pt.y - lineStart.y) * dy) / (len * len);
+        return Math.sqrt((pt.x - (lineStart.x + t * dx)) ** 2 + (pt.y - (lineStart.y + t * dy)) ** 2);
+    }
+
+    calculateBounds(primitives) {
+        if (primitives.length === 0) return null;
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const p of primitives) {
+            const bb = p.getBoundingBox();
+            minX = Math.min(minX, bb.minX);
+            minY = Math.min(minY, bb.minY);
+            maxX = Math.max(maxX, bb.maxX);
+            maxY = Math.max(maxY, bb.maxY);
+        }
+        return isFinite(minX) ? { minX, minY, maxX, maxY } : null;
+    }
+}

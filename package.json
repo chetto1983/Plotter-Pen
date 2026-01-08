@@ -9,8 +9,10 @@
     "dev": "node --watch server.js"
   },
   "dependencies": {
-    "express": "^5.1.0",
-    "node-opcua-client": "^2.158.0"
+    "b-spline": "^2.0.2",
+    "dxf-parser": "^1.1.2",
+    "express": "^5.2.1",
+    "node-opcua-client": "^2.159.0"
   },
   "engines": {
     "node": ">=18.0.0"

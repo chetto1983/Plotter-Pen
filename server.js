@@ -44,8 +44,8 @@ const DEFAULT_OPCUA_CONFIG = {
   arrayLength: 0,
 };
 
-class OpcUaConfigurationError extends Error {}
-class OpcUaConfigValidationError extends Error {}
+class OpcUaConfigurationError extends Error { }
+class OpcUaConfigValidationError extends Error { }
 
 async function loadFileConfig() {
   try {
@@ -239,18 +239,50 @@ async function buildSettings(overrides = {}) {
   const config = await loadFileConfig();
   const env = process.env;
 
-  const endpoint = coalesce(
-    overrides.endpoint,
-    env.OPCUA_ENDPOINT,
-    config.endpoint
-  );
-  const nodeId = coalesce(
-    overrides.nodeId,
-    overrides.node_id,
-    env.OPCUA_NODE_ID,
-    config.nodeId,
-    config.node_id
-  );
+  const resolve = (keys, envKeys, defaultVal, transform = (v) => v) => {
+    let val;
+
+    // Helper to check validity
+    const isValid = (v) => v !== undefined && v !== null && v !== "" && (typeof v !== "string" || v.trim().length > 0);
+
+    // Scan Overrides
+    for (const k of keys) {
+      if (isValid(overrides[k])) {
+        val = overrides[k];
+        break;
+      }
+    }
+
+    // Scan Env
+    if (val === undefined) {
+      const eKeys = Array.isArray(envKeys) ? envKeys : (envKeys ? [envKeys] : []);
+      for (const k of eKeys) {
+        if (isValid(env[k])) {
+          val = env[k];
+          break;
+        }
+      }
+    }
+
+    // Scan Config
+    if (val === undefined) {
+      for (const k of keys) {
+        if (isValid(config[k])) {
+          val = config[k];
+          break;
+        }
+      }
+    }
+
+    if (val === undefined) {
+      val = defaultVal;
+    }
+
+    return transform(val);
+  };
+
+  const endpoint = resolve(["endpoint"], "OPCUA_ENDPOINT");
+  const nodeId = resolve(["nodeId", "node_id"], "OPCUA_NODE_ID");
 
   if (!endpoint) {
     throw new OpcUaConfigurationError(
@@ -263,96 +295,59 @@ async function buildSettings(overrides = {}) {
     );
   }
 
-  const username = coalesce(
-    overrides.username,
-    env.OPCUA_USERNAME,
-    config.username
-  );
-  const password = coalesce(
-    overrides.password,
-    env.OPCUA_PASSWORD,
-    config.password
-  );
-  const triggerNodeId = coalesce(
-    overrides.triggerNodeId,
-    overrides.trigger_node_id,
-    env.OPCUA_TRIGGER_NODE_ID,
-    config.triggerNodeId,
-    config.trigger_node_id
-  );
-  const triggerValue = coalesce(
-    overrides.triggerValue,
-    overrides.trigger_value,
-    env.OPCUA_TRIGGER_VALUE !== undefined
-      ? toBool(env.OPCUA_TRIGGER_VALUE)
-      : undefined,
-    config.triggerValue,
-    config.trigger_value,
-    true
-  );
-  const triggerResetValue = coalesce(
-    overrides.triggerResetValue,
-    overrides.trigger_reset_value,
-    env.OPCUA_TRIGGER_RESET_VALUE !== undefined
-      ? toBool(env.OPCUA_TRIGGER_RESET_VALUE)
-      : undefined,
-    config.triggerResetValue,
-    config.trigger_reset_value,
-    false
-  );
-  const triggerResetDelayMs =
-    toInt(
-      coalesce(
-        overrides.triggerResetDelayMs,
-        overrides.trigger_reset_delay_ms,
-        env.OPCUA_TRIGGER_RESET_DELAY_MS,
-        config.triggerResetDelayMs,
-        config.trigger_reset_delay_ms,
-        250
-      )
-    ) ?? 0;
+  const username = resolve(["username"], "OPCUA_USERNAME");
+  const password = resolve(["password"], "OPCUA_PASSWORD");
+  const triggerNodeId = resolve(["triggerNodeId", "trigger_node_id"], "OPCUA_TRIGGER_NODE_ID");
 
-  const valueTypeRaw = coalesce(
-    overrides.valueType,
-    overrides.value_type,
-    env.OPCUA_VALUE_TYPE,
-    config.valueType,
-    config.value_type,
-    "string"
+  const triggerValue = resolve(
+    ["triggerValue", "trigger_value"],
+    "OPCUA_TRIGGER_VALUE",
+    true,
+    (v) => {
+      const b = toBool(v);
+      return b !== undefined ? b : true;
+    }
   );
+
+  const triggerResetValue = resolve(
+    ["triggerResetValue", "trigger_reset_value"],
+    "OPCUA_TRIGGER_RESET_VALUE",
+    false,
+    (v) => {
+      const b = toBool(v);
+      return b !== undefined ? b : false;
+    }
+  );
+
+  const triggerResetDelayMs = resolve(
+    ["triggerResetDelayMs", "trigger_reset_delay_ms"],
+    "OPCUA_TRIGGER_RESET_DELAY_MS",
+    250,
+    (v) => {
+      const i = toInt(v);
+      return (i !== undefined && i >= 0) ? i : 250;
+    }
+  );
+
+  const valueTypeRaw = resolve(["valueType", "value_type"], "OPCUA_VALUE_TYPE", "string");
   const valueType = String(valueTypeRaw).toLowerCase();
 
-  const arrayLength =
-    toInt(
-      coalesce(
-        overrides.arrayLength,
-        overrides.array_length,
-        env.OPCUA_ARRAY_LENGTH,
-        config.arrayLength,
-        config.array_length
-      )
-    ) ?? undefined;
+  const arrayLength = resolve(
+    ["arrayLength", "array_length"],
+    "OPCUA_ARRAY_LENGTH",
+    undefined,
+    toInt
+  );
 
-  const rawOperationTimeoutMs =
-    toInt(
-      coalesce(
-        overrides.operationTimeoutMs,
-        overrides.operation_timeout_ms,
-        overrides.timeoutMs,
-        overrides.timeout_ms,
-        env.OPCUA_OPERATION_TIMEOUT_MS,
-        env.OPCUA_TIMEOUT_MS,
-        config.operationTimeoutMs,
-        config.operation_timeout_ms,
-        config.timeoutMs,
-        config.timeout_ms,
-        OPCUA_OPERATION_TIMEOUT_MS
-      )
-    ) ?? OPCUA_OPERATION_TIMEOUT_MS;
-  const operationTimeoutMs =
-    Number.isFinite(rawOperationTimeoutMs) && rawOperationTimeoutMs > 0
-      ? rawOperationTimeoutMs
-      : OPCUA_OPERATION_TIMEOUT_MS;
+  const operationTimeoutMs = resolve(
+    ["operationTimeoutMs", "operation_timeout_ms", "timeoutMs", "timeout_ms"],
+    ["OPCUA_OPERATION_TIMEOUT_MS", "OPCUA_TIMEOUT_MS"],
+    OPCUA_OPERATION_TIMEOUT_MS,
+    (v) => {
+      const i = toInt(v);
+      return (i !== undefined && i > 0) ? i : OPCUA_OPERATION_TIMEOUT_MS;
+    }
+  );
 
   return {
     endpoint,
@@ -360,9 +355,9 @@ async function buildSettings(overrides = {}) {
     username: username !== undefined ? String(username) : undefined,
     password: password !== undefined ? String(password) : undefined,
     triggerNodeId,
-    triggerValue: triggerValue !== undefined ? triggerValue : true,
-    triggerResetValue: triggerResetValue !== undefined ? triggerResetValue : false,
-    triggerResetDelayMs,
+    triggerValue,
+    triggerResetValue,
+    triggerResetDelayMs: triggerResetDelayMs ?? 0,
     valueType,
     arrayLength,
     operationTimeoutMs,
@@ -767,8 +762,7 @@ async function sendProgramViaOpcua({ text, commands, overrides }) {
 
       if (!statusIsGood(mainStatus)) {
         throw new Error(
-          `OPC UA write failed: ${
-            mainStatus ? mainStatus.toString() : "unknown status"
+          `OPC UA write failed: ${mainStatus ? mainStatus.toString() : "unknown status"
           }`
         );
       }
@@ -781,8 +775,7 @@ async function sendProgramViaOpcua({ text, commands, overrides }) {
 
       if (!statusIsGood(mainStatus)) {
         throw new Error(
-          `OPC UA write failed: ${
-            mainStatus ? mainStatus.toString() : "unknown status"
+          `OPC UA write failed: ${mainStatus ? mainStatus.toString() : "unknown status"
           }`
         );
       }
@@ -797,8 +790,7 @@ async function sendProgramViaOpcua({ text, commands, overrides }) {
       );
       if (!statusIsGood(triggerStatus)) {
         throw new Error(
-          `Failed to write trigger node: ${
-            triggerStatus ? triggerStatus.toString() : "unknown status"
+          `Failed to write trigger node: ${triggerStatus ? triggerStatus.toString() : "unknown status"
           }`
         );
       }
@@ -835,13 +827,13 @@ async function sendProgramViaOpcua({ text, commands, overrides }) {
         () => session.close(),
         "Chiusura sessione OPC UA",
         settings.operationTimeoutMs
-      ).catch(() => {});
+      ).catch(() => { });
     }
     await withOpcUaTimeout(
       () => client.disconnect(),
       "Disconnessione OPC UA",
       settings.operationTimeoutMs
-    ).catch(() => {});
+    ).catch(() => { });
   }
 }
 
