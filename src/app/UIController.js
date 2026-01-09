@@ -1,68 +1,23 @@
 /**
  * UI Controller - Handles all UI bindings and updates
+ * Refactored to use CommandAutocomplete module
  */
 
 import { parseCommandInput } from '../tools/toolManager.js';
+import { createCommandDefinitions, CommandAutocomplete } from './CommandAutocomplete.js';
 
+/**
+ * UIController class - manages all UI interactions
+ */
 export class UIController {
   constructor(app) {
     this.app = app;
 
-    // Command definitions for autocomplete
-    this.commands = [
-      // Drawing Tools
-      { name: 'LINE', aliases: ['L'], desc: 'Disegna una linea', shortcut: 'L', category: 'Disegno', action: () => this.app.selectTool('line') },
-      { name: 'ARC', aliases: ['A'], desc: 'Disegna un arco', shortcut: 'A', category: 'Disegno', action: () => this.app.selectTool('arc') },
-      { name: 'CIRCLE', aliases: ['C', 'CERCHIO'], desc: 'Disegna un cerchio', shortcut: 'C', category: 'Disegno', action: () => this.app.selectTool('circle') },
-      { name: 'RECTANGLE', aliases: ['RECT', 'R', 'RETTANGOLO'], desc: 'Disegna un rettangolo', shortcut: 'R', category: 'Disegno', action: () => this.app.selectTool('rectangle') },
-      { name: 'POLYGON', aliases: ['P', 'POLY', 'POLIGONO'], desc: 'Disegna un poligono', shortcut: 'P', category: 'Disegno', action: () => this.app.selectTool('polygon') },
+    // Initialize commands using the shared command definitions
+    this.commands = createCommandDefinitions(app, this);
 
-      // Edit Tools
-      { name: 'SELECT', aliases: ['S', 'SEL', 'SELEZIONA'], desc: 'Modalità selezione', shortcut: 'S', category: 'Modifica', action: () => this.app.selectTool('select') },
-      { name: 'DELETE', aliases: ['DEL', 'ERASE', 'ELIMINA'], desc: 'Elimina selezione', shortcut: 'DEL', category: 'Modifica', action: () => this.app.deleteSelected() },
-      { name: 'MOVE', aliases: ['M', 'SPOSTA'], desc: 'Sposta selezione (usa frecce o trascina)', shortcut: 'Frecce', category: 'Modifica', action: () => { this.app.selectTool('select'); this.updateStatus('Usa frecce per spostare o trascina con mouse'); } },
-      { name: 'COPYSEL', aliases: ['COPIASEL'], desc: 'Copia selezione', shortcut: 'Ctrl+C', category: 'Modifica', action: () => this.app.copySelected() },
-      { name: 'PASTE', aliases: ['INCOLLA'], desc: 'Incolla dagli appunti', shortcut: 'Ctrl+V', category: 'Modifica', action: () => this.app.pasteClipboard() },
-      { name: 'CUT', aliases: ['TAGLIA'], desc: 'Taglia selezione', shortcut: 'Ctrl+X', category: 'Modifica', action: () => this.app.cutSelected() },
-      { name: 'ROTATE', aliases: ['ROT', 'RUOTA'], desc: 'Ruota selezione 90°', shortcut: '', category: 'Modifica', action: () => this.app.rotateSelected(90) },
-      { name: 'ROTATE45', aliases: ['ROT45'], desc: 'Ruota selezione 45°', shortcut: '', category: 'Modifica', action: () => this.app.rotateSelected(45) },
-      { name: 'SCALE', aliases: ['SCALA'], desc: 'Scala selezione (1.5x)', shortcut: '', category: 'Modifica', action: () => this.app.scaleSelected(1.5) },
-      { name: 'SCALEDOWN', aliases: ['SCALAGIU'], desc: 'Scala selezione (0.5x)', shortcut: '', category: 'Modifica', action: () => this.app.scaleSelected(0.5) },
-      { name: 'MIRRORX', aliases: ['SPECCHIOX'], desc: 'Specchia orizzontalmente', shortcut: '', category: 'Modifica', action: () => this.app.mirrorSelected('x') },
-      { name: 'MIRRORY', aliases: ['SPECCHIOY'], desc: 'Specchia verticalmente', shortcut: '', category: 'Modifica', action: () => this.app.mirrorSelected('y') },
-
-      // File Operations
-      { name: 'SAVE', aliases: ['SALVA'], desc: 'Salva disegno', shortcut: 'Ctrl+S', category: 'File', action: () => this.app.saveToFile() },
-      { name: 'OPEN', aliases: ['LOAD', 'APRI', 'CARICA'], desc: 'Apri disegno', shortcut: 'Ctrl+O', category: 'File', action: () => this.app.loadFromFile() },
-      { name: 'NEW', aliases: ['CLEAR', 'NUOVO', 'PULISCI'], desc: 'Nuovo disegno (pulisci tutto)', shortcut: '', category: 'File', action: () => this.app.clearAll() },
-
-      // View
-      { name: 'ZOOM', aliases: ['Z'], desc: 'Zoom (+ o - per in/out)', shortcut: '+/-', category: 'Vista', action: () => this.updateStatus('Usa + per zoom in, - per zoom out') },
-      { name: 'ZOOMIN', aliases: ['ZI'], desc: 'Zoom avanti', shortcut: '+', category: 'Vista', action: () => this.app.zoomIn() },
-      { name: 'ZOOMOUT', aliases: ['ZO'], desc: 'Zoom indietro', shortcut: '-', category: 'Vista', action: () => this.app.zoomOut() },
-      { name: 'FIT', aliases: ['ZOOMFIT', 'ZF', 'ADATTA'], desc: 'Adatta vista', shortcut: 'F', category: 'Vista', action: () => this.app.zoomFit() },
-      { name: 'GRID', aliases: ['G', 'GRIGLIA'], desc: 'Attiva/disattiva griglia', shortcut: 'G', category: 'Vista', action: () => this.app.toggleGrid() },
-
-      // Actions
-      { name: 'UNDO', aliases: ['U', 'ANNULLA'], desc: 'Annulla ultima azione', shortcut: 'Ctrl+Z', category: 'Azioni', action: () => this.app.state.undo() },
-      { name: 'REDO', aliases: ['RIPETI'], desc: 'Ripeti azione annullata', shortcut: 'Ctrl+Y', category: 'Azioni', action: () => this.app.state.redo() },
-      { name: 'ESCAPE', aliases: ['ESC', 'CANCEL', 'ANNULLA'], desc: 'Annulla operazione corrente', shortcut: 'ESC', category: 'Azioni', action: () => this.app.cancelCurrentOperation() },
-
-      // Output
-      { name: 'EXTRACT', aliases: ['PLC', 'OUTPUT'], desc: 'Estrai comandi PLC', shortcut: '', category: 'Output', action: () => this.app.extractPLC() },
-      { name: 'SIMULATE', aliases: ['SIM', 'SIMULA'], desc: 'Simula percorso utensile', shortcut: '', category: 'Output', action: () => this.app.simulatePath() },
-      { name: 'COPY', aliases: ['COPIA'], desc: 'Copia output negli appunti', shortcut: '', category: 'Output', action: () => this.app.copyOutput() },
-      { name: 'DOWNLOAD', aliases: ['SCARICA'], desc: 'Scarica output come file', shortcut: '', category: 'Output', action: () => this.app.downloadOutput() },
-      { name: 'SEND', aliases: ['INVIA'], desc: 'Invia a PLC via OPC UA', shortcut: '', category: 'Output', action: () => this.app.sendToPLC() },
-
-      // Help
-      { name: 'HELP', aliases: ['?', 'AIUTO', 'H'], desc: 'Mostra scorciatoie', shortcut: 'F1', category: 'Aiuto', action: () => document.getElementById('shortcutsModal')?.removeAttribute('hidden') },
-    ];
-
-    // Autocomplete state
-    this.autocompleteEl = null;
-    this.selectedIndex = -1;
-    this.filteredCommands = [];
+    // Create autocomplete manager
+    this.autocomplete = new CommandAutocomplete(this.commands, (msg) => this.updateStatus(msg));
   }
 
   /**
@@ -84,68 +39,56 @@ export class UIController {
     this.floatToolbar = document.getElementById('floatToolbar');
     if (!this.floatToolbar) return;
 
-    // Input elements
     const rotateAngleInput = document.getElementById('ftRotateAngle');
     const scaleFactorInput = document.getElementById('ftScaleFactor');
     const moveXInput = document.getElementById('ftMoveX');
     const moveYInput = document.getElementById('ftMoveY');
 
-    // Helper to get rotation angle from input
     const getRotateAngle = () => {
       const val = parseFloat(rotateAngleInput?.value) || 90;
       return Math.max(1, Math.min(360, val));
     };
 
-    // Helper to get scale factor from input
     const getScaleFactor = () => {
       const val = parseFloat(scaleFactorInput?.value) || 1.5;
       return Math.max(0.1, Math.min(10, val));
     };
 
-    // Rotate CCW (positive angle in math convention)
     document.getElementById('ftRotateCCW')?.addEventListener('click', () => {
-      this.app.rotateSelected(getRotateAngle());
+      this.app.selectionManager.rotateSelected(getRotateAngle());
     });
 
-    // Rotate CW (negative angle in math convention)
     document.getElementById('ftRotateCW')?.addEventListener('click', () => {
-      this.app.rotateSelected(-getRotateAngle());
+      this.app.selectionManager.rotateSelected(-getRotateAngle());
     });
 
-    // Mirror X (horizontal)
     document.getElementById('ftMirrorX')?.addEventListener('click', () => {
-      this.app.mirrorSelected('x');
+      this.app.selectionManager.mirrorSelected('x');
     });
 
-    // Mirror Y (vertical)
     document.getElementById('ftMirrorY')?.addEventListener('click', () => {
-      this.app.mirrorSelected('y');
+      this.app.selectionManager.mirrorSelected('y');
     });
 
-    // Scale Up (multiply by factor)
     document.getElementById('ftScaleUp')?.addEventListener('click', () => {
-      this.app.scaleSelected(getScaleFactor());
+      this.app.selectionManager.scaleSelected(getScaleFactor());
     });
 
-    // Scale Down (divide by factor)
     document.getElementById('ftScaleDown')?.addEventListener('click', () => {
       const factor = getScaleFactor();
-      this.app.scaleSelected(1 / factor);
+      this.app.selectionManager.scaleSelected(1 / factor);
     });
 
-    // Move Apply - move selection by X,Y mm
     document.getElementById('ftMoveApply')?.addEventListener('click', () => {
       const dx = parseFloat(moveXInput?.value) || 0;
       const dy = parseFloat(moveYInput?.value) || 0;
       if (dx !== 0 || dy !== 0) {
-        this.app.moveSelected(dx, dy);
-        // Reset inputs after move
+        this.app.selectionManager.moveSelected(dx, dy);
         if (moveXInput) moveXInput.value = '0';
         if (moveYInput) moveYInput.value = '0';
       }
     });
 
-    // Allow Enter key to apply move
     [moveXInput, moveYInput].forEach(input => {
       input?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
@@ -155,14 +98,12 @@ export class UIController {
       });
     });
 
-    // Copy
     document.getElementById('ftCopy')?.addEventListener('click', () => {
-      this.app.copySelected();
+      this.app.selectionManager.copySelected();
     });
 
-    // Delete
     document.getElementById('ftDelete')?.addEventListener('click', () => {
-      this.app.deleteSelected();
+      this.app.selectionManager.deleteSelected();
     });
   }
 
@@ -171,7 +112,6 @@ export class UIController {
    */
   updateFloatingToolbar() {
     if (!this.floatToolbar) return;
-
     if (this.app.selectedPrimitives.size > 0) {
       this.floatToolbar.classList.add('visible');
     } else {
@@ -183,7 +123,6 @@ export class UIController {
    * Setup tool button bindings
    */
   setupToolButtons() {
-    // Tool buttons
     document.querySelectorAll('[data-tool]').forEach(btn => {
       btn.addEventListener('click', () => {
         const toolName = btn.dataset.tool;
@@ -191,7 +130,6 @@ export class UIController {
       });
     });
 
-    // Arc mode buttons
     document.querySelectorAll('[data-arc-mode]').forEach(btn => {
       btn.addEventListener('click', () => {
         this.app.arcMode = btn.dataset.arcMode;
@@ -205,38 +143,35 @@ export class UIController {
    * Setup action button bindings
    */
   setupActionButtons() {
-    document.getElementById('btnSave')?.addEventListener('click', () => this.app.saveToFile());
-    document.getElementById('btnLoad')?.addEventListener('click', () => this.app.loadFromFile());
+    document.getElementById('btnSave')?.addEventListener('click', () => this.app.fileManager.saveToFile());
+    document.getElementById('btnLoad')?.addEventListener('click', () => this.app.fileManager.loadFromFile());
     document.getElementById('btnUndo')?.addEventListener('click', () => this.app.state.undo());
     document.getElementById('btnRedo')?.addEventListener('click', () => this.app.state.redo());
-    document.getElementById('btnClear')?.addEventListener('click', () => this.app.clearAll());
-    document.getElementById('btnZoomIn')?.addEventListener('click', () => this.app.zoomIn());
-    document.getElementById('btnZoomOut')?.addEventListener('click', () => this.app.zoomOut());
-    document.getElementById('btnZoomFit')?.addEventListener('click', () => this.app.zoomFit());
-    document.getElementById('btnSimulate')?.addEventListener('click', () => this.app.simulatePath());
+    document.getElementById('btnClear')?.addEventListener('click', () => this.app.selectionManager.clearAll());
+    document.getElementById('btnZoomIn')?.addEventListener('click', () => this.app.viewManager.zoomIn());
+    document.getElementById('btnZoomOut')?.addEventListener('click', () => this.app.viewManager.zoomOut());
+    document.getElementById('btnZoomFit')?.addEventListener('click', () => this.app.viewManager.zoomFit());
+    document.getElementById('btnSimulate')?.addEventListener('click', () => this.app.plcOutputManager.simulatePath());
 
-    // Pause/Resume Simulation
     document.getElementById('btnPauseSim')?.addEventListener('click', () => {
       this.app.renderer.togglePauseSimulation();
       const isPaused = this.app.renderer.simulationManager.state.paused;
       const btn = document.getElementById('btnPauseSim');
       if (btn) {
-        // If paused, show Play icon. If running, show Pause icon.
         if (isPaused) {
           btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
-          this.app.ui.updateStatus("Simulazione in pausa");
+          this.updateStatus("Simulazione in pausa");
         } else {
           btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
-          this.app.ui.updateStatus("Simulazione ripresa");
+          this.updateStatus("Simulazione ripresa");
         }
       }
     });
 
-    document.getElementById('btnCopyOutput')?.addEventListener('click', () => this.app.copyOutput());
-    document.getElementById('btnDownloadOutput')?.addEventListener('click', () => this.app.downloadOutput());
-    document.getElementById('btnSendPLC')?.addEventListener('click', () => this.app.sendToPLC());
+    document.getElementById('btnCopyOutput')?.addEventListener('click', () => this.app.plcOutputManager.copyOutput());
+    document.getElementById('btnDownloadOutput')?.addEventListener('click', () => this.app.plcOutputManager.downloadOutput());
+    document.getElementById('btnSendPLC')?.addEventListener('click', () => this.app.plcOutputManager.sendToPLC());
 
-    // Simulation speeds
     const workSpeedInput = document.getElementById('simWorkSpeed');
     if (workSpeedInput) {
       workSpeedInput.addEventListener('change', (e) => {
@@ -244,8 +179,7 @@ export class UIController {
         if (this.app.renderer.simulation) {
           this.app.renderer.setSimulationSpeed(speed);
         }
-        // Refresh PLC output to reflect new speed in commands
-        this.app.refreshPLCOutput();
+        this.app.plcOutputManager.refreshPLCOutput();
       });
     }
 
@@ -256,6 +190,7 @@ export class UIController {
         if (this.app.renderer.simulation) {
           this.app.renderer.setRapidSpeed(speed);
         }
+        this.app.plcOutputManager.refreshPLCOutput();
       });
     }
   }
@@ -301,235 +236,18 @@ export class UIController {
   }
 
   /**
-   * Setup command line input with autocomplete
+   * Setup command line input with autocomplete (uses CommandAutocomplete module)
    */
   setupCommandInput() {
     const commandInput = document.getElementById('commandInput');
-    this.autocompleteEl = document.getElementById('commandAutocomplete');
+    const autocompleteEl = document.getElementById('commandAutocomplete');
 
-    if (!commandInput) return;
-
-    // Input event for autocomplete filtering
-    commandInput.addEventListener('input', (e) => {
-      this.filterCommands(e.target.value);
-    });
-
-    // Focus shows all commands if empty
-    commandInput.addEventListener('focus', () => {
-      if (!commandInput.value.trim()) {
-        this.showAllCommands();
-      }
-    });
-
-    // Blur hides autocomplete (with delay for click)
-    commandInput.addEventListener('blur', () => {
-      setTimeout(() => this.hideAutocomplete(), 150);
-    });
-
-    // Keyboard navigation
-    commandInput.addEventListener('keydown', (e) => {
-      const isAutocompleteVisible = this.autocompleteEl?.classList.contains('active');
-
-      if (e.key === 'Tab') {
-        e.preventDefault();
-        if (!isAutocompleteVisible) {
-          this.showAllCommands();
-        } else if (this.filteredCommands.length > 0) {
-          // Select first or highlighted item
-          const idx = this.selectedIndex >= 0 ? this.selectedIndex : 0;
-          this.executeCommand(this.filteredCommands[idx]);
-          commandInput.value = '';
-          this.hideAutocomplete();
-        }
-        return;
-      }
-
-      if (e.key === 'ArrowDown' && isAutocompleteVisible) {
-        e.preventDefault();
-        this.selectNext();
-        return;
-      }
-
-      if (e.key === 'ArrowUp' && isAutocompleteVisible) {
-        e.preventDefault();
-        this.selectPrevious();
-        return;
-      }
-
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        if (isAutocompleteVisible && this.selectedIndex >= 0) {
-          this.executeCommand(this.filteredCommands[this.selectedIndex]);
-          commandInput.value = '';
-        } else {
-          this.handleCommand(commandInput.value);
-          commandInput.value = '';
-        }
-        this.hideAutocomplete();
-        return;
-      }
-
-      if (e.key === 'Escape') {
-        if (isAutocompleteVisible) {
-          this.hideAutocomplete();
-        } else {
-          this.app.cancelCurrentOperation();
-          commandInput.value = '';
-        }
-        return;
-      }
-    });
-  }
-
-  /**
-   * Show all commands in autocomplete
-   */
-  showAllCommands() {
-    this.filteredCommands = [...this.commands];
-    this.selectedIndex = -1;
-    this.renderAutocomplete();
-  }
-
-  /**
-   * Filter commands based on input
-   */
-  filterCommands(query) {
-    const q = query.trim().toUpperCase();
-
-    if (!q) {
-      this.hideAutocomplete();
-      return;
-    }
-
-    // Filter commands that match name or any alias
-    this.filteredCommands = this.commands.filter(cmd => {
-      if (cmd.name.startsWith(q)) return true;
-      if (cmd.aliases.some(a => a.toUpperCase().startsWith(q))) return true;
-      if (cmd.desc.toUpperCase().includes(q)) return true;
-      return false;
-    });
-
-    // Sort: exact matches first, then by name
-    this.filteredCommands.sort((a, b) => {
-      const aExact = a.name === q || a.aliases.some(al => al.toUpperCase() === q);
-      const bExact = b.name === q || b.aliases.some(al => al.toUpperCase() === q);
-      if (aExact && !bExact) return -1;
-      if (bExact && !aExact) return 1;
-      return a.name.localeCompare(b.name);
-    });
-
-    this.selectedIndex = this.filteredCommands.length > 0 ? 0 : -1;
-    this.renderAutocomplete();
-  }
-
-  /**
-   * Render autocomplete dropdown
-   */
-  renderAutocomplete() {
-    if (!this.autocompleteEl) {
-      return;
-    }
-
-    if (this.filteredCommands.length === 0) {
-      this.hideAutocomplete();
-      return;
-    }
-
-    // Group by category
-    const byCategory = {};
-    for (const cmd of this.filteredCommands) {
-      if (!byCategory[cmd.category]) byCategory[cmd.category] = [];
-      byCategory[cmd.category].push(cmd);
-    }
-
-    let html = '';
-    const categoryOrder = ['Disegno', 'Modifica', 'File', 'Vista', 'Azioni', 'Output', 'Aiuto'];
-
-    for (const category of categoryOrder) {
-      const cmds = byCategory[category];
-      if (!cmds || cmds.length === 0) continue;
-
-      html += `<div class="cad-autocomplete-category">${category}</div>`;
-      for (const cmd of cmds) {
-        const idx = this.filteredCommands.indexOf(cmd);
-        const selectedClass = idx === this.selectedIndex ? 'selected' : '';
-        const shortcutHtml = cmd.shortcut ?
-          `<div class="cad-autocomplete-shortcut"><kbd>${cmd.shortcut}</kbd></div>` : '';
-
-        html += `
-          <div class="cad-autocomplete-item ${selectedClass}" data-index="${idx}">
-            <div class="cad-autocomplete-cmd">
-              <span class="cad-autocomplete-cmd-name">${cmd.name}</span>
-              <span class="cad-autocomplete-cmd-desc">${cmd.desc}</span>
-            </div>
-            ${shortcutHtml}
-          </div>
-        `;
-      }
-    }
-
-    this.autocompleteEl.innerHTML = html;
-    this.autocompleteEl.classList.add('active');
-
-    // Add click handlers
-    this.autocompleteEl.querySelectorAll('.cad-autocomplete-item').forEach(item => {
-      item.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        const idx = parseInt(item.dataset.index);
-        this.executeCommand(this.filteredCommands[idx]);
-        document.getElementById('commandInput').value = '';
-        this.hideAutocomplete();
-      });
-    });
-  }
-
-  /**
-   * Hide autocomplete dropdown
-   */
-  hideAutocomplete() {
-    this.autocompleteEl?.classList.remove('active');
-    this.selectedIndex = -1;
-  }
-
-  /**
-   * Select next item in autocomplete
-   */
-  selectNext() {
-    if (this.filteredCommands.length === 0) return;
-    this.selectedIndex = (this.selectedIndex + 1) % this.filteredCommands.length;
-    this.updateSelection();
-  }
-
-  /**
-   * Select previous item in autocomplete
-   */
-  selectPrevious() {
-    if (this.filteredCommands.length === 0) return;
-    this.selectedIndex = this.selectedIndex <= 0 ?
-      this.filteredCommands.length - 1 : this.selectedIndex - 1;
-    this.updateSelection();
-  }
-
-  /**
-   * Update visual selection in autocomplete
-   */
-  updateSelection() {
-    if (!this.autocompleteEl) return;
-    this.autocompleteEl.querySelectorAll('.cad-autocomplete-item').forEach((item, _i) => {
-      item.classList.toggle('selected', parseInt(item.dataset.index) === this.selectedIndex);
-    });
-
-    // Scroll into view
-    const selected = this.autocompleteEl.querySelector('.cad-autocomplete-item.selected');
-    selected?.scrollIntoView({ block: 'nearest' });
-  }
-
-  /**
-   * Execute a command from autocomplete
-   */
-  executeCommand(cmd) {
-    if (cmd && cmd.action) {
-      cmd.action();
+    if (commandInput && autocompleteEl) {
+      this.autocomplete.setup(
+        commandInput,
+        autocompleteEl,
+        () => this.app.cancelCurrentOperation()
+      );
     }
   }
 
@@ -541,7 +259,6 @@ export class UIController {
       document.getElementById('shortcutsModal')?.setAttribute('hidden', '');
     });
 
-    // Hamburger menu toggle
     const menuBtn = document.getElementById('menuBtn');
     const hamburgerMenu = document.getElementById('hamburgerMenu');
 
@@ -550,14 +267,12 @@ export class UIController {
       hamburgerMenu?.classList.toggle('open');
     });
 
-    // Close hamburger menu when clicking outside
     document.addEventListener('click', (e) => {
       if (hamburgerMenu?.classList.contains('open') && !hamburgerMenu.contains(e.target)) {
         hamburgerMenu.classList.remove('open');
       }
     });
 
-    // Shortcuts button in hamburger menu
     document.getElementById('btnShowShortcuts')?.addEventListener('click', () => {
       hamburgerMenu?.classList.remove('open');
       document.getElementById('shortcutsModal')?.removeAttribute('hidden');
@@ -565,33 +280,20 @@ export class UIController {
   }
 
   /**
-   * Handle command input
+   * Handle command input (for coordinate parsing)
    */
   handleCommand(input) {
     if (!input.trim()) return;
 
-    const q = input.trim().toUpperCase();
+    // Try autocomplete first
+    this.autocomplete.handleTextCommand(input);
 
-    // Find matching command
-    const matchingCmd = this.commands.find(cmd => {
-      if (cmd.name === q) return true;
-      if (cmd.aliases.some(a => a.toUpperCase() === q)) return true;
-      return false;
-    });
-
-    if (matchingCmd) {
-      matchingCmd.action();
-      return;
-    }
-
-    // Try to parse as coordinate input (e.g., "100,200" or "@50,30")
+    // If no command matched, try coordinate input
     const coord = parseCommandInput(input, this.app.input.currentMousePos);
     if (coord && this.app.currentTool) {
       this.app.handleToolClick(coord);
       return;
     }
-
-    this.updateStatus(`Comando non riconosciuto: ${input}`);
   }
 
   /**
@@ -692,16 +394,12 @@ export class UIController {
 
   /**
    * Display PLC output in grid with primitive highlighting
-   */
-  /**
-   * Display PLC output in grid with primitive highlighting
-   * Optimized: Uses Event Delegation to prevent freezing on large lists
+   * Uses Event Delegation for performance
    */
   displayPLCOutput(plcCommands) {
     const grid = document.getElementById('outputGrid');
     if (!grid) return;
 
-    // Attach Event Delegation (ONCE)
     if (!grid.dataset.listenerAttached) {
       grid.dataset.listenerAttached = 'true';
       grid.addEventListener('click', (e) => {
@@ -711,23 +409,12 @@ export class UIController {
         const index = parseInt(item.dataset.index);
         const wasSelected = item.classList.contains('selected');
 
-        // Remove previous selection
         const currentSelected = grid.querySelector('.cad-output-item.selected');
         if (currentSelected) currentSelected.classList.remove('selected');
 
         if (!wasSelected) {
-          // Select new
           item.classList.add('selected');
-
-          // Access source data directly from App state
-          // Handle potential slice/hidden items logic if indices don't match 1:1
-          // But here we rely on dataset index being correct relative to the original list OR the displayed list.
-          // In FileManager we passed sliced commands. 
-          // So we should verify if app.plcCommands matches the display index.
-          // For now, simpler is better.
-
           const cmd = this.app.plcCommands ? this.app.plcCommands[index] : null;
-
           if (cmd && cmd.primitive) {
             this.app.highlightPrimitive(cmd.primitive);
           }
@@ -737,7 +424,6 @@ export class UIController {
       });
     }
 
-    // Normalize commands
     const commands = Array.isArray(plcCommands) ?
       (typeof plcCommands[0] === 'string' ? plcCommands.map(c => ({ command: c })) : plcCommands) :
       [];
@@ -747,14 +433,9 @@ export class UIController {
       return;
     }
 
-    // Fast String Rendering
-    // Slice to 2000 is done in FileManager, so this list is safe length.
-    // Even 2000 items with listeners was slow. Without listeners, innerHTML is instant.
     grid.innerHTML = commands.map((cmd, i) =>
       `<div class="cad-output-item" data-index="${i}">${cmd.command}</div>`
     ).join('');
-
-    // NO loop to addEventListener here!
   }
 
   /**

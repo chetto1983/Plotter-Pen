@@ -18,9 +18,9 @@ export class Primitive {
     this.hovered = false;
     this.locked = false;
     this.visible = true;
-    this.layer = 0;
+    this.layerId = null; // Assigned by LayerManager when added to app
     this.style = {
-      strokeColor: '#c8d8ff',
+      strokeColor: null, // null = ByLayer
       fillColor: null,
       lineWidth: 1,
       lineDash: []
@@ -148,7 +148,7 @@ export class Primitive {
       type: this.type,
       id: this.id,
       style: { ...this.style },
-      layer: this.layer
+      layerId: this.layerId
     };
   }
 }

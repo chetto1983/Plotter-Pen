@@ -178,7 +178,7 @@ export class CanvasRenderer {
   /**
    * Update the static cache
    */
-  updateCache(primitives, selection) {
+  updateCache(primitives, selection, layerColors) {
     // Clear cache
     this.cacheCtx.save();
     this.cacheCtx.setTransform(1, 0, 0, 1, 0, 0);
@@ -204,7 +204,7 @@ export class CanvasRenderer {
 
         const selectedSet = selection instanceof Set ? selection : (selection ? new Set([selection]) : new Set());
         if (primitives) {
-          this.primitiveRenderer.drawPrimitives(ctx, scale, primitives, selectedSet);
+          this.primitiveRenderer.drawPrimitives(ctx, scale, primitives, selectedSet, layerColors);
         }
         ctx.restore();
       });
@@ -218,7 +218,7 @@ export class CanvasRenderer {
    * Main render function
    * Optimized with Draw Caching
    */
-  render(primitives = [], selection = null, preview = null, hovered = null, highlighted = null) {
+  render(primitives = [], selection = null, preview = null, hovered = null, highlighted = null, layerColors = {}) {
     // Check if view changed (pan/zoom)
     const currentViewState = `${this.view.zoom.toFixed(5)},${this.view.panX.toFixed(2)},${this.view.panY.toFixed(2)}`;
     if (this.lastViewState !== currentViewState) {
@@ -226,9 +226,19 @@ export class CanvasRenderer {
       this.lastViewState = currentViewState;
     }
 
+    // Check if content changed (primitives list or layer colors)
+    if (this.lastPrimitives !== primitives) {
+      this.isCacheDirty = true;
+      this.lastPrimitives = primitives;
+    }
+    if (this.lastLayerColors !== layerColors) {
+      this.isCacheDirty = true;
+      this.lastLayerColors = layerColors;
+    }
+
     // If cache dirty, update it
     if (this.isCacheDirty) {
-      this.updateCache(primitives, selection);
+      this.updateCache(primitives, selection, layerColors);
       this.isCacheDirty = false;
     }
 

@@ -8,6 +8,7 @@ import express from "express";
 import opcua from "node-opcua-client";
 import { dxfParseHandler } from "./routes/dxf-parser.js";
 import { smartImportRouter } from "./routes/import-dxf.js";
+import { persistenceRouter } from "./routes/persistence.js";
 
 const {
   OPCUAClient,
@@ -29,7 +30,7 @@ const DEFAULT_PORT = (() => {
   const envPort = toInt(process.env.PORT);
   return envPort && envPort > 0 && envPort < 65536 ? envPort : 8000;
 })();
-const MAX_JSON_SIZE = 1_000_000;
+const MAX_JSON_SIZE = 50_000_000;
 const BROWSER_OPEN_DELAY_MS = 400;
 const STRING_ARRAY_TYPES = new Set(["lines", "string_array", "string[]", "list"]);
 const OPCUA_OPERATION_TIMEOUT_MS = 15_000;
@@ -1064,6 +1065,9 @@ async function start() {
 
   // Smart Import (Biarc + Optimization)
   app.use("/api", smartImportRouter);
+
+  // Persistence (SQLite)
+  app.use("/api", persistenceRouter);
 
   const port = await findAvailablePort(DEFAULT_PORT);
   const server = app.listen(port, HOST, () => {

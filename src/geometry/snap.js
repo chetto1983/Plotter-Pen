@@ -90,6 +90,10 @@ export class SnapManager {
     this._anchorsDirty = true;
   }
 
+  setLayerManager(layerManager) {
+    this.layerManager = layerManager;
+  }
+
   /**
    * Get all snap anchors from primitives
    */
@@ -102,6 +106,7 @@ export class SnapManager {
 
     for (const prim of this.primitives) {
       if (!prim.visible) continue;
+      if (this.layerManager && !this.layerManager.isPrimitiveVisible(prim)) continue;
 
       const snapPoints = prim.getSnapPoints();
       for (const sp of snapPoints) {

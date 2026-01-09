@@ -3,6 +3,7 @@
 ## Overview
 
 This document outlines the implementation plan for four key CAD features:
+
 1. **Move/Delete Selected** - Basic editing operations
 2. **Box Selection** - Rubber band multi-select
 3. **Save/Load JSON** - Drawing persistence
@@ -13,6 +14,7 @@ This document outlines the implementation plan for four key CAD features:
 ## 1. Move/Delete Selected Primitives
 
 ### Current State
+
 - Selection system exists (`selectedPrimitives` Set in main.js)
 - Primitives have position properties but no `translate()` method
 - No delete functionality implemented
@@ -178,6 +180,7 @@ this.isDragging = false;
 ## 2. Box Selection (Rubber Band)
 
 ### Implementation Approach
+
 Use a DOM overlay div for the selection rectangle - cleaner than two-canvas approach and doesn't require re-rendering primitives.
 
 ### Implementation Steps
@@ -330,6 +333,7 @@ intersectsBox(minX, minY, maxX, maxY) {
 #### 2.5 Selection Modes (Optional Enhancement)
 
 Two common CAD behaviors:
+
 - **Window Selection** (left-to-right): Select only fully contained primitives
 - **Crossing Selection** (right-to-left): Select any intersecting primitives
 
@@ -348,6 +352,7 @@ finishBoxSelection(screenPos, additive) {
 ## 3. Save/Load JSON
 
 ### Current State
+
 - StateManager already has `serializePrimitives()` and `deserializePrimitives()`
 - Used for undo/redo, can be reused for file save/load
 
@@ -530,9 +535,11 @@ if (e.ctrlKey && e.key === 'o') {
 ## 4. Import DXF
 
 ### Library Choice
+
 **dxf-parser** (npm) - Lightweight, well-maintained, parses DXF to JSON structure.
 
 ### Installation
+
 ```bash
 npm install dxf-parser
 ```
@@ -809,6 +816,7 @@ fitToContent(bounds) {
 ## Implementation Priority
 
 ### Phase 1: Core Editing (Move/Delete)
+
 1. Add `translate()` to all primitives
 2. Implement `deleteSelected()`
 3. Add keyboard handlers (Delete, Arrow keys)
@@ -816,6 +824,7 @@ fitToContent(bounds) {
 5. Update toolbar/status
 
 ### Phase 2: Box Selection
+
 1. Add selection box DOM element
 2. Implement selection box sizing/positioning
 3. Add `intersectsBox()` to all primitives
@@ -823,6 +832,7 @@ fitToContent(bounds) {
 5. Add window/crossing modes
 
 ### Phase 3: Save/Load JSON
+
 1. Create FileManager class
 2. Implement save to file
 3. Implement load from file
@@ -830,6 +840,7 @@ fitToContent(bounds) {
 5. Add auto-save (optional)
 
 ### Phase 4: DXF Import
+
 1. Install dxf-parser
 2. Create DXFImporter class
 3. Implement entity conversion for LINE, CIRCLE, ARC, POLYLINE
@@ -842,6 +853,7 @@ fitToContent(bounds) {
 ## Testing Checklist
 
 ### Move/Delete ✅ IMPLEMENTED
+
 - [x] Delete single selected primitive
 - [x] Delete multiple selected primitives
 - [x] Arrow keys move selection (1mm steps)
@@ -850,6 +862,7 @@ fitToContent(bounds) {
 - [x] Undo/redo works after move/delete
 
 ### Box Selection ✅ IMPLEMENTED
+
 - [x] Click+drag creates selection box
 - [x] Selection box highlights correctly
 - [x] Primitives inside box get selected
@@ -857,20 +870,248 @@ fitToContent(bounds) {
 - [x] Window vs crossing mode works
 
 ### Save/Load ✅ IMPLEMENTED
+
 - [x] Ctrl+S triggers save
 - [x] JSON file contains all primitives
 - [x] Ctrl+O opens load dialog
 - [x] Loading restores primitives correctly
 - [x] Workspace settings restored
 
-### DXF Import (Phase 4 - Not yet implemented)
-- [ ] Can open DXF file dialog
-- [ ] Lines imported correctly
-- [ ] Circles imported correctly
-- [ ] Arcs imported correctly
-- [ ] Polylines imported correctly
-- [ ] View fits to imported content
-- [ ] Merge mode adds to existing
+### DXF Import ✅ IMPLEMENTED
+
+- [x] Can open DXF file dialog
+- [x] Lines imported correctly
+- [x] Circles imported correctly
+- [x] Arcs imported correctly
+- [x] Polylines imported correctly
+- [x] View fits to imported content
+- [x] Merge mode adds to existing
+
+---
+
+## Phase 5: Professional CAD Features (Planned)
+
+### 5.1 Layer System
+
+- [ ] Layer panel in sidebar (add/remove/rename layers)
+- [ ] Layer visibility toggle (eye icon)
+- [ ] Layer lock (prevent editing)
+- [ ] Assign primitives to layers
+- [ ] Layer colors/styles
+- [ ] "Send to layer" context menu
+
+### 5.2 DXF Export
+
+- [ ] Export current drawing to DXF
+- [ ] Support LINE, ARC, CIRCLE, POLYLINE entities
+- [ ] Preserve layer information
+- [ ] Unit conversion (mm/inches)
+
+### 5.3 Dimension Annotations
+
+- [ ] Linear dimension tool
+- [ ] Angular dimension tool
+- [ ] Radius/diameter dimension
+- [ ] Dimension display formatting
+
+### 5.4 Advanced Drawing Tools
+
+- [ ] Fillet tool (round corners)
+- [ ] Chamfer tool (cut corners)
+- [ ] Offset tool (parallel copy)
+- [ ] Trim/Extend tool
+- [ ] Array tool (rectangular/polar)
+
+---
+
+## Phase 6: Enterprise Features (Planned)
+
+### 6.1 Multi-Machine Support
+
+- [ ] Machine profiles (name, IP, connection type)
+- [ ] Switch between machines
+- [ ] Machine-specific settings
+
+### 6.2 Job Queue System
+
+- [ ] Queue multiple drawings for sequential execution
+- [ ] Job priority ordering
+- [ ] Job status tracking (pending, running, complete)
+- [ ] Cancel/pause job
+
+### 6.3 User Authentication
+
+- [ ] Login/logout
+- [ ] User roles (admin, operator, viewer)
+- [ ] Access control per user
+
+### 6.4 Audit Logging
+
+- [ ] Track drawing edits (who, when, what)
+- [ ] Track PLC transmissions
+- [ ] Export audit log
+
+---
+
+## Phase 7: Quality & Packaging (Planned)
+
+### 7.1 Testing
+
+- [ ] Unit tests for geometry functions
+- [ ] Integration tests for tools
+- [ ] Browser-based E2E tests
+- [ ] Automated CI pipeline
+
+### 7.2 Offline/PWA Support
+
+- [ ] Service worker for offline access
+- [ ] PWA manifest
+- [ ] Install prompt
+
+### 7.3 Desktop Packaging (Electron)
+
+- [ ] Electron wrapper
+- [ ] Windows installer (NSIS/MSI)
+- [ ] macOS app bundle
+- [ ] Auto-update mechanism
+
+### 7.4 Documentation
+
+- [ ] User manual (PDF/online)
+- [ ] Video tutorials
+- [ ] API documentation
+- [ ] Keyboard shortcuts PDF
+
+---
+
+## Phase 8: Commercial Distribution (Planned)
+
+### 8.1 Licensing System
+
+- [ ] License key validation
+- [ ] Trial period management
+- [ ] Feature tiers (Basic/Pro/Enterprise)
+
+### 8.2 Pricing Model
+
+- [ ] One-time purchase option
+- [ ] Subscription option
+- [ ] Volume licensing
+
+### 8.3 Support System
+
+- [ ] Bug reporting form
+- [ ] Feature request submission
+- [ ] Email support integration
+
+---
+
+## Phase 9: Milling / CAM Support (Planned)
+
+### 9.1 G-code Output Generator
+
+- [ ] Standard G-code output format
+- [ ] G00 - Rapid positioning
+- [ ] G01 - Linear interpolation with feed rate
+- [ ] G02/G03 - Circular interpolation CW/CCW
+- [ ] M03/M04/M05 - Spindle control (on CW, on CCW, stop)
+- [ ] M08/M09 - Coolant on/off
+- [ ] G90/G91 - Absolute/Incremental mode selection
+- [ ] Post-processor selection (Fanuc, Haas, LinuxCNC, Mach3)
+
+### 9.2 Toolpath Operations
+
+| Operation | Description | Status |
+|-----------|-------------|--------|
+| **Contour** | Machine outer/inner perimeter | 🔲 Planned |
+| **Pocket** | Clear enclosed area (zigzag/spiral) | 🔲 Planned |
+| **Drill** | Point-to-point hole drilling (G81) | 🔲 Planned |
+| **Peck Drill** | Deep hole with chip breaking (G83) | 🔲 Planned |
+| **Bore** | Precision hole enlargement (G85/G86) | 🔲 Planned |
+| **Face** | Surface flattening | 🔲 Planned |
+| **Engrave** | V-carve text/patterns | 🔲 Planned |
+
+### 9.3 Machine Parameters
+
+- [ ] Spindle speed (RPM) input
+- [ ] Feed rate (mm/min) input
+- [ ] Plunge rate (Z descent speed)
+- [ ] Step-down (depth per pass)
+- [ ] Step-over (pocket overlap %)
+- [ ] Safe Z height (retract position)
+- [ ] Stock surface (Z0 reference)
+- [ ] Final depth input
+
+### 9.4 Tool Library
+
+- [ ] Tool database (add/edit/delete tools)
+- [ ] Tool types: End mill, Ball nose, Drill, V-bit
+- [ ] Tool diameter
+- [ ] Flute count
+- [ ] Tool length
+- [ ] Cutting length
+- [ ] Material presets (speeds/feeds for aluminum, wood, plastic, steel)
+- [ ] Tool change commands (M06 Txx)
+
+### 9.5 Multi-pass Depth Cutting
+
+- [ ] Automatic multi-pass generation based on step-down
+- [ ] Roughing pass with finishing allowance
+- [ ] Finishing pass at final depth
+- [ ] Lead-in/Lead-out moves for smooth entry/exit
+- [ ] Ramp entry (helical descent into material)
+
+### 9.6 Toolpath Visualization
+
+- [ ] 3D toolpath preview
+- [ ] Color-coded by operation type
+- [ ] Rapid moves vs cutting moves distinction
+- [ ] Tool simulation animation
+- [ ] Collision detection warning
+
+### 9.7 CAM-Specific Commands
+
+```gcode
+; Example G-code output
+G21          ; Units: mm
+G90          ; Absolute positioning
+G17          ; XY plane selection
+M03 S12000   ; Spindle on CW at 12000 RPM
+G00 Z5.000   ; Rapid to safe height
+G00 X10.000 Y10.000  ; Rapid to start position
+G01 Z-2.000 F100     ; Plunge to depth at plunge feed
+G01 X50.000 F500     ; Cut to X50 at cutting feed
+G02 X70.000 Y30.000 I10.000 J0.000 F500  ; Arc CW
+G00 Z5.000   ; Rapid retract
+M05          ; Spindle stop
+M30          ; Program end
+```
+
+---
+
+## Current Status Summary
+
+| Phase | Feature | Status |
+|-------|---------|--------|
+| 1 | Move/Delete | ✅ Complete |
+| 2 | Box Selection | ✅ Complete |
+| 3 | Save/Load JSON | ✅ Complete |
+| 4 | DXF Import | ✅ Complete |
+| 5 | Professional CAD | 🔲 Planned |
+| 6 | Enterprise Features | 🔲 Planned |
+| 7 | Quality & Packaging | 🔲 Planned |
+| 8 | Commercial Distribution | 🔲 Planned |
+| 9 | Milling / CAM | 🔲 Planned |
+
+---
+
+## Quick Wins (Low effort, High impact)
+
+1. **DXF Export** - Users can export their work
+2. **Keyboard shortcuts PDF** - Print-friendly reference
+3. **Dark/Light theme toggle** - User preference
+4. **Touch support** - Tablet users
+5. **PWA manifest** - Installable web app
 
 ---
 
@@ -880,6 +1121,10 @@ fitToContent(bounds) {
 {
     "dependencies": {
         "dxf-parser": "^1.1.2"
+    },
+    "devDependencies": {
+        "electron": "^28.0.0",
+        "electron-builder": "^24.0.0"
     }
 }
 ```
@@ -892,3 +1137,5 @@ fitToContent(bounds) {
 - [DXF Reference](https://images.autodesk.com/adsk/files/autocad_2012_pdf_dxf-reference_enu.pdf)
 - [Canvas Hit Testing](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial/Hit_regions_and_accessibility)
 - [File System Access API](https://developer.mozilla.org/en-US/docs/Web/API/File_System_Access_API)
+- [Electron Documentation](https://www.electronjs.org/docs/latest)
+- [PWA Documentation](https://web.dev/progressive-web-apps/)

@@ -2,7 +2,7 @@
  * Tool Controller - Manages active tool selection
  */
 
-import { LineTool, ArcTool, CircleTool, RectangleTool, PolygonTool } from '../tools/toolManager.js';
+import { LineTool, ArcTool, CircleTool, RectangleTool, PolygonTool, DimensionTool, FilletTool } from '../tools/toolManager.js';
 
 export class ToolController {
   constructor(app) {
@@ -43,6 +43,12 @@ export class ToolController {
       case 'polygon':
         this.app.currentTool = new PolygonTool(manager);
         break;
+      case 'dimension':
+        this.app.currentTool = new DimensionTool(manager);
+        break;
+      case 'fillet':
+        this.app.currentTool = new FilletTool(manager);
+        break;
       case 'select':
         this.app.currentTool = null;
         this.app.selectMode = true;
@@ -50,7 +56,7 @@ export class ToolController {
       case 'delete':
         this.app.currentTool = null;
         this.app.selectMode = false;
-        this.app.deleteSelected();
+        this.app.selectionManager.deleteSelected();
         break;
       default:
         this.app.currentTool = null;

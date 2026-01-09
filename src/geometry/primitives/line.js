@@ -155,7 +155,7 @@ export class Line extends Primitive {
   clone() {
     const line = new Line(this.a.x, this.a.y, this.b.x, this.b.y);
     line.style = { ...this.style };
-    line.layer = this.layer;
+    line.layerId = this.layerId;
     return line;
   }
 
@@ -235,7 +235,8 @@ export class Line extends Primitive {
   static fromJSON(data) {
     const line = new Line(data.x1, data.y1, data.x2, data.y2, data.id);
     if (data.style) line.style = { ...data.style };
-    if (data.layer !== undefined) line.layer = data.layer;
+    if (data.layerId !== undefined) line.layerId = data.layerId;
+    else if (data.layer !== undefined) line.layerId = data.layer;
     return line;
   }
 }

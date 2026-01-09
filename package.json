@@ -12,7 +12,8 @@
     "b-spline": "^2.0.2",
     "dxf-parser": "^1.1.2",
     "express": "^5.2.1",
-    "node-opcua-client": "^2.159.0"
+    "node-opcua-client": "^2.159.0",
+    "sqlite3": "^5.1.7"
   },
   "engines": {
     "node": ">=18.0.0"

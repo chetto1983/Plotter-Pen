@@ -18,6 +18,9 @@ export class SelectionManager {
 
     // Find primitive closest to click
     for (const prim of this.app.primitives) {
+      // Skip invisible layers
+      if (this.app.layerManager && !this.app.layerManager.isPrimitiveVisible(prim)) continue;
+
       const dist = prim.distanceToPoint ? prim.distanceToPoint(position) : Infinity;
       if (dist < hitDistance) {
         found = prim;
@@ -57,6 +60,7 @@ export class SelectionManager {
 
     if (this.app.renderer) this.app.renderer.invalidateCache();
     this.app.render();
+    document.dispatchEvent(new CustomEvent('selectionChanged', { detail: { selection: this.app.selectedPrimitives } }));
   }
 
   /**
@@ -78,6 +82,9 @@ export class SelectionManager {
 
     // Find closest primitive to cursor
     for (const prim of this.app.primitives) {
+      // Skip invisible layers
+      if (this.app.layerManager && !this.app.layerManager.isPrimitiveVisible(prim)) continue;
+
       const dist = prim.distanceToPoint ? prim.distanceToPoint(position) : Infinity;
       if (dist < hitDistance && dist < minDist) {
         found = prim;
@@ -111,6 +118,7 @@ export class SelectionManager {
     if (this.app.snapManager) this.app.snapManager.setPrimitives(this.app.primitives);
     this.app.render();
     this.app.refreshPLCOutput();
+    document.dispatchEvent(new CustomEvent('selectionChanged', { detail: { selection: this.app.selectedPrimitives } }));
     this.app.ui.updateStatus('Elementi eliminati');
   }
 
@@ -357,6 +365,7 @@ export class SelectionManager {
     if (this.app.snapManager) this.app.snapManager.setPrimitives(this.app.primitives);
     this.app.render();
     this.app.refreshPLCOutput();
+    document.dispatchEvent(new CustomEvent('selectionChanged', { detail: { selection: this.app.selectedPrimitives } }));
     this.app.ui.updateStatus('Area di lavoro pulita');
   }
 }

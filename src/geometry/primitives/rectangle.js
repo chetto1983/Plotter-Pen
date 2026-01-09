@@ -115,7 +115,7 @@ export class Rectangle extends Primitive {
   clone() {
     const rect = new Rectangle(this._x, this._y, this._width, this._height);
     rect.style = { ...this.style };
-    rect.layer = this.layer;
+    rect.layerId = this.layerId;
     return rect;
   }
 
@@ -176,7 +176,8 @@ export class Rectangle extends Primitive {
   static fromJSON(data) {
     const rect = new Rectangle(data.x, data.y, data.width, data.height, data.id);
     if (data.style) rect.style = { ...data.style };
-    if (data.layer !== undefined) rect.layer = data.layer;
+    if (data.layerId !== undefined) rect.layerId = data.layerId;
+    else if (data.layer !== undefined) rect.layerId = data.layer;
     return rect;
   }
 

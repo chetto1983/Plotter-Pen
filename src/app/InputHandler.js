@@ -256,7 +256,7 @@ export class InputHandler {
     this.app.ui.updateCoordinates(snappedPos);
 
     // Update hover detection for select mode
-    this.app.updateHover(snappedPos);
+    this.app.selectionManager.updateHover(snappedPos);
 
     // Update tool preview if tool is active
     if (this.app.currentTool) {
@@ -290,7 +290,7 @@ export class InputHandler {
     if (this.isMovingSelection) {
       // Update PLC output if we actually moved something
       if (this.moveHasMoved) {
-        this.app.refreshPLCOutput();
+        this.app.plcOutputManager.refreshPLCOutput();
       }
       this.isMovingSelection = false;
       this.moveStartWorld = null;
@@ -326,7 +326,7 @@ export class InputHandler {
       const maxY = Math.max(this.boxStartWorld.y, endWorld.y);
 
       // Select primitives
-      this.app.boxSelect(minX, minY, maxX, maxY, isCrossing, e.shiftKey);
+      this.app.selectionManager.boxSelect(minX, minY, maxX, maxY, isCrossing, e.shiftKey);
 
       // Reset box selection state
       this.isBoxSelecting = false;
@@ -390,25 +390,25 @@ export class InputHandler {
       case 'ArrowUp':
         if (this.app.selectedPrimitives.size > 0) {
           e.preventDefault();
-          this.app.moveSelected(0, -moveAmount);
+          this.app.selectionManager.moveSelected(0, -moveAmount);
         }
         break;
       case 'ArrowDown':
         if (this.app.selectedPrimitives.size > 0) {
           e.preventDefault();
-          this.app.moveSelected(0, moveAmount);
+          this.app.selectionManager.moveSelected(0, moveAmount);
         }
         break;
       case 'ArrowLeft':
         if (this.app.selectedPrimitives.size > 0) {
           e.preventDefault();
-          this.app.moveSelected(-moveAmount, 0);
+          this.app.selectionManager.moveSelected(-moveAmount, 0);
         }
         break;
       case 'ArrowRight':
         if (this.app.selectedPrimitives.size > 0) {
           e.preventDefault();
-          this.app.moveSelected(moveAmount, 0);
+          this.app.selectionManager.moveSelected(moveAmount, 0);
         }
         break;
     }
@@ -423,7 +423,7 @@ export class InputHandler {
       case 'r':
         // R = Rotate CW if selection exists, otherwise Rectangle tool
         if (this.app.selectedPrimitives.size > 0) {
-          this.app.rotateSelected(-90);  // CW = negative in math convention
+          this.app.selectionManager.rotateSelected(-90);  // CW = negative in math convention
         } else {
           this.app.selectTool('rectangle');
         }
@@ -431,19 +431,19 @@ export class InputHandler {
       case 'q':
         // Q = Rotate 90° CCW (counter-clockwise, positive in math convention)
         if (this.app.selectedPrimitives.size > 0) {
-          this.app.rotateSelected(90);
+          this.app.selectionManager.rotateSelected(90);
         }
         break;
       case 'e':
         // E = Rotate 90° CW (clockwise, negative in math convention)
         if (this.app.selectedPrimitives.size > 0) {
-          this.app.rotateSelected(-90);
+          this.app.selectionManager.rotateSelected(-90);
         }
         break;
       case 'm':
         // M = Mirror X (horizontal)
         if (this.app.selectedPrimitives.size > 0) {
-          this.app.mirrorSelected('x');
+          this.app.selectionManager.mirrorSelected('x');
         }
         break;
       case 'p':
@@ -452,7 +452,7 @@ export class InputHandler {
       case 's':
         if (e.ctrlKey || e.metaKey) {
           e.preventDefault();
-          this.app.saveToFile();
+          this.app.fileManager.saveToFile();
         } else {
           this.app.selectTool('select');
         }
@@ -460,12 +460,12 @@ export class InputHandler {
       case 'o':
         if (e.ctrlKey || e.metaKey) {
           e.preventDefault();
-          this.app.loadFromFile();
+          this.app.fileManager.loadFromFile();
         }
         break;
       case 'delete':
       case 'backspace':
-        this.app.deleteSelected();
+        this.app.selectionManager.deleteSelected();
         break;
       case 'escape':
         this.app.cancelCurrentOperation();
@@ -489,7 +489,7 @@ export class InputHandler {
       case 'c':
         if (e.ctrlKey || e.metaKey) {
           e.preventDefault();
-          this.app.copySelected();
+          this.app.selectionManager.copySelected();
         } else {
           this.app.selectTool('circle');
         }
@@ -497,27 +497,27 @@ export class InputHandler {
       case 'v':
         if (e.ctrlKey || e.metaKey) {
           e.preventDefault();
-          this.app.pasteClipboard();
+          this.app.selectionManager.pasteClipboard();
         }
         break;
       case 'x':
         if (e.ctrlKey || e.metaKey) {
           e.preventDefault();
-          this.app.cutSelected();
+          this.app.selectionManager.cutSelected();
         }
         break;
       case 'g':
-        this.app.toggleGrid();
+        this.app.viewManager.toggleGrid();
         break;
       case 'f':
-        this.app.zoomFit();
+        this.app.viewManager.zoomFit();
         break;
       case '+':
       case '=':
-        this.app.zoomIn();
+        this.app.viewManager.zoomIn();
         break;
       case '-':
-        this.app.zoomOut();
+        this.app.viewManager.zoomOut();
         break;
       case 'f1':
         e.preventDefault();

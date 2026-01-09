@@ -882,7 +882,7 @@ body.cad-app {
 
 /* Number Input */
 .cad-number-input {
-  width: 70px;
+  width: 80px;
   background: linear-gradient(135deg, rgba(0, 0, 0, 0.4), rgba(10, 15, 25, 0.5));
   border: 1px solid rgba(82, 168, 255, 0.2);
   color: #ffffff;
@@ -962,16 +962,16 @@ body.cad-app {
 
 .cad-speed-controls {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .cad-speed-group {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  padding: 6px 10px;
+  padding: 8px 12px;
   background: rgba(0, 0, 0, 0.2);
   border: 1px solid rgba(82, 168, 255, 0.12);
   border-radius: 8px;
@@ -983,11 +983,13 @@ body.cad-app {
   color: var(--fg-dim);
   text-transform: uppercase;
   letter-spacing: 0.3px;
+  min-width: 45px;
 }
 
 .cad-speed-unit {
   font-size: 10px;
   color: var(--muted);
+  min-width: 30px;
 }
 
 /* OPC UA Status */
@@ -2096,3 +2098,140 @@ body.config-shell .config-status.error {
     gap: 18px;
   }
 }
+/* ============================================
+   LAYER PANEL STYLES
+   ============================================ */
+
+.cad-layer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.cad-layer-title {
+  font-weight: 500;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+}
+
+.cad-layer-add {
+  padding: 4px;
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+
+.cad-layer-add:hover {
+  background: var(--accent-dim);
+}
+
+.cad-layer-list {
+  padding: 4px 0;
+}
+
+.cad-layer-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.cad-layer-item:hover {
+  background: var(--accent-dim);
+}
+
+.cad-layer-item.active {
+  background: rgba(82, 168, 255, 0.2);
+  border-left: 2px solid var(--accent);
+}
+
+.cad-layer-item.locked {
+  opacity: 0.6;
+}
+
+.cad-layer-btn {
+  padding: 3px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s, background 0.15s;
+}
+
+.cad-layer-btn:hover {
+  color: var(--fg);
+  background: var(--border);
+}
+
+.cad-layer-visibility.off {
+  color: var(--error);
+  opacity: 0.5;
+}
+
+.cad-layer-lock.on {
+  color: var(--warning);
+}
+
+.cad-layer-color {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.cad-layer-name {
+  flex: 1;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fg);
+}
+
+.cad-layer-delete {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.cad-layer-item:hover .cad-layer-delete {
+  opacity: 1;
+}
+
+.cad-layer-delete:hover {
+  color: var(--error);
+}
+
+.cad-layer-rename-input {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  color: var(--fg);
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  outline: none;
+}
+
+/* FIX LAYER PANEL LAYOUT */
+.cad-layer-list { display: flex; flex-direction: column; gap: 2px; }
+.cad-layer-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; border-radius: 6px; background: transparent; border: 1px solid transparent; width: 100%; box-sizing: border-box; }
+.cad-layer-controls { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.cad-layer-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.cad-layer-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cad-layer-btn { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: none; background: transparent; color: #a9b0c0; cursor: pointer; }
+.cad-layer-color { display: inline-block; width: 12px; height: 12px; border-radius: 2px; border: 1px solid rgba(255,255,255,0.3); flex-shrink: 0; }

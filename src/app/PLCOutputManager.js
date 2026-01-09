@@ -55,9 +55,11 @@ export class PLCOutputManager {
     const optimizedPrimitives = PathOptimizer.optimizeOrder(primitivesWithData);
     // Get speed from UI or default to 100
     const speedInput = document.getElementById('simWorkSpeed');
+    const rapidInput = document.getElementById('simRapidSpeed');
     const defaultSpeed = speedInput ? parseFloat(speedInput.value) : 100.0;
+    const rapidSpeed = rapidInput ? parseFloat(rapidInput.value) : 1000.0;
 
-    const generator = new PLCOutputGenerator({ defaultSpeed });
+    const generator = new PLCOutputGenerator({ defaultSpeed, rapidSpeed });
     const commands = generator.generate(optimizedPrimitives);
     this.app.plcCommands = commands;
     this.app.plcOutput = commands.map((c) => c.command);

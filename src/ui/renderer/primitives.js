@@ -13,38 +13,19 @@ export class PrimitiveRenderer {
    * @param {Array} primitives - Array of domain objects (Line, Arc, etc.)
    * @param {Set} selectedPrimitives - Set of selected primitive objects
    */
-  drawPrimitives(ctx, scale, primitives, selectedPrimitives = new Set()) {
+  drawPrimitives(ctx, scale, primitives, selectedPrimitives = new Set(), layerColors = {}) {
     const lineWidth = this.renderer.lineWidth / scale;
     const selectedLineWidth = lineWidth * 1.5;
 
     if (!primitives || primitives.length === 0) return;
 
-    // DEBUG: Log primitives info
-    // console.log(`[PrimitiveRenderer] Drawing ${primitives.length} primitives. First:`, primitives[0]);
-
-    // Debug large datasets
-    if (primitives.length > 500) {
-      // console.log(`Drawing ${primitives.length} primitives`);
-    }
-
-    // Batch all non-selected lines together
-    ctx.save();
-    ctx.strokeStyle = COLORS.primitive;
-    ctx.lineWidth = lineWidth;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.beginPath();
-
+    // Group by color (non-selected)
+    const byColor = new Map();
     const deferredSelected = [];
-    const deferredArcs = [];
-    const deferredCircles = [];
-    const deferredPolygons = [];
-    const deferredRectangles = [];
+    const defaultColor = COLORS.primitive;
 
     for (const prim of primitives) {
-      if (!prim) continue; // Skip nulls
-
-      // Check visibility if property exists (default to true)
+      if (!prim) continue;
       if (prim.visible === false) continue;
 
       if (selectedPrimitives.has(prim)) {
@@ -52,7 +33,57 @@ export class PrimitiveRenderer {
         continue;
       }
 
-      // Batch lines directly into path
+      // Determine color: Style > Layer > Default
+      let color = prim.style?.strokeColor;
+      if (!color && prim.layerId && layerColors[prim.layerId]) {
+        color = layerColors[prim.layerId];
+      }
+      if (!color) color = defaultColor;
+
+      if (!byColor.has(color)) byColor.set(color, []);
+      byColor.get(color).push(prim);
+    }
+
+    ctx.lineWidth = lineWidth;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // Draw batches by color
+    for (const [color, group] of byColor) {
+      ctx.save();
+      ctx.strokeStyle = color;
+      this.drawBatch(ctx, group);
+      ctx.restore();
+    }
+
+    // Draw selected primitives
+    if (deferredSelected.length > 0) {
+      ctx.save();
+      ctx.strokeStyle = COLORS.primitiveSelected;
+      ctx.lineWidth = selectedLineWidth;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      for (const prim of deferredSelected) {
+        this.drawPrimitive(ctx, prim, scale);
+      }
+
+      ctx.restore();
+    }
+  }
+
+  /**
+   * internal batch drawer for a specific color group
+   */
+  drawBatch(ctx, primitives) {
+    ctx.beginPath();
+
+    const deferredArcs = [];
+    const deferredCircles = [];
+    const deferredPolygons = [];
+    const deferredRectangles = [];
+
+    for (const prim of primitives) {
       if (prim.type === 'line') {
         ctx.moveTo(prim.x1, prim.y1);
         ctx.lineTo(prim.x2, prim.y2);
@@ -67,7 +98,7 @@ export class PrimitiveRenderer {
       }
     }
 
-    // Stroke all batched lines at once
+    // Stroke all batched lines
     ctx.stroke();
 
     // Batch Arcs
@@ -77,7 +108,6 @@ export class PrimitiveRenderer {
         const render = typeof arc.getRenderData === 'function' ? arc.getRenderData() : null;
         if (!render || !render.r) continue;
 
-        // Calculate start point to move to (prevents connecting lines)
         const startX = render.cx + render.r * Math.cos(render.startAngle);
         const startY = render.cy + render.r * Math.sin(render.startAngle);
 
@@ -95,7 +125,6 @@ export class PrimitiveRenderer {
         const cx = circle.cx ?? circle.center?.x;
         const cy = circle.cy ?? circle.center?.y;
 
-        // Move to start of circle (angle 0)
         ctx.moveTo(cx + r, cy);
         ctx.arc(cx, cy, r, 0, TWO_PI);
       }
@@ -125,23 +154,6 @@ export class PrimitiveRenderer {
       }
       ctx.stroke();
     }
-
-    ctx.restore();
-
-    // Draw selected primitives with different style
-    if (deferredSelected.length > 0) {
-      ctx.save();
-      ctx.strokeStyle = COLORS.primitiveSelected;
-      ctx.lineWidth = selectedLineWidth;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-
-      for (const prim of deferredSelected) {
-        this.drawPrimitive(ctx, prim, scale);
-      }
-
-      ctx.restore();
-    }
   }
 
   /**
@@ -166,6 +178,9 @@ export class PrimitiveRenderer {
       case 'polygon':
       case 'polyline':
         this.drawPolygon(ctx, prim);
+        break;
+      case 'dimension':
+        this.drawDimension(ctx, prim, scale);
         break;
     }
   }
@@ -320,6 +335,8 @@ export class PrimitiveRenderer {
         }
         ctx.stroke();
       }
+    } else if (preview.type === 'dimension') {
+      this.drawDimension(ctx, preview, scale);
     }
 
     ctx.restore();
@@ -458,6 +475,107 @@ export class PrimitiveRenderer {
 
       ctx.restore();
     });
+  }
+  /**
+   * Draw dimension
+   */
+  drawDimension(ctx, dim, scale) {
+    if (!dim) return;
+
+    // Calculate geometry in World Space
+    const dx = dim.x2 - dim.x1;
+    const dy = dim.y2 - dim.y1;
+    const angle = Math.atan2(dy, dx);
+    const length = Math.sqrt(dx * dx + dy * dy);
+
+    // Perpendicular vector for offset
+    const px = -Math.sin(angle) * dim.offset;
+    const py = Math.cos(angle) * dim.offset;
+
+    // Points for dimension line
+    const d1x = dim.x1 + px;
+    const d1y = dim.y1 + py;
+    const d2x = dim.x2 + px;
+    const d2y = dim.y2 + py;
+
+    const extensionOverride = 5 / scale; // Extend 5px past dim line
+
+    ctx.beginPath();
+    // Extension lines
+    ctx.moveTo(dim.x1, dim.y1);
+    ctx.lineTo(d1x + (px > 0 ? px * 0.1 : px * 0.1), d1y + (py > 0 ? py * 0.1 : py * 0.1)); // Simplified extension
+
+    // Better extension lines: from origin to offset point + small overshoot
+    // Calculate normalized perp vector
+    const normLen = Math.sqrt(px * px + py * py);
+    let uPx = 0, uPy = 0;
+    if (normLen > 0) {
+      uPx = px / normLen;
+      uPy = py / normLen;
+    }
+
+    // Draw extension 1
+    ctx.moveTo(dim.x1, dim.y1);
+    ctx.lineTo(d1x + uPx * extensionOverride, d1y + uPy * extensionOverride);
+
+    // Draw extension 2
+    ctx.moveTo(dim.x2, dim.y2);
+    ctx.lineTo(d2x + uPx * extensionOverride, d2y + uPy * extensionOverride);
+
+    // Dimension line
+    ctx.moveTo(d1x, d1y);
+    ctx.lineTo(d2x, d2y);
+    ctx.stroke();
+
+    // Arrows
+    this.drawArrow(ctx, d1x, d1y, angle + Math.PI, scale);
+    this.drawArrow(ctx, d2x, d2y, angle, scale);
+
+    // Text
+    const text = dim.text || length.toFixed(2);
+    const midX = (d1x + d2x) / 2;
+    const midY = (d1y + d2y) / 2;
+
+    // Create text offset (slightly above line)
+    const textGap = 5 / scale;
+    const tx = midX + uPx * textGap;
+    const ty = midY + uPy * textGap;
+
+    ctx.save();
+    ctx.translate(tx, ty);
+
+    // Ensure text is readable
+    let textAngle = angle;
+    if (textAngle > Math.PI / 2 || textAngle < -Math.PI / 2) {
+      textAngle += Math.PI;
+    }
+    ctx.rotate(textAngle);
+
+    // Inverse scale font size
+    ctx.font = `${12 / scale}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillStyle = ctx.strokeStyle; // Use same color as line
+    ctx.fillText(text, 0, 0);
+    ctx.restore();
+  }
+
+  drawArrow(ctx, x, y, angle, scale) {
+    const size = 10 / scale; // 10px visual size
+    const arrowAngle = Math.PI / 6;
+
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(
+      x - size * Math.cos(angle - arrowAngle),
+      y - size * Math.sin(angle - arrowAngle)
+    );
+    ctx.moveTo(x, y);
+    ctx.lineTo(
+      x - size * Math.cos(angle + arrowAngle),
+      y - size * Math.sin(angle + arrowAngle)
+    );
+    ctx.stroke();
   }
 }
 

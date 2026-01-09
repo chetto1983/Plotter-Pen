@@ -12,9 +12,11 @@ import { StateManager } from './app/StateManager.js';
 import { FileManager } from './app/FileManager.js';
 import { PLCOutputManager } from './app/PLCOutputManager.js';
 import { SelectionManager } from './app/SelectionManager.js';
-// RenderManager removed
+import { LayerManager } from './app/LayerManager.js';
 import { ViewManager } from './app/ViewManager.js';
 import { ToolController } from './app/ToolController.js';
+import { LayerPanel } from './ui/LayerPanel.js';
+import { PersistenceManager } from './app/PersistenceManager.js';
 
 /**
  * Main CAD Application Class
@@ -40,9 +42,11 @@ class CADApplication {
     this.fileManager = null;
     this.plcOutputManager = null;
     this.selectionManager = null;
-    // this.renderManager = null;
+    this.layerManager = null;
+    this.layerPanel = null;
     this.viewManager = null;
     this.toolController = null;
+    this.persistenceManager = null;
 
     // Settings
     this.workspaceWidth = 600;
@@ -100,13 +104,21 @@ class CADApplication {
     this.fileManager = new FileManager(this);
     this.plcOutputManager = new PLCOutputManager(this);
     this.selectionManager = new SelectionManager(this);
-    // RenderManager removed - direct rendering used
+    this.layerManager = new LayerManager(this);
+    this.snapManager.setLayerManager(this.layerManager);
     this.viewManager = new ViewManager(this);
     this.toolController = new ToolController(this);
+    this.persistenceManager = new PersistenceManager(this);
+
+    // Initialize layer panel UI
+    this.layerPanel = new LayerPanel(this.layerManager, 'layerPanel');
 
     // Setup
     this.input.setup();
     this.ui.setup();
+
+    // Load persisted state
+    this.persistenceManager.loadState();
 
     // Initial render (wait for layout to be calculated)
     requestAnimationFrame(() => {
@@ -149,7 +161,9 @@ class CADApplication {
 
     // Handle selection mode
     if (this.selectMode) {
-      this.handleSelection(position, shiftKey);
+      if (this.selectionManager) {
+        this.selectionManager.handleSelection(position, shiftKey);
+      }
       return;
     }
 
@@ -164,25 +178,7 @@ class CADApplication {
     this.render();
   }
 
-  /**
-   * Handle selection at position
-   * @param {Object} position - Click position
-   * @param {boolean} addToSelection - If true, add to existing selection (Shift+Click)
-   */
-  handleSelection(position, addToSelection = false) {
-    if (this.selectionManager) {
-      this.selectionManager.handleSelection(position, addToSelection);
-    }
-  }
 
-  /**
-   * Update hovered primitive based on mouse position
-   */
-  updateHover(position) {
-    if (this.selectionManager) {
-      this.selectionManager.updateHover(position);
-    }
-  }
 
   /**
    * Select a tool
@@ -205,6 +201,11 @@ class CADApplication {
       return;
     }
 
+    // Assign to active layer if not already set
+    if (!primitive.layerId && this.layerManager) {
+      primitive.layerId = this.layerManager.activeLayerId;
+    }
+
     this.state.pushState();
     this.primitives.push(primitive);
 
@@ -218,7 +219,7 @@ class CADApplication {
 
     this.ui.updateStats();
     this.render();
-    this.refreshPLCOutput();
+    if (this.plcOutputManager) this.plcOutputManager.refreshPLCOutput();
   }
 
   /**
@@ -259,125 +260,7 @@ class CADApplication {
     return true;
   }
 
-  /**
-   * Delete selected primitives
-   */
-  deleteSelected() {
-    if (this.selectionManager) {
-      this.selectionManager.deleteSelected();
-      this.snapManager.setPrimitives(this.primitives);
-      if (this.renderer) this.renderer.invalidateCache();
-    }
-  }
 
-  /**
-   * Move selected primitives by dx, dy (in world units)
-   */
-  moveSelected(dx, dy) {
-    if (this.selectionManager) {
-      this.selectionManager.moveSelected(dx, dy);
-    }
-  }
-
-  /**
-   * Copy selected primitives to clipboard
-   */
-  copySelected() {
-    if (this.selectionManager) {
-      this.selectionManager.copySelected();
-    }
-  }
-
-  /**
-   * Cut selected primitives (copy + delete)
-   */
-  cutSelected() {
-    if (this.selectionManager) {
-      this.selectionManager.cutSelected();
-    }
-  }
-
-  /**
-   * Paste primitives from clipboard
-   */
-  pasteClipboard() {
-    if (this.selectionManager) {
-      this.selectionManager.pasteClipboard();
-    }
-  }
-
-  /**
-   * Rotate selected primitives around their center
-   * @param {number} angle - Rotation angle in degrees
-   */
-  rotateSelected(angle) {
-    if (this.selectionManager) {
-      this.selectionManager.rotateSelected(angle);
-    }
-  }
-
-  /**
-   * Scale selected primitives from their center
-   * @param {number} factor - Scale factor (1.0 = no change)
-   */
-  scaleSelected(factor) {
-    if (this.selectionManager) {
-      this.selectionManager.scaleSelected(factor);
-    }
-  }
-
-  /**
-   * Mirror selected primitives
-   * @param {string} axis - 'x' for horizontal mirror, 'y' for vertical mirror
-   */
-  mirrorSelected(axis) {
-    if (this.selectionManager) {
-      this.selectionManager.mirrorSelected(axis);
-    }
-  }
-
-  /**
-   * Get the center point of all selected primitives
-   */
-  getSelectionCenter() {
-    if (this.selectionManager) {
-      return this.selectionManager.getSelectionCenter();
-    }
-    return { x: 0, y: 0 };
-  }
-
-  /**
-   * Select primitives inside a box (rubber band selection)
-   * @param {number} minX - Min X in world coordinates
-   * @param {number} minY - Min Y in world coordinates
-   * @param {number} maxX - Max X in world coordinates
-   * @param {number} maxY - Max Y in world coordinates
-   * @param {boolean} crossing - If true, select any intersecting primitive (crossing mode)
-   * @param {boolean} additive - If true, add to existing selection (Shift held)
-   */
-  boxSelect(minX, minY, maxX, maxY, crossing = false, additive = false) {
-    if (this.selectionManager) {
-      this.selectionManager.boxSelect(minX, minY, maxX, maxY, crossing, additive);
-    }
-  }
-
-  /**
-   * Clear all primitives
-   */
-  clearAll() {
-    if (this.selectionManager) {
-      this.selectionManager.clearAll();
-    }
-  }
-
-  /**
-   * Refresh PLC output after changes
-   */
-  refreshPLCOutput() {
-    if (this.plcOutputManager) {
-      this.plcOutputManager.refreshPLCOutput();
-    }
-  }
 
   /**
    * Cancel current operation
@@ -413,98 +296,7 @@ class CADApplication {
     this.render();
   }
 
-  /**
-   * Zoom controls
-   */
-  zoomIn() {
-    if (this.viewManager) {
-      this.viewManager.zoomIn();
-    }
-  }
 
-  zoomOut() {
-    if (this.viewManager) {
-      this.viewManager.zoomOut();
-    }
-  }
-
-  zoomFit() {
-    if (this.viewManager) {
-      this.viewManager.zoomFit();
-    }
-  }
-
-  /**
-   * Toggle grid display
-   */
-  toggleGrid() {
-    if (this.viewManager) {
-      this.viewManager.toggleGrid();
-    }
-  }
-
-  /**
-   * Extract PLC commands
-   */
-  extractPLC() {
-    if (this.plcOutputManager) {
-      this.plcOutputManager.extractPLC();
-    }
-  }
-
-  /**
-   * Copy PLC output to clipboard
-   */
-  async copyOutput() {
-    if (this.plcOutputManager) {
-      await this.plcOutputManager.copyOutput();
-    }
-  }
-
-  /**
-   * Download PLC output as file
-   */
-  downloadOutput() {
-    if (this.plcOutputManager) {
-      this.plcOutputManager.downloadOutput();
-    }
-  }
-
-  /**
-   * Simulate the PLC path execution
-   */
-  simulatePath() {
-    if (this.plcOutputManager) {
-      this.plcOutputManager.simulatePath();
-    }
-  }
-
-  /**
-   * Send output to PLC via OPC UA
-   */
-  async sendToPLC() {
-    if (this.plcOutputManager) {
-      await this.plcOutputManager.sendToPLC();
-    }
-  }
-
-  /**
-   * Save drawing to JSON file
-   */
-  saveToFile() {
-    if (this.fileManager) {
-      this.fileManager.saveToFile();
-    }
-  }
-
-  /**
-   * Load drawing from JSON file
-   */
-  loadFromFile() {
-    if (this.fileManager) {
-      this.fileManager.loadFromFile();
-    }
-  }
 
   /**
    * Render the canvas
@@ -527,13 +319,27 @@ class CADApplication {
       preview = this.currentTool.getPreview();
     }
 
+    // Filter invisible primitives based on layer
+    const visiblePrimitives = this.layerManager
+      ? this.primitives.filter(p => this.layerManager.isPrimitiveVisible(p))
+      : this.primitives;
+
+    // Map layer colors for rendering
+    const layerColors = {};
+    if (this.layerManager) {
+      for (const layer of this.layerManager.layers.values()) {
+        layerColors[layer.id] = layer.color;
+      }
+    }
+
     // Single render call with all state
     this.renderer.render(
-      this.primitives,
+      visiblePrimitives,
       this.selectedPrimitives,
       preview,
       this.hoveredPrimitive,
-      this.highlightedPrimitive
+      this.highlightedPrimitive,
+      layerColors
     );
 
     // Draw snap indicator if available
@@ -545,6 +351,11 @@ class CADApplication {
           snapResult.type
         );
       }
+    }
+
+    // Trigger auto-save (debounced)
+    if (this.persistenceManager) {
+      this.persistenceManager.triggerAutoSave();
     }
   }
 

@@ -344,7 +344,7 @@ export class Arc extends Primitive {
       this._throughPoint ? { x: this._throughPoint.x, y: this._throughPoint.y } : null
     );
     arc.style = { ...this.style };
-    arc.layer = this.layer;
+    arc.layerId = this.layerId;
     return arc;
   }
 
@@ -446,7 +446,8 @@ export class Arc extends Primitive {
       data.id
     );
     if (data.style) arc.style = { ...data.style };
-    if (data.layer !== undefined) arc.layer = data.layer;
+    if (data.layerId !== undefined) arc.layerId = data.layerId;
+    else if (data.layer !== undefined) arc.layerId = data.layer;
     return arc;
   }
 }

@@ -2,7 +2,7 @@
  * State Manager - Handles undo/redo and primitive serialization
  */
 
-import { Line, Arc, Circle, Rectangle, Polygon, Polyline } from '../geometry/primitives.js';
+import { Line, Arc, Circle, Rectangle, Polygon, Polyline, Dimension } from '../geometry/primitives.js';
 
 export class StateManager {
   constructor(app, maxHistory = 50) {
@@ -15,8 +15,11 @@ export class StateManager {
   /**
    * Push current state to undo stack
    */
+  /**
+   * Push current state to undo stack
+   */
   pushState() {
-    const state = this.serializePrimitives(this.app.primitives);
+    const state = this.serializeState();
     this.undoStack.push(state);
 
     // Limit stack size
@@ -38,13 +41,12 @@ export class StateManager {
     }
 
     // Save current state to redo stack
-    const currentState = this.serializePrimitives(this.app.primitives);
+    const currentState = this.serializeState();
     this.redoStack.push(currentState);
 
     // Restore previous state
     const previousState = this.undoStack.pop();
-    this.app.primitives = this.deserializePrimitives(previousState);
-    this.app.selectedPrimitives.clear();
+    this.restoreState(previousState);
 
     // Update
     this.app.ui.updateStats();
@@ -66,13 +68,12 @@ export class StateManager {
     }
 
     // Save current state to undo stack
-    const currentState = this.serializePrimitives(this.app.primitives);
+    const currentState = this.serializeState();
     this.undoStack.push(currentState);
 
     // Restore next state
     const nextState = this.redoStack.pop();
-    this.app.primitives = this.deserializePrimitives(nextState);
-    this.app.selectedPrimitives.clear();
+    this.restoreState(nextState);
 
     // Update
     this.app.ui.updateStats();
@@ -93,20 +94,90 @@ export class StateManager {
   }
 
   /**
-   * Serialize primitives to JSON string
+   * Serialize full application state (primitives + layers)
    */
-  serializePrimitives(primitives) {
-    return JSON.stringify(primitives.map(p => p.toJSON()));
+  /**
+   * Serialize full application state (primitives + layers + view settings)
+   */
+  serializeState() {
+    const view = this.app.renderer ? {
+      zoom: this.app.renderer.view.zoom,
+      panX: this.app.renderer.view.panX,
+      panY: this.app.renderer.view.panY,
+      scaleFactor: this.app.renderer.view.scaleFactor
+    } : null;
+
+    const workspace = this.app.renderer ? { ...this.app.renderer.workspace } : null;
+    const grid = this.app.renderer ? { ...this.app.renderer.grid } : null;
+
+    const state = {
+      primitives: this.app.primitives.map(p => p.toJSON()),
+      layers: this.app.layerManager ? this.app.layerManager.serialize() : null,
+      view,
+      workspace,
+      grid
+    };
+    return JSON.stringify(state);
   }
 
   /**
-   * Deserialize primitives from JSON string
+   * Restore application state
+   * @param {string|Object} jsonString - State data
+   * @param {boolean} restoreView - Whether to restore zoom/pan/grid settings (default false for Undo/Redo)
+   */
+  restoreState(jsonString, restoreView = false) {
+    let data;
+    try {
+      data = typeof jsonString === 'string' ? JSON.parse(jsonString) : jsonString;
+    } catch (e) {
+      console.error('Error parsing state:', e);
+      return;
+    }
+
+    // Restore layers if present
+    if (data.layers && this.app.layerManager) {
+      this.app.layerManager.deserialize(data.layers);
+    }
+
+    // Restore primitives (handle both new object format and legacy array format)
+    const primitivesData = data.primitives || data; // Fallback for legacy state (just primitive array)
+    this.app.primitives = this.deserializePrimitives(primitivesData);
+    this.app.selectedPrimitives.clear();
+
+    // Restore View/Settings if requested
+    if (restoreView && this.app.renderer) {
+      if (data.workspace) {
+        this.app.renderer.workspace = { ...data.workspace };
+        this.app.renderer.resizeCanvas();
+      }
+      if (data.grid) {
+        this.app.renderer.setGridOptions(data.grid);
+      }
+      if (data.view) {
+        this.app.renderer.view = { ...data.view };
+        this.app.renderer.isCacheDirty = true;
+      }
+    }
+
+    // Refresh PLC output if manager exists
+    if (this.app.plcOutputManager) {
+      this.app.plcOutputManager.refreshPLCOutput();
+    }
+  }
+
+  /**
+   * Deserialize primitives from JSON string or object
    * Uses static fromJSON methods from primitive classes
    */
-  deserializePrimitives(jsonString) {
-    const data = JSON.parse(jsonString);
+  deserializePrimitives(data) {
+    const items = typeof data === 'string' ? JSON.parse(data) : data;
 
-    return data.map(item => {
+    if (!Array.isArray(items)) {
+      console.warn('deserializePrimitives: Expected array, got', typeof items);
+      return [];
+    }
+
+    return items.map(item => {
       switch (item.type) {
         case 'line':
           return Line.fromJSON(item);
@@ -125,6 +196,9 @@ export class StateManager {
 
         case 'polyline':
           return Polyline.fromJSON(item);
+
+        case 'dimension':
+          return Dimension.fromJSON(item);
 
         default:
           console.warn('Unknown primitive type:', item.type);

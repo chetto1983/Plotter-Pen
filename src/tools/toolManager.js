@@ -9,6 +9,8 @@ export { ArcTool } from './arcTool.js';
 export { CircleTool } from './circleTool.js';
 export { RectangleTool } from './rectangleTool.js';
 export { PolygonTool } from './polygonTool.js';
+export { DimensionTool } from './dimensionTool.js';
+export { FilletTool } from './filletTool.js';
 export { parseNumber, parseVector, parseCommandInput } from './commandParser.js';
 export { ToolManager } from './toolManagerCore.js';
 

@@ -189,7 +189,7 @@ export class Polygon extends Primitive {
     const poly = new Polygon(this.points.map(p => ({ x: p.x, y: p.y })));
     poly._closed = this._closed;
     poly.style = { ...this.style };
-    poly.layer = this.layer;
+    poly.layerId = this.layerId;
     return poly;
   }
 
@@ -256,7 +256,8 @@ export class Polygon extends Primitive {
     const poly = new Polygon(data.points, data.id);
     poly._closed = data.closed !== false;
     if (data.style) poly.style = { ...data.style };
-    if (data.layer !== undefined) poly.layer = data.layer;
+    if (data.layerId !== undefined) poly.layerId = data.layerId;
+    else if (data.layer !== undefined) poly.layerId = data.layer;
     return poly;
   }
 
@@ -286,14 +287,15 @@ export class Polyline extends Polygon {
   clone() {
     const poly = new Polyline(this.points.map(p => ({ x: p.x, y: p.y })));
     poly.style = { ...this.style };
-    poly.layer = this.layer;
+    poly.layerId = this.layerId;
     return poly;
   }
 
   static fromJSON(data) {
     const poly = new Polyline(data.points, data.id);
     if (data.style) poly.style = { ...data.style };
-    if (data.layer !== undefined) poly.layer = data.layer;
+    if (data.layerId !== undefined) poly.layerId = data.layerId;
+    else if (data.layer !== undefined) poly.layerId = data.layer;
     return poly;
   }
 }

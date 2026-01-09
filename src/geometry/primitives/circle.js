@@ -97,7 +97,7 @@ export class Circle extends Primitive {
   clone() {
     const circle = new Circle(this.center.x, this.center.y, this._radius);
     circle.style = { ...this.style };
-    circle.layer = this.layer;
+    circle.layerId = this.layerId;
     return circle;
   }
 
@@ -146,7 +146,8 @@ export class Circle extends Primitive {
   static fromJSON(data) {
     const circle = new Circle(data.cx, data.cy, data.radius, data.id);
     if (data.style) circle.style = { ...data.style };
-    if (data.layer !== undefined) circle.layer = data.layer;
+    if (data.layerId !== undefined) circle.layerId = data.layerId;
+    else if (data.layer !== undefined) circle.layerId = data.layer;
     return circle;
   }
 }
