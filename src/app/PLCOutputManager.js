@@ -23,84 +23,47 @@ export class PLCOutputManager {
     }
 
     const primitivesWithData = this.app.primitives.map((p) => {
+      // Create a shallow copy to attach plcData without polluting original too much
+      // (Actually original code modified 'p' directly which is risky but I will stick to it for now or copy)
+      // The original code returned 'p' with 'plcData'.
+
       if (p.type === "line") {
         p.plcData = { type: 1, x1: p.x1, y1: p.y1, x2: p.x2, y2: p.y2 };
       } else if (p.type === "arc") {
         p.plcData = {
           type: p.isClockwise ? 2 : 3,
-          x1: p.x1,
-          y1: p.y1,
-          x2: p.x2,
-          y2: p.y2,
-          cx: p.cx,
-          cy: p.cy,
+          x1: p.x1, y1: p.y1, x2: p.x2, y2: p.y2, cx: p.cx, cy: p.cy,
         };
       } else if (p.type === "circle") {
         p.plcData = {
           type: 3,
-          x1: p.center.x + p.radius,
-          y1: p.center.y,
-          x2: p.center.x + p.radius,
-          y2: p.center.y,
-          cx: p.center.x,
-          cy: p.center.y,
+          x1: p.center.x + p.radius, y1: p.center.y,
+          x2: p.center.x + p.radius, y2: p.center.y,
+          cx: p.center.x, cy: p.center.y,
         };
       } else if (p.type === "rectangle") {
         p.plcData = { type: "rectangle", x: p.x, y: p.y, width: p.width, height: p.height };
+      } else if (p.type === "polygon" || p.type === "polyline") {
+        // Prepare data for polygon/polyline
+        p.plcData = { type: p.type, points: p.points, closed: p.closed };
       }
       return p;
     });
 
-    const expandedPrimitives = [];
-    for (const p of primitivesWithData) {
-      if (p.type === "rectangle") {
-        const x = p.x;
-        const y = p.y;
-        const w = p.width;
-        const h = p.height;
-        expandedPrimitives.push(
-          { type: "line", x1: x, y1: y, x2: x + w, y2: y, plcData: { type: 1, x1: x, y1: y, x2: x + w, y2: y } },
-          { type: "line", x1: x + w, y1: y, x2: x + w, y2: y + h, plcData: { type: 1, x1: x + w, y1: y, x2: x + w, y2: y + h } },
-          { type: "line", x1: x + w, y1: y + h, x2: x, y2: y + h, plcData: { type: 1, x1: x + w, y1: y + h, x2: x, y2: y + h } },
-          { type: "line", x1: x, y1: y + h, x2: x, y2: y, plcData: { type: 1, x1: x, y1: y + h, x2: x, y2: y } }
-        );
-      } else if (p.type === "polygon" && p.points && p.points.length > 1) {
-        for (let i = 0; i < p.points.length - 1; i++) {
-          const p1 = p.points[i];
-          const p2 = p.points[i + 1];
-          expandedPrimitives.push({
-            type: "line",
-            x1: p1.x,
-            y1: p1.y,
-            x2: p2.x,
-            y2: p2.y,
-            plcData: { type: 1, x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y },
-          });
-        }
-        if (p.closed && p.points.length > 2) {
-          const first = p.points[0];
-          const last = p.points[p.points.length - 1];
-          expandedPrimitives.push({
-            type: "line",
-            x1: last.x,
-            y1: last.y,
-            x2: first.x,
-            y2: first.y,
-            plcData: { type: 1, x1: last.x, y1: last.y, x2: first.x, y2: first.y },
-          });
-        }
-      } else if (p.type === "line" || p.type === "arc" || p.type === "circle") {
-        expandedPrimitives.push(p);
-      }
-    }
-
-    const optimizedPrimitives = PathOptimizer.optimizeOrder(expandedPrimitives);
+    // Use primitives directly, do NOT expand polygons/rectangles into thousands of lines
+    // This optimization prevents O(N^2) path finding on huge datasets
+    const optimizedPrimitives = PathOptimizer.optimizeOrder(primitivesWithData);
     const generator = new PLCOutputGenerator();
     const commands = generator.generate(optimizedPrimitives);
     this.app.plcCommands = commands;
     this.app.plcOutput = commands.map((c) => c.command);
 
-    this.app.ui.displayPLCOutput(this.app.plcCommands, this.app);
+    // Limit UI display to avoid DOM freeze with massive outputs
+    const displayCommands = this.app.plcCommands.length > 2000
+      ? this.app.plcCommands.slice(0, 2000).concat([{ command: `... (${this.app.plcCommands.length - 2000} more commands)` }])
+      : this.app.plcCommands;
+
+    this.app.ui.displayPLCOutput(displayCommands, this.app);
     this.app.ui.updateStats();
     this.app.ui.updateStatus(`Estratte ${this.app.plcOutput.length} istruzioni PLC`);
   }
@@ -173,7 +136,7 @@ export class PLCOutputManager {
           btnSimulate.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
         }
       },
-      onUpdate: () => {},
+      onUpdate: () => { },
     });
   }
 

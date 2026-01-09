@@ -7,6 +7,7 @@ import { spawn } from "node:child_process";
 import express from "express";
 import opcua from "node-opcua-client";
 import { dxfParseHandler } from "./routes/dxf-parser.js";
+import { smartImportRouter } from "./routes/import-dxf.js";
 
 const {
   OPCUAClient,
@@ -1060,6 +1061,9 @@ async function start() {
   // ========== DXF PARSING ENDPOINT ==========
   // Process DXF files in backend to avoid browser freeze
   app.post("/api/parse-dxf", express.text({ limit: '10mb', type: '*/*' }), dxfParseHandler);
+
+  // Smart Import (Biarc + Optimization)
+  app.use("/api", smartImportRouter);
 
   const port = await findAvailablePort(DEFAULT_PORT);
   const server = app.listen(port, HOST, () => {

@@ -666,11 +666,51 @@ export class UIController {
   /**
    * Display PLC output in grid with primitive highlighting
    */
+  /**
+   * Display PLC output in grid with primitive highlighting
+   * Optimized: Uses Event Delegation to prevent freezing on large lists
+   */
   displayPLCOutput(plcCommands, app) {
     const grid = document.getElementById('outputGrid');
     if (!grid) return;
 
-    // Handle both old format (string array) and new format (command objects)
+    // Attach Event Delegation (ONCE)
+    if (!grid.dataset.listenerAttached) {
+      grid.dataset.listenerAttached = 'true';
+      grid.addEventListener('click', (e) => {
+        const item = e.target.closest('.cad-output-item');
+        if (!item) return;
+
+        const index = parseInt(item.dataset.index);
+        const wasSelected = item.classList.contains('selected');
+
+        // Remove previous selection
+        const currentSelected = grid.querySelector('.cad-output-item.selected');
+        if (currentSelected) currentSelected.classList.remove('selected');
+
+        if (!wasSelected) {
+          // Select new
+          item.classList.add('selected');
+
+          // Access source data directly from App state
+          // Handle potential slice/hidden items logic if indices don't match 1:1
+          // But here we rely on dataset index being correct relative to the original list OR the displayed list.
+          // In FileManager we passed sliced commands. 
+          // So we should verify if app.plcCommands matches the display index.
+          // For now, simpler is better.
+
+          const cmd = this.app.plcCommands ? this.app.plcCommands[index] : null;
+
+          if (cmd && cmd.primitive) {
+            this.app.highlightPrimitive(cmd.primitive);
+          }
+        } else {
+          this.app.clearHighlight();
+        }
+      });
+    }
+
+    // Normalize commands
     const commands = Array.isArray(plcCommands) ?
       (typeof plcCommands[0] === 'string' ? plcCommands.map(c => ({ command: c })) : plcCommands) :
       [];
@@ -680,35 +720,14 @@ export class UIController {
       return;
     }
 
+    // Fast String Rendering
+    // Slice to 2000 is done in FileManager, so this list is safe length.
+    // Even 2000 items with listeners was slow. Without listeners, innerHTML is instant.
     grid.innerHTML = commands.map((cmd, i) =>
       `<div class="cad-output-item" data-index="${i}">${cmd.command}</div>`
     ).join('');
 
-    // Add click handlers for selection and primitive highlighting
-    grid.querySelectorAll('.cad-output-item').forEach((item, index) => {
-      item.addEventListener('click', () => {
-        // Toggle selection state
-        const wasSelected = item.classList.contains('selected');
-
-        // Remove selection from all items
-        grid.querySelectorAll('.cad-output-item').forEach(el => el.classList.remove('selected'));
-
-        if (!wasSelected) {
-          // Select this item and highlight primitive
-          item.classList.add('selected');
-
-          const cmd = commands[index];
-          if (cmd && cmd.primitive && app) {
-            app.highlightPrimitive(cmd.primitive);
-          }
-        } else {
-          // Deselect - clear highlight
-          if (app) {
-            app.clearHighlight();
-          }
-        }
-      });
-    });
+    // NO loop to addEventListener here!
   }
 
   /**

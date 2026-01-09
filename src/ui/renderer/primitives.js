@@ -8,13 +8,20 @@ export class PrimitiveRenderer {
 
   /**
    * Draw all primitives with batched rendering for performance
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} scale
+   * @param {Array} primitives - Array of domain objects (Line, Arc, etc.)
+   * @param {Set} selectedPrimitives - Set of selected primitive objects
    */
-  drawPrimitives(ctx, scale) {
+  drawPrimitives(ctx, scale, primitives, selectedPrimitives = new Set()) {
     const lineWidth = this.renderer.lineWidth / scale;
     const selectedLineWidth = lineWidth * 1.5;
-    const primitives = this.renderer.primitives;
 
-    if (primitives.length === 0) return;
+    if (!primitives || primitives.length === 0) return;
+    // Debug large datasets
+    if (primitives.length > 500) {
+      // console.log(`Drawing ${primitives.length} primitives`);
+    }
 
     // Batch all non-selected lines together
     ctx.save();
@@ -30,9 +37,12 @@ export class PrimitiveRenderer {
     const deferredPolygons = [];
 
     for (const prim of primitives) {
-      if (!prim.visible) continue;
+      if (!prim) continue; // Skip nulls
 
-      if (prim.selected) {
+      // Check visibility if property exists (default to true)
+      if (prim.visible === false) continue;
+
+      if (selectedPrimitives.has(prim)) {
         deferredSelected.push(prim);
         continue;
       }
@@ -53,30 +63,50 @@ export class PrimitiveRenderer {
     // Stroke all batched lines at once
     ctx.stroke();
 
-    // Draw arcs (need individual paths due to arc() behavior)
-    for (const arc of deferredArcs) {
-      const render = arc.getRenderData();
+    // Batch Arcs
+    if (deferredArcs.length > 0) {
       ctx.beginPath();
-      ctx.arc(render.cx, render.cy, render.r, render.startAngle, render.endAngle, render.anticlockwise);
-      ctx.stroke();
-    }
+      for (const arc of deferredArcs) {
+        const render = typeof arc.getRenderData === 'function' ? arc.getRenderData() : null;
+        if (!render || !render.r) continue;
 
-    // Draw circles
-    for (const circle of deferredCircles) {
-      ctx.beginPath();
-      ctx.arc(circle.cx, circle.cy, circle.radius, 0, TWO_PI);
-      ctx.stroke();
-    }
+        // Calculate start point to move to (prevents connecting lines)
+        const startX = render.cx + render.r * Math.cos(render.startAngle);
+        const startY = render.cy + render.r * Math.sin(render.startAngle);
 
-    // Draw polygons/polylines
-    for (const poly of deferredPolygons) {
-      if (!poly.points || poly.points.length < 2) continue;
-      ctx.beginPath();
-      ctx.moveTo(poly.points[0].x, poly.points[0].y);
-      for (let i = 1; i < poly.points.length; i++) {
-        ctx.lineTo(poly.points[i].x, poly.points[i].y);
+        ctx.moveTo(startX, startY);
+        ctx.arc(render.cx, render.cy, render.r, render.startAngle, render.endAngle, render.anticlockwise);
       }
-      if (poly.closed || poly.type === 'polygon') ctx.closePath();
+      ctx.stroke();
+    }
+
+    // Batch Circles
+    if (deferredCircles.length > 0) {
+      ctx.beginPath();
+      for (const circle of deferredCircles) {
+        const r = circle.radius ?? circle.r;
+        const cx = circle.cx ?? circle.center?.x;
+        const cy = circle.cy ?? circle.center?.y;
+
+        // Move to start of circle (angle 0)
+        ctx.moveTo(cx + r, cy);
+        ctx.arc(cx, cy, r, 0, TWO_PI);
+      }
+      ctx.stroke();
+    }
+
+    // Batch Polygons
+    if (deferredPolygons.length > 0) {
+      ctx.beginPath();
+      for (const poly of deferredPolygons) {
+        if (!poly.points || poly.points.length < 2) continue;
+
+        ctx.moveTo(poly.points[0].x, poly.points[0].y);
+        for (let i = 1; i < poly.points.length; i++) {
+          ctx.lineTo(poly.points[i].x, poly.points[i].y);
+        }
+        if (poly.closed || poly.type === 'polygon') ctx.closePath();
+      }
       ctx.stroke();
     }
 
@@ -102,6 +132,8 @@ export class PrimitiveRenderer {
    * Draw a single primitive
    */
   drawPrimitive(ctx, prim, scale) {
+    if (!prim) return;
+
     switch (prim.type) {
       case 'line':
         this.drawLine(ctx, prim);
@@ -136,15 +168,25 @@ export class PrimitiveRenderer {
    * Draw arc
    */
   drawArc(ctx, arc, scale) {
-    // SINGLE SOURCE OF TRUTH: Always use getRenderData()
-    const render = arc.getRenderData();
+    try {
+      // SINGLE SOURCE OF TRUTH: Always use getRenderData()
+      const render = arc.getRenderData();
 
-    ctx.beginPath();
-    ctx.arc(render.cx, render.cy, render.r, render.startAngle, render.endAngle, render.anticlockwise);
-    ctx.stroke();
+      // Sanity checks to prevent freeze
+      if (!render || isNaN(render.r) || render.r <= 0 || !isFinite(render.startAngle) || !isFinite(render.endAngle)) {
+        return;
+      }
+      if (render.r > 1000000) return; // Skip massive arcs that might freeze canvas
 
-    // Draw arc markers
-    this.drawArcMarkers(ctx, arc, scale);
+      ctx.beginPath();
+      ctx.arc(render.cx, render.cy, render.r, render.startAngle, render.endAngle, render.anticlockwise);
+      ctx.stroke();
+
+      // Draw arc markers
+      this.drawArcMarkers(ctx, arc, scale);
+    } catch (e) {
+      console.warn('Error drawing arc:', e);
+    }
   }
 
   /**
@@ -191,7 +233,10 @@ export class PrimitiveRenderer {
    */
   drawCircle(ctx, circle) {
     ctx.beginPath();
-    ctx.arc(circle.cx, circle.cy, circle.radius, 0, TWO_PI);
+    const r = circle.radius ?? circle.r;
+    const cx = circle.cx ?? circle.center?.x;
+    const cy = circle.cy ?? circle.center?.y;
+    ctx.arc(cx, cy, r, 0, TWO_PI);
     ctx.stroke();
   }
 
@@ -227,13 +272,13 @@ export class PrimitiveRenderer {
   /**
    * Draw preview shape
    */
-  drawPreview(ctx, scale) {
+  drawPreview(ctx, preview, scale) {
+    if (!preview) return;
+
     ctx.save();
     ctx.strokeStyle = COLORS.primitivePreview;
     ctx.lineWidth = this.renderer.lineWidth / scale;
     ctx.setLineDash([5 / scale, 3 / scale]);
-
-    const preview = this.renderer.preview;
 
     if (preview.type === 'line') {
       ctx.beginPath();
@@ -265,28 +310,32 @@ export class PrimitiveRenderer {
   }
 
   /**
-   * Draw selection highlight
+   * Draw selection highlight for a specific primitive
    */
-  drawSelection(ctx, scale) {
+  drawSelection(ctx, primitive, scale) {
+    if (!primitive) return;
+
     ctx.save();
     ctx.strokeStyle = COLORS.primitiveSelected;
     ctx.lineWidth = (this.renderer.lineWidth + 2) / scale;
     ctx.setLineDash([]);
 
-    this.drawPrimitive(ctx, this.renderer.selection, scale);
+    this.drawPrimitive(ctx, primitive, scale);
     ctx.restore();
   }
 
   /**
-   * Draw hover highlight
+   * Draw hover highlight for a specific primitive
    */
-  drawHovered(ctx, scale) {
+  drawHovered(ctx, primitive, scale) {
+    if (!primitive) return;
+
     ctx.save();
     ctx.strokeStyle = COLORS.primitiveHovered;
     ctx.lineWidth = (this.renderer.lineWidth + 2) / scale;  // Thicker line when hovered
     ctx.setLineDash([]);
 
-    this.drawPrimitive(ctx, this.renderer.hovered, scale);
+    this.drawPrimitive(ctx, primitive, scale);
     ctx.restore();
   }
 

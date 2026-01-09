@@ -120,32 +120,49 @@ export class FileManager {
     this.app.ui.updateStatus(`Caricamento DXF ${file.name}...`);
     const content = contentOverride ?? await file.text();
 
+    // BACKEND EXTRACTION (Smart Import)
+    // We send raw DXF to server, it parses and optimizes it, returning Primitives + PLC Commands
     try {
-      // Send DXF content to backend for parsing
-      this.app.ui.updateStatus('Invio al backend...');
-      const response = await fetch('/api/parse-dxf', {
+      this.app.ui.updateStatus('Elaborazione backend (Smart Import)...');
+
+      const response = await fetch('/api/smart-import', {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
         body: content
       });
 
-      const result = await response.json();
-
-      if (result.status !== 'ok') {
-        throw new Error(result.message || 'Backend parsing failed');
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.message || 'Import failed');
       }
 
-      // Convert raw data to primitive instances (chunked to avoid freeze)
-      this.app.ui.updateStatus(`Creazione ${result.primitives.length} primitive...`);
+      this.app.ui.updateStatus('Download risultati...');
+      const result = await response.json();
+
+      this.app.ui.updateStatus(`Ricevute ${result.primitives.length} primitive. Ricostruzione oggetti...`);
+
+      // Rehydrate instances for Rendering (Chunked)
       const primitives = await this.createPrimitivesFromDataAsync(result.primitives);
 
       if (!primitives || primitives.length === 0) {
-        this.app.ui.updateStatus("DXF senza entita importabili");
+        this.app.ui.updateStatus("DXF senza entità importabili");
         return;
       }
 
-      this.app.state.pushState();
+      // Optimize history for large files
+      if (primitives.length < 10000) {
+        this.app.state.pushState();
+      } else {
+        console.warn('Import too large for Undo history, skipping pushState');
+        // We don't push state, but we should probably clear previous history to avoid mixed state issues
+        // or just accept that "Undo" won't go back to "Empty".
+      }
       this.app.primitives = primitives;
+
+      // PRE-CALCULATED PLC COMMANDS
+      this.app.plcCommands = result.plcCommands;
+      this.app.plcOutput = result.plcOutput;
+
       this.app.selectedPrimitives.clear();
       this.app.highlightedPrimitive = null;
 
@@ -155,14 +172,23 @@ export class FileManager {
       this.app.ui.updateStats();
       this.app.ui.updateStatus(`Rendering...`);
       await new Promise(r => requestAnimationFrame(r));
+
       this.app.render();
-      this.app.refreshPLCOutput();
+
       this.app.renderer.resetView();
       this.app.ui.updateStatus(`DXF importato: ${primitives.length} primitive`);
+
+      // 8. Update UI with PLC Commands (Sliced to prevent freeze)
+      const maxDisplay = 2000;
+      const displayCommands = this.app.plcCommands.length > maxDisplay
+        ? this.app.plcCommands.slice(0, maxDisplay).concat([{ command: `... (${this.app.plcCommands.length - maxDisplay} instructions hidden)` }])
+        : this.app.plcCommands;
+
+      this.app.ui.displayPLCOutput(displayCommands, this.app);
+
     } catch (error) {
       console.error('DXF import error:', error);
       this.app.ui.updateStatus(`Errore: ${error.message}`);
-      throw error;
     }
   }
 
@@ -182,7 +208,8 @@ export class FileManager {
         if (d.type === 'line') {
           primitives.push(new Line(d.x1, d.y1, d.x2, d.y2));
         } else if (d.type === 'arc') {
-          primitives.push(new Arc(d.x1, d.y1, d.x2, d.y2, d.cx, d.cy, d.throughPoint));
+          // Arc.toJSON returns ax, ay, bx, by (start/end points)
+          primitives.push(new Arc(d.ax ?? d.x1, d.ay ?? d.y1, d.bx ?? d.x2, d.by ?? d.y2, d.cx, d.cy, d.throughPoint));
         } else if (d.type === 'circle') {
           primitives.push(new Circle(d.cx, d.cy, d.radius));
         }

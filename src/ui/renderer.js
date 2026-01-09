@@ -45,11 +45,10 @@ export class CanvasRenderer {
       snapToGrid: false
     };
 
-    // Drawing state
-    this.primitives = [];
-    this.preview = null;
-    this.selection = null;
-    this.hovered = null;
+    // Drawing state - Removed internal state, passed via render()
+
+    // Styling
+    this.lineWidth = 1;
 
     // Styling
     this.lineWidth = 1;
@@ -57,8 +56,26 @@ export class CanvasRenderer {
     // Rendering helpers
     this.primitiveRenderer = new PrimitiveRenderer(this);
     this.simulationManager = new SimulationManager(this);
+    this.onRequestRender = null;
+
+    // Cache System (Double Buffering)
+    this.cacheCanvas = document.createElement('canvas');
+    this.cacheCtx = this.cacheCanvas.getContext('2d');
+    this.isCacheDirty = true;
+    this.lastViewState = '';
 
     this.initialize();
+  }
+
+  requestRender() {
+    if (this.onRequestRender) {
+      this.onRequestRender();
+    }
+  }
+
+  // Explicitly invalidate cache (e.g. when primitives added)
+  invalidateCache() {
+    this.isCacheDirty = true;
   }
 
   initialize() {
@@ -84,6 +101,13 @@ export class CanvasRenderer {
     this.canvas.width = Math.floor(width * this.dpr);
     this.canvas.height = Math.floor(height * this.dpr);
 
+    // Resize cache as well
+    if (this.cacheCanvas.width !== this.canvas.width || this.cacheCanvas.height !== this.canvas.height) {
+      this.cacheCanvas.width = this.canvas.width;
+      this.cacheCanvas.height = this.canvas.height;
+      this.isCacheDirty = true;
+    }
+
     // Calculate scale to fit workspace
     const scaleX = width / this.workspace.width;
     const scaleY = height / this.workspace.height;
@@ -93,71 +117,105 @@ export class CanvasRenderer {
     this.view.panX = (width - this.workspace.width * this.view.scaleFactor) / 2;
     this.view.panY = (height - this.workspace.height * this.view.scaleFactor) / 2;
 
-    this.render();
+    this.isCacheDirty = true; // View changed
   }
+  // ...
 
   /**
-   * Get effective scale
+   * Update the static cache
    */
-  getEffectiveScale() {
-    return this.view.scaleFactor * this.dpr * this.view.zoom;
-  }
+  updateCache(primitives, selection) {
+    // Clear cache
+    this.cacheCtx.save();
+    this.cacheCtx.setTransform(1, 0, 0, 1, 0, 0);
+    this.cacheCtx.fillStyle = COLORS.background;
+    this.cacheCtx.fillRect(0, 0, this.cacheCanvas.width, this.cacheCanvas.height);
+    this.cacheCtx.restore();
 
-  /**
-   * Transform model coordinates to screen coordinates
-   */
-  modelToScreen(point) {
-    const scale = this.view.scaleFactor * this.view.zoom;
-    return {
-      x: point.x * scale + this.view.panX,
-      y: point.y * scale + this.view.panY
-    };
-  }
+    // We need to use the cacheCtx for drawing operations
+    // Temporarily swap this.ctx to cacheCtx so reused methods work
+    const mainCtx = this.ctx;
+    this.ctx = this.cacheCtx;
 
-  /**
-   * Transform screen coordinates to model coordinates
-   */
-  screenToModel(point) {
-    const scale = this.view.scaleFactor * this.view.zoom;
-    return {
-      x: (point.x - this.view.panX) / scale,
-      y: (point.y - this.view.panY) / scale
-    };
-  }
-
-  /**
-   * Apply view transformation to context
-   */
-  applyViewTransform() {
-    const scale = this.getEffectiveScale();
-    this.ctx.setTransform(
-      scale, 0, 0, scale,
-      this.view.panX * this.dpr,
-      this.view.panY * this.dpr
-    );
-    return scale;
-  }
-
-  /**
-   * Execute drawing function with view transform
-   */
-  withViewContext(drawFn) {
-    this.ctx.save();
-    const scale = this.applyViewTransform();
     try {
-      drawFn(this.ctx, scale);
+      this.drawBackground();
+
+      // Draw static primitives
+      this.withViewContext((ctx, scale) => {
+        // Clip to workspace
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(0, 0, this.workspace.width, this.workspace.height);
+        ctx.clip();
+
+        const selectedSet = selection instanceof Set ? selection : (selection ? new Set([selection]) : new Set());
+        if (primitives) {
+          this.primitiveRenderer.drawPrimitives(ctx, scale, primitives, selectedSet);
+        }
+        ctx.restore();
+      });
+
     } finally {
-      this.ctx.restore();
+      this.ctx = mainCtx; // Restore main context
     }
   }
 
   /**
    * Main render function
+   * Optimized with Draw Caching
    */
-  render() {
+  render(primitives = [], selection = null, preview = null, hovered = null, highlighted = null) {
+    // Check if view changed (pan/zoom)
+    const currentViewState = `${this.view.zoom.toFixed(5)},${this.view.panX.toFixed(2)},${this.view.panY.toFixed(2)}`;
+    if (this.lastViewState !== currentViewState) {
+      this.isCacheDirty = true;
+      this.lastViewState = currentViewState;
+    }
+
+    // If cache dirty, update it
+    if (this.isCacheDirty) {
+      this.updateCache(primitives, selection);
+      this.isCacheDirty = false;
+    }
+
+    // 1. Draw Cache (Static Layer)
     this.clear();
-    this.drawBackground();
-    this.drawWorkspace();
+    this.ctx.drawImage(this.cacheCanvas, 0, 0);
+
+    // 2. Draw Dynamic Layer (overlays)
+    this.drawDynamic(preview, hovered, highlighted, selection);
+  }
+
+  drawDynamic(preview, hovered, highlighted, selection) {
+    const selectedSet = selection instanceof Set ? selection : (selection ? new Set([selection]) : new Set());
+
+    this.withViewContext((ctx, scale) => {
+      // Clip
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, this.workspace.width, this.workspace.height);
+      ctx.clip();
+
+      if (preview) {
+        this.primitiveRenderer.drawPreview(ctx, preview, scale);
+      }
+      if (highlighted) {
+        this.primitiveRenderer.drawHighlightedPrimitive(highlighted);
+      }
+      // Hovered (only if not selected)
+      if (hovered && !selectedSet.has(hovered)) {
+        this.primitiveRenderer.drawHovered(ctx, hovered, scale);
+      }
+
+      ctx.restore();
+    });
+
+    // Simulation overlay
+    if (this.simulation && this.simulation.running) {
+      this.withViewContext((ctx, scale) => {
+        this.simulationManager.draw(ctx, scale);
+      });
+    }
   }
 
   /**
@@ -195,7 +253,10 @@ export class CanvasRenderer {
   /**
    * Draw workspace with primitives
    */
-  drawWorkspace() {
+  /**
+   * Draw workspace with primitives
+   */
+  drawWorkspace(primitives, selection, preview, hovered, highlighted) {
     this.withViewContext((ctx, scale) => {
       // Clip to workspace
       ctx.save();
@@ -203,22 +264,27 @@ export class CanvasRenderer {
       ctx.rect(0, 0, this.workspace.width, this.workspace.height);
       ctx.clip();
 
+      // Convert selection to Set if it isn't one (legacy support)
+      const selectedSet = selection instanceof Set ? selection : (selection ? new Set([selection]) : new Set());
+
       // Draw primitives
-      this.primitiveRenderer.drawPrimitives(ctx, scale);
+      if (primitives) {
+        this.primitiveRenderer.drawPrimitives(ctx, scale, primitives, selectedSet);
+      }
 
       // Draw preview
-      if (this.preview) {
-        this.primitiveRenderer.drawPreview(ctx, scale);
+      if (preview) {
+        this.primitiveRenderer.drawPreview(ctx, preview, scale);
       }
 
-      // Draw selection
-      if (this.selection) {
-        this.primitiveRenderer.drawSelection(ctx, scale);
+      // Draw highlighted primitive (PLC)
+      if (highlighted) {
+        this.primitiveRenderer.drawHighlightedPrimitive(highlighted);
       }
 
-      // Draw hovered
-      if (this.hovered && this.hovered !== this.selection) {
-        this.primitiveRenderer.drawHovered(ctx, scale);
+      // Draw hovered (if not selected)
+      if (hovered && !selectedSet.has(hovered)) {
+        this.primitiveRenderer.drawHovered(ctx, hovered, scale);
       }
 
       // Draw simulation overlay
@@ -373,14 +439,11 @@ export class CanvasRenderer {
       this.view.panX = centerX - (centerX - this.view.panX) * scale;
       this.view.panY = centerY - (centerY - this.view.panY) * scale;
     }
-
-    this.render();
   }
 
   pan(dx, dy) {
     this.view.panX += dx;
     this.view.panY += dy;
-    this.render();
   }
 
   resetView() {
@@ -389,29 +452,11 @@ export class CanvasRenderer {
     const height = this.canvas.clientHeight;
     this.view.panX = (width - this.workspace.width * this.view.scaleFactor) / 2;
     this.view.panY = (height - this.workspace.height * this.view.scaleFactor) / 2;
-    this.render();
   }
 
   // Data methods
-  setPrimitives(primitives) {
-    this.primitives = primitives;
-    this.render();
-  }
-
-  setPreview(preview) {
-    this.preview = preview;
-    this.render();
-  }
-
-  setSelection(primitive) {
-    this.selection = primitive;
-    this.render();
-  }
-
-  setHovered(primitive) {
-    this.hovered = primitive;
-    this.render();
-  }
+  // Data methods - REMOVED state setters (setPrimitives, setPreview, etc.)
+  // State is now passed directly to render()
 
   setWorkspaceSize(width, height) {
     this.workspace.width = width;
@@ -421,7 +466,6 @@ export class CanvasRenderer {
 
   setGridOptions(options) {
     Object.assign(this.grid, options);
-    this.render();
   }
 
   // ===== PATH SIMULATION =====

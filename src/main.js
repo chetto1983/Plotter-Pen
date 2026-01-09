@@ -12,7 +12,7 @@ import { StateManager } from './app/StateManager.js';
 import { FileManager } from './app/FileManager.js';
 import { PLCOutputManager } from './app/PLCOutputManager.js';
 import { SelectionManager } from './app/SelectionManager.js';
-import { RenderManager } from './app/RenderManager.js';
+// RenderManager removed
 import { ViewManager } from './app/ViewManager.js';
 import { ToolController } from './app/ToolController.js';
 
@@ -40,7 +40,7 @@ class CADApplication {
     this.fileManager = null;
     this.plcOutputManager = null;
     this.selectionManager = null;
-    this.renderManager = null;
+    // this.renderManager = null;
     this.viewManager = null;
     this.toolController = null;
 
@@ -82,6 +82,7 @@ class CADApplication {
     // Initialize renderer
     this.renderer = new CanvasRenderer(this.canvas);
     this.renderer.setWorkspaceSize(this.workspaceWidth, this.workspaceHeight);
+    this.renderer.onRequestRender = () => this.render();
 
     // Initialize snap manager
     this.snapManager = new SnapManager({
@@ -90,6 +91,7 @@ class CADApplication {
       gridEnabled: this.snapToGrid,
       objectSnapEnabled: this.snapToObjects
     });
+    this.snapManager.setPrimitives(this.primitives);
 
     // Initialize handlers
     this.input = new InputHandler(this);
@@ -98,7 +100,7 @@ class CADApplication {
     this.fileManager = new FileManager(this);
     this.plcOutputManager = new PLCOutputManager(this);
     this.selectionManager = new SelectionManager(this);
-    this.renderManager = new RenderManager(this);
+    // RenderManager removed - direct rendering used
     this.viewManager = new ViewManager(this);
     this.toolController = new ToolController(this);
 
@@ -117,7 +119,10 @@ class CADApplication {
    * Get snapped position for a world coordinate
    */
   getSnappedPosition(worldPos) {
-    this.snapManager.setPrimitives(this.primitives);
+    // Optimization: Do NOT reset primitives every frame. 
+    // It rebuilds the O(N^2) intersection cache.
+    // this.snapManager.setPrimitives(this.primitives); 
+
     // snap() expects a point object, not separate x,y
     const snapResult = this.snapManager.snap(worldPos);
 
@@ -202,6 +207,12 @@ class CADApplication {
 
     this.state.pushState();
     this.primitives.push(primitive);
+
+    // Update snap manager anchor cache
+    if (this.snapManager) {
+      this.snapManager.setPrimitives(this.primitives);
+    }
+
     this.ui.updateStats();
     this.render();
     this.refreshPLCOutput();
@@ -232,12 +243,12 @@ class CADApplication {
     } else if (primitive.type === 'line') {
       // Lines should already be clamped by input handler
       if (primitive.x1 < 0 || primitive.x1 > w || primitive.x2 < 0 || primitive.x2 > w ||
-          primitive.y1 < 0 || primitive.y1 > h || primitive.y2 < 0 || primitive.y2 > h) {
+        primitive.y1 < 0 || primitive.y1 > h || primitive.y2 < 0 || primitive.y2 > h) {
         return false;
       }
     } else if (primitive.type === 'rectangle') {
       if (primitive.x < 0 || primitive.x + primitive.width > w ||
-          primitive.y < 0 || primitive.y + primitive.height > h) {
+        primitive.y < 0 || primitive.y + primitive.height > h) {
         return false;
       }
     }
@@ -251,6 +262,7 @@ class CADApplication {
   deleteSelected() {
     if (this.selectionManager) {
       this.selectionManager.deleteSelected();
+      this.snapManager.setPrimitives(this.primitives);
     }
   }
 
@@ -380,18 +392,20 @@ class CADApplication {
    * Highlight a primitive from PLC command
    */
   highlightPrimitive(primitive) {
-    if (this.renderManager) {
-      this.renderManager.highlightPrimitive(primitive);
-    }
+    this.highlightedPrimitive = primitive;
+    this.render();
   }
 
   /**
    * Clear primitive highlight
    */
   clearHighlight() {
-    if (this.renderManager) {
-      this.renderManager.clearHighlight();
+    this.highlightedPrimitive = null;
+    const grid = document.getElementById('outputGrid');
+    if (grid) {
+      grid.querySelectorAll('.cad-output-item.selected').forEach(el => el.classList.remove('selected'));
     }
+    this.render();
   }
 
   /**
@@ -491,31 +505,46 @@ class CADApplication {
    * Render the canvas
    */
   render() {
-    if (this.renderManager) {
-      this.renderManager.render();
+    if (!this.renderer) return;
+
+    // Update renderer settings
+    this.renderer.grid.show = this.showGrid;
+    this.renderer.grid.spacing = this.gridSpacing;
+
+    // Update floating toolbar visibility
+    if (this.ui) {
+      this.ui.updateFloatingToolbar();
+    }
+
+    // Get preview from current tool
+    let preview = null;
+    if (this.currentTool && this.currentTool.getPreview) {
+      preview = this.currentTool.getPreview();
+    }
+
+    // Single render call with all state
+    this.renderer.render(
+      this.primitives,
+      this.selectedPrimitives,
+      preview,
+      this.hoveredPrimitive,
+      this.highlightedPrimitive
+    );
+
+    // Draw snap indicator if available
+    if (this.snapManager && this.snapManager.lastSnapResult) {
+      const snapResult = this.snapManager.lastSnapResult;
+      if (snapResult && snapResult.isValid && snapResult.point) {
+        this.renderer.drawSnapIndicator(
+          { x: snapResult.point.x, y: snapResult.point.y },
+          snapResult.type
+        );
+      }
     }
   }
 
-  /**
-   * Convert primitive to renderer format
-   */
-  toRenderFormat(p) {
-    if (this.renderManager) {
-      return this.renderManager.toRenderFormat(p);
-    }
-    return { visible: true, type: p.type };
-  }
-
-  /**
-   * Convert preview to renderer format
-   * Preview comes from tools and uses different format than primitives
-   */
-  previewToRenderFormat(preview) {
-    if (this.renderManager) {
-      return this.renderManager.previewToRenderFormat(preview);
-    }
-    return preview;
-  }
+  // Helper methods removed: toRenderFormat, previewToRenderFormat
+  // Direct object rendering is now used
 }
 
 // Initialize application when DOM is ready

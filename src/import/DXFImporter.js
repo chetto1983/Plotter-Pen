@@ -8,9 +8,20 @@ import { Line, Arc, Circle, Polygon, Polyline } from '../geometry/primitives.js'
 import { ArcBuilder } from '../geometry/arcBuilder.js';
 import { pointToSegmentDistance } from '../geometry/core.js';
 
+// Polyfill DxfParser for Node environment if not present
+if (typeof DxfParser === 'undefined') {
+    // We expect the caller (Node) to provide it globally or we could dynamically import
+    // But since this is a shared file, we leave it to dependency injection or global scope
+}
+
 export class DXFImporter {
-    constructor() {
-        this.parser = new DxfParser();
+    constructor(dxfParserClass) {
+        if (dxfParserClass) {
+            this.parser = new dxfParserClass();
+        } else {
+            // Fallback for browser environment where DxfParser is global
+            this.parser = new DxfParser();
+        }
         this.scaleFactor = 1.0;
     }
 

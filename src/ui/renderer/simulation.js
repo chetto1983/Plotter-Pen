@@ -67,7 +67,7 @@ export class SimulationManager {
       this.update(deltaTime);
     }
 
-    this.renderer.render();
+    this.renderer.requestRender();
     this.state.animationId = requestAnimationFrame(() => this.loop());
   }
 
@@ -321,7 +321,7 @@ export class SimulationManager {
         this.state.animationId = null;
       }
     }
-    this.renderer.render();
+    this.renderer.requestRender();
   }
 
   togglePause() {

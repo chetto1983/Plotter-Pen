@@ -421,10 +421,27 @@ export class PathOptimizer {
           const r = prim.radius ?? prim._radius;
           startPt = { x: cx + r, y: cy };
           endPt = startPt;  // Circle is closed
+        } else if (prim.type === 'rectangle') {
+          // Rectangle starts at x,y
+          startPt = { x: prim.x, y: prim.y };
+          endPt = { x: prim.x, y: prim.y }; // Closed
+        } else if (prim.type === 'polygon' || prim.type === 'polyline') {
+          if (prim.points && prim.points.length > 0) {
+            startPt = prim.points[0];
+            if (prim.closed || prim.type === 'polygon') {
+              endPt = prim.points[0];
+            } else {
+              endPt = prim.points[prim.points.length - 1];
+            }
+          } else {
+            continue; // Skip invalid
+          }
         } else {
           startPt = { x: prim.x1, y: prim.y1 };
           endPt = { x: prim.x2, y: prim.y2 };
         }
+
+        if (!startPt || !endPt) continue;
 
         const distToStart = distance(currentPoint.x, currentPoint.y, startPt.x, startPt.y);
         const distToEnd = distance(currentPoint.x, currentPoint.y, endPt.x, endPt.y);
@@ -434,7 +451,12 @@ export class PathOptimizer {
           nearestIndex = i;
           reverseNearest = false;
         }
-        if (distToEnd < nearestDist) {
+        // Only consider reversing for open paths (Lines, Polylines)
+        // Closed paths (Circle, Rectangle, Polygon) start/end at same point so reversing doesn't help travel distance (ignore direction for optimization)
+        // BUT wait: Polygon might be open? primitives isClosed?
+        const isClosed = prim.type === 'circle' || prim.type === 'rectangle' || prim.closed || prim.type === 'polygon';
+
+        if (!isClosed && distToEnd < nearestDist) {
           nearestDist = distToEnd;
           nearestIndex = i;
           reverseNearest = true;
@@ -460,15 +482,13 @@ export class PathOptimizer {
             selected.plcData.y2 = selected.y2;
           }
         } else if (selected.type === 'arc') {
-          // For arcs, swap start/end - the through point stays same but sweep reverses
+          // For arcs, swap start/end
           const tempA = { x: selected.a.x, y: selected.a.y };
           selected.a.x = selected.b.x;
           selected.a.y = selected.b.y;
           selected.b.x = tempA.x;
           selected.b.y = tempA.y;
 
-          // The through point stays at same position geometrically
-          // Re-sync geometry to recalculate sweep
           selected.syncGeometry();
 
           if (selected.plcData) {
@@ -478,6 +498,11 @@ export class PathOptimizer {
             selected.plcData.y2 = selected.y2;
             selected.plcData.type = selected.sweep < 0 ? PLC_TYPES.ARC_CW : PLC_TYPES.ARC_CCW;
           }
+        } else if (selected.type === 'polyline') {
+          // Reverse polyline points
+          if (selected.points) {
+            selected.points.reverse();
+          }
         }
       }
 
@@ -485,11 +510,22 @@ export class PathOptimizer {
 
       // Update current point
       if (selected.type === 'circle') {
-        // Circle ends where it started
         const cx = selected.cx ?? selected.center?.x;
         const cy = selected.cy ?? selected.center?.y;
         const r = selected.radius ?? selected._radius;
         currentPoint = { x: cx + r, y: cy };
+      } else if (selected.type === 'rectangle') {
+        currentPoint = { x: selected.x, y: selected.y };
+      } else if (selected.type === 'polygon' || selected.type === 'polyline') {
+        // If closed, end = start (points[0]) which is correct after potential reverse
+        // If open, end = points[last]
+        if (selected.points && selected.points.length > 0) {
+          if (selected.closed || selected.type === 'polygon') {
+            currentPoint = { x: selected.points[0].x, y: selected.points[0].y };
+          } else {
+            currentPoint = { x: selected.points[selected.points.length - 1].x, y: selected.points[selected.points.length - 1].y };
+          }
+        }
       } else {
         currentPoint = { x: selected.x2, y: selected.y2 };
       }
@@ -542,7 +578,7 @@ export class PLCOutputGenerator {
       const prim = primitives[i];
       const data = prim.plcData || {};
 
-      // Get start point - circles start at right side (cx + r, cy)
+      // Get start point
       let x1, y1;
       if (prim.type === 'circle') {
         const cx = data.cx ?? prim.cx ?? prim.center?.x;
@@ -550,6 +586,16 @@ export class PLCOutputGenerator {
         const r = data.r ?? prim.radius ?? prim._radius;
         x1 = cx + r;
         y1 = cy;
+      } else if (prim.type === 'rectangle') {
+        x1 = prim.x;
+        y1 = prim.y;
+      } else if (prim.type === 'polygon' || prim.type === 'polyline') {
+        if (prim.points && prim.points.length > 0) {
+          x1 = prim.points[0].x;
+          y1 = prim.points[0].y;
+        } else {
+          continue;
+        }
       } else {
         x1 = data.x1 ?? prim.x1;
         y1 = data.y1 ?? prim.y1;
@@ -587,11 +633,20 @@ export class PLCOutputGenerator {
       // Add the drawing command(s)
       const cmd = this.primitiveToCommand(prim, commands.length);
       if (cmd) {
-        // Circle returns an array of commands
+        // Circle/Rect/Poly returns an array of commands
         if (Array.isArray(cmd)) {
           commands.push(...cmd);
-          // Circle ends where it started (closed shape)
-          lastPoint = { x: x1, y: y1 };
+
+          // Update lastPoint based on type
+          if (prim.type === 'circle' || prim.type === 'rectangle' || prim.type === 'polygon' || prim.closed) {
+            lastPoint = { x: x1, y: y1 };
+          } else if (prim.type === 'polyline' && prim.points) {
+            // Open polyline ends at last point
+            const last = prim.points[prim.points.length - 1];
+            lastPoint = { x: last.x, y: last.y };
+          } else {
+            lastPoint = { x: x1, y: y1 }; // fallback
+          }
         } else {
           commands.push(cmd);
           // Update last point to end of this primitive
@@ -670,6 +725,63 @@ export class PLCOutputGenerator {
       // Circle is drawn as two semicircular arcs (robot 3-point style)
       // This method returns an array of commands for circles
       return this.circleToCommands(primitive, index);
+    } else if (primitive.type === 'rectangle') {
+      // Expand rectangle to 4 lines
+      const cmds = [];
+      const x = primitive.x;
+      const y = primitive.y;
+      const w = primitive.width;
+      const h = primitive.height;
+      const fmt = (v) => v.toFixed(this.precision);
+
+      const pts = [
+        { x: x, y: y },
+        { x: x + w, y: y },
+        { x: x + w, y: y + h },
+        { x: x, y: y + h },
+        { x: x, y: y } // Close
+      ];
+
+      for (let i = 0; i < 4; i++) {
+        cmds.push({
+          index: index + i,
+          type: 'line',
+          command: `L X ${fmt(pts[i + 1].x)}, Y ${fmt(pts[i + 1].y)}`,
+          primitive: primitive
+        });
+      }
+      return cmds;
+
+    } else if (primitive.type === 'polygon' || primitive.type === 'polyline') {
+      // Expand polygon/polyline to lines
+      const cmds = [];
+      const pts = primitive.points;
+      if (!pts || pts.length < 2) return null;
+
+      const fmt = (v) => v.toFixed(this.precision);
+      let cmdIdx = 0;
+
+      for (let i = 0; i < pts.length - 1; i++) {
+        cmds.push({
+          index: index + cmdIdx,
+          type: 'line',
+          command: `L X ${fmt(pts[i + 1].x)}, Y ${fmt(pts[i + 1].y)}`,
+          primitive: primitive
+        });
+        cmdIdx++;
+      }
+
+      if (primitive.closed || primitive.type === 'polygon') {
+        // Close loop to start
+        cmds.push({
+          index: index + cmdIdx,
+          type: 'line',
+          command: `L X ${fmt(pts[0].x)}, Y ${fmt(pts[0].y)}`,
+          primitive: primitive
+        });
+      }
+      return cmds;
+
     } else {
       return null;
     }

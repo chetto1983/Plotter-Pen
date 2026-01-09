@@ -21,6 +21,11 @@ export class InputHandler {
     this.isMovingSelection = false;
     this.moveStartWorld = null;
     this.moveHasMoved = false;
+
+    // Optimization
+    this.renderRequested = false;
+    this.inputTicking = false;
+    this.pendingMouseEvent = null;
   }
 
   /**
@@ -166,6 +171,23 @@ export class InputHandler {
    * Handle mouse move event
    */
   handleMouseMove(e) {
+    // 1. Buffer the latest event
+    this.pendingMouseEvent = e;
+
+    // 2. Request processing frame if not already ticking
+    if (!this.inputTicking) {
+      this.inputTicking = true;
+      requestAnimationFrame(() => {
+        this.processMouseMove();
+        this.inputTicking = false;
+      });
+    }
+  }
+
+  processMouseMove() {
+    const e = this.pendingMouseEvent;
+    if (!e) return;
+
     const rect = this.app.canvas.getBoundingClientRect();
     const screenX = e.clientX - rect.left;
     const screenY = e.clientY - rect.top;
@@ -179,6 +201,7 @@ export class InputHandler {
       this.lastMousePos.set(e.clientX, e.clientY);
       this.app.renderer.pan(dx, dy);
       this.app.ui.updateZoomDisplay();
+      this.requestRender();
       return;
     }
 
@@ -207,7 +230,7 @@ export class InputHandler {
         }
 
         this.moveStartWorld = { x: snappedPos.x, y: snappedPos.y };
-        this.app.render();
+        this.requestRender();
       }
       return;
     }
@@ -227,7 +250,17 @@ export class InputHandler {
     }
 
     // Always render to show snap indicators and preview
-    this.app.render();
+    this.requestRender();
+  }
+
+  requestRender() {
+    if (!this.renderRequested) {
+      this.renderRequested = true;
+      requestAnimationFrame(() => {
+        this.app.render();
+        this.renderRequested = false;
+      });
+    }
   }
 
   /**
@@ -298,6 +331,7 @@ export class InputHandler {
     const newZoom = this.app.renderer.view.zoom * delta;
     this.app.renderer.setZoom(newZoom, mouseX, mouseY);
     this.app.ui.updateZoomDisplay();
+    this.app.render();
   }
 
   /**
