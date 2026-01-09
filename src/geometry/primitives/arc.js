@@ -16,7 +16,19 @@ import {
 import { Primitive } from './base.js';
 
 export class Arc extends Primitive {
-  constructor(ax, ay, bx, by, cx, cy, clockwise = null, id = null) {
+  /**
+   * Create an arc from start, end, center, and through point.
+   * The through point determines which side of the chord the arc curves.
+   * @param {number} ax - Start point X
+   * @param {number} ay - Start point Y
+   * @param {number} bx - End point X
+   * @param {number} by - End point Y
+   * @param {number} cx - Center X
+   * @param {number} cy - Center Y
+   * @param {object|null} throughPoint - Point on the arc (determines direction)
+   * @param {string|null} id - Optional ID
+   */
+  constructor(ax, ay, bx, by, cx, cy, throughPoint = null, id = null) {
     super('arc', id);
 
     // Three defining points
@@ -34,8 +46,8 @@ export class Arc extends Primitive {
     this._endAngle = 0;
     this._sweep = 0;
 
-    // Explicit direction flag (null = auto-detect on first sync)
-    this._clockwise = clockwise;
+    // Through point determines arc direction (which side of chord)
+    this._throughPoint = throughPoint;
 
     this.syncGeometry();
   }
@@ -61,25 +73,37 @@ export class Arc extends Primitive {
   calcSweep() {
     let sweep = this._endAngle - this._startAngle;
 
-    // If direction is already set, preserve it
-    if (this._clockwise !== null) {
-      // For clockwise: sweep should be negative
-      // For counter-clockwise: sweep should be positive
-      if (this._clockwise) {
-        // Want clockwise (negative sweep)
-        while (sweep > 0) sweep -= TWO_PI;
-        if (sweep < -TWO_PI + TOLERANCE) sweep += TWO_PI;
-      } else {
-        // Want counter-clockwise (positive sweep)
+    // If we have a through point, use it to determine direction
+    if (this._throughPoint) {
+      const throughAngle = Math.atan2(
+        this._throughPoint.y - this.c.y,
+        this._throughPoint.x - this.c.x
+      );
+
+      // Normalize angles to [0, 2π) for comparison
+      const normStart = ((this._startAngle % TWO_PI) + TWO_PI) % TWO_PI;
+      const normEnd = ((this._endAngle % TWO_PI) + TWO_PI) % TWO_PI;
+      const normThrough = ((throughAngle % TWO_PI) + TWO_PI) % TWO_PI;
+
+      // Check if going positive (CCW math) from start hits through before end
+      const throughRelToStart = ((normThrough - normStart) % TWO_PI + TWO_PI) % TWO_PI;
+      const endRelToStart = ((normEnd - normStart) % TWO_PI + TWO_PI) % TWO_PI;
+
+      // If through is "before" end in positive direction, use positive sweep
+      // Otherwise use negative sweep
+      if (throughRelToStart < endRelToStart && throughRelToStart > 0) {
+        // Positive direction (CCW math) passes through the point
         while (sweep < 0) sweep += TWO_PI;
         if (sweep > TWO_PI - TOLERANCE) sweep -= TWO_PI;
+      } else {
+        // Negative direction (CW math) passes through the point
+        while (sweep > 0) sweep -= TWO_PI;
+        if (sweep < -TWO_PI + TOLERANCE) sweep += TWO_PI;
       }
     } else {
-      // First time: auto-detect based on smaller arc
+      // No through point: auto-detect based on smaller arc
       if (sweep > Math.PI) sweep -= TWO_PI;
       if (sweep < -Math.PI) sweep += TWO_PI;
-      // Store detected direction
-      this._clockwise = sweep < 0;
     }
 
     return sweep;
@@ -291,29 +315,18 @@ export class Arc extends Primitive {
    * This is the SINGLE SOURCE OF TRUTH for arc rendering
    * 
    * Uses sweep angle to determine direction:
-   * - Positive sweep (CCW) → draw from startAngle to endAngle
-   * - Negative sweep (CW) → swap angles to draw correctly
+   * - Positive sweep (Mathematical CCW) -> Canvas Clockwise (anticlockwise=false)
+   * - Negative sweep (Mathematical CW) -> Canvas Counter-Clockwise (anticlockwise=true)
+   *   (Because Canvas Y-down inverts "Clockwise/CCW" naming relative to Math Y-up)
    */
   getRenderData() {
-    // Canvas always draws in the direction from startAngle to endAngle
-    // For negative sweep (CW), we need to swap the angles
-    if (this._sweep < 0) {
-      return {
-        cx: this.c.x,
-        cy: this.c.y,
-        r: this.radius,
-        startAngle: this._endAngle,
-        endAngle: this._startAngle,
-        anticlockwise: false
-      };
-    }
     return {
       cx: this.c.x,
       cy: this.c.y,
       r: this.radius,
       startAngle: this._startAngle,
       endAngle: this._endAngle,
-      anticlockwise: false
+      anticlockwise: this._sweep < 0
     };
   }
 
@@ -329,7 +342,7 @@ export class Arc extends Primitive {
       this.a.x, this.a.y,
       this.b.x, this.b.y,
       this.c.x, this.c.y,
-      this._clockwise
+      this._throughPoint ? { x: this._throughPoint.x, y: this._throughPoint.y } : null
     );
     arc.style = { ...this.style };
     arc.layer = this.layer;
@@ -343,6 +356,9 @@ export class Arc extends Primitive {
     this.b.parent = this;
     this.c = new Point(this.c.x + dx, this.c.y + dy, this.c.id);
     this.c.parent = this;
+    if (this._throughPoint) {
+      this._throughPoint = { x: this._throughPoint.x + dx, y: this._throughPoint.y + dy };
+    }
     this.syncGeometry();
   }
 
@@ -356,6 +372,10 @@ export class Arc extends Primitive {
     this.b.parent = this;
     this.c = new Point(newC.x, newC.y, this.c.id);
     this.c.parent = this;
+    if (this._throughPoint) {
+      const newT = Primitive.rotatePoint(this._throughPoint.x, this._throughPoint.y, cx, cy, radians);
+      this._throughPoint = { x: newT.x, y: newT.y };
+    }
     this.syncGeometry();
   }
 
@@ -369,6 +389,10 @@ export class Arc extends Primitive {
     this.b.parent = this;
     this.c = new Point(newC.x, newC.y, this.c.id);
     this.c.parent = this;
+    if (this._throughPoint) {
+      const newT = Primitive.scalePoint(this._throughPoint.x, this._throughPoint.y, cx, cy, factor);
+      this._throughPoint = { x: newT.x, y: newT.y };
+    }
     this.syncGeometry();
   }
 
@@ -382,8 +406,11 @@ export class Arc extends Primitive {
     this.b.parent = this;
     this.c = new Point(newC.x, newC.y, this.c.id);
     this.c.parent = this;
-    // Mirror reverses direction (CW <-> CCW)
-    this._clockwise = !this._clockwise;
+    // Mirror the through point too
+    if (this._throughPoint) {
+      const newT = Primitive.mirrorPoint(this._throughPoint.x, this._throughPoint.y, cx, cy, axis);
+      this._throughPoint = { x: newT.x, y: newT.y };
+    }
     this.syncGeometry();
   }
 
@@ -407,7 +434,7 @@ export class Arc extends Primitive {
       by: this.b.y,
       cx: this.c.x,
       cy: this.c.y,
-      clockwise: this._clockwise
+      throughPoint: this._throughPoint
     };
   }
 
@@ -416,7 +443,7 @@ export class Arc extends Primitive {
       data.ax, data.ay,
       data.bx, data.by,
       data.cx, data.cy,
-      data.clockwise !== undefined ? data.clockwise : null,
+      data.throughPoint || null,
       data.id
     );
     if (data.style) arc.style = { ...data.style };

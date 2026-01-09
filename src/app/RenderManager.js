@@ -135,11 +135,7 @@ export class RenderManager {
               x2: arc.x2, y2: arc.y2,
               startAngle: arc.startAngle, endAngle: arc.endAngle,
               isClockwise: arc.isClockwise,
-              getRenderData: () => ({
-                cx: arc.cx, cy: arc.cy, r: arc.radius,
-                startAngle: arc.startAngle, endAngle: arc.endAngle,
-                anticlockwise: !arc.isClockwise
-              })
+              getRenderData: () => arc.getRenderData()
             }
           };
         }

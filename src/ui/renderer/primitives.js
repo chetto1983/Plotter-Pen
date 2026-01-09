@@ -65,14 +65,8 @@ export class PrimitiveRenderer {
    * Draw arc
    */
   drawArc(ctx, arc, scale) {
-    const render = arc.getRenderData ? arc.getRenderData() : {
-      cx: arc.cx,
-      cy: arc.cy,
-      r: arc.radius || arc.r,
-      startAngle: arc.startAngle,
-      endAngle: arc.endAngle,
-      anticlockwise: !arc.isClockwise  // Canvas anticlockwise = true when NOT clockwise
-    };
+    // SINGLE SOURCE OF TRUTH: Always use getRenderData()
+    const render = arc.getRenderData();
 
     ctx.beginPath();
     ctx.arc(render.cx, render.cy, render.r, render.startAngle, render.endAngle, render.anticlockwise);
@@ -256,15 +250,8 @@ export class PrimitiveRenderer {
         ctx.arc(primitive.x2, primitive.y2, markerSize, 0, Math.PI * 2);
         ctx.fill();
       } else if (primitive.type === 'arc') {
-        // Build render data with proper fallback like drawArc does
-        const render = primitive.getRenderData ? primitive.getRenderData() : {
-          cx: primitive.cx,
-          cy: primitive.cy,
-          r: primitive.radius || primitive.r,
-          startAngle: primitive.startAngle,
-          endAngle: primitive.endAngle,
-          anticlockwise: !primitive.isClockwise
-        };
+        // SINGLE SOURCE OF TRUTH: Always use getRenderData()
+        const render = primitive.getRenderData();
 
         ctx.beginPath();
         ctx.arc(render.cx, render.cy, render.r, render.startAngle, render.endAngle, render.anticlockwise);

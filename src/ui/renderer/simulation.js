@@ -1,4 +1,5 @@
 import { TWO_PI } from '../../geometry/core.js';
+import { ArcBuilder } from '../../geometry/arcBuilder.js';
 
 export class SimulationManager {
   constructor(renderer) {

@@ -81,13 +81,13 @@ export class PrimitiveExtractor {
       info.start.x, info.start.y,
       info.end.x, info.end.y,
       info.center.x, info.center.y,
-      null,           // clockwise - auto-detect
-      `arc_${id}`     // id
+      info.throughPoint || null,  // throughPoint - auto-detect if not provided
+      `arc_${id}`                 // id
     );
 
     // Add PLC-specific data (robot post-processor style: end point + center)
     arc.plcData = {
-      type: arc.isClockwise ? PLC_TYPES.ARC_CW : PLC_TYPES.ARC_CCW,
+      type: arc.sweep < 0 ? PLC_TYPES.ARC_CW : PLC_TYPES.ARC_CCW,
       x1: info.start.x,
       y1: info.start.y,
       x2: info.end.x,
@@ -342,7 +342,7 @@ export class PrimitiveExtractor {
 
       // Robot post-processor style: end point + center (no radius/direction)
       arc.plcData = {
-        type: arc.isClockwise ? PLC_TYPES.ARC_CW : PLC_TYPES.ARC_CCW,
+        type: arc.sweep < 0 ? PLC_TYPES.ARC_CW : PLC_TYPES.ARC_CCW,
         x1: arc.x1,
         y1: arc.y1,
         x2: arc.x2,
@@ -460,31 +460,23 @@ export class PathOptimizer {
             selected.plcData.y2 = selected.y2;
           }
         } else if (selected.type === 'arc') {
-          // For arcs, swap start/end and flip direction
+          // For arcs, swap start/end - the through point stays same but sweep reverses
           const tempA = { x: selected.a.x, y: selected.a.y };
           selected.a.x = selected.b.x;
           selected.a.y = selected.b.y;
           selected.b.x = tempA.x;
           selected.b.y = tempA.y;
 
-          // Flip clockwise flag
-          selected._clockwise = !selected._clockwise;
+          // The through point stays at same position geometrically
+          // Re-sync geometry to recalculate sweep
           selected.syncGeometry();
-
-          // Recalculate _throughPoint (midpoint will be same point, just traversed opposite direction)
-          if (selected._throughPoint) {
-            // The through point stays the same position on the arc
-            // but we need to recalculate it from the new midpoint
-            const mp = selected.midpoint;
-            selected._throughPoint = { x: mp.x, y: mp.y };
-          }
 
           if (selected.plcData) {
             selected.plcData.x1 = selected.x1;
             selected.plcData.y1 = selected.y1;
             selected.plcData.x2 = selected.x2;
             selected.plcData.y2 = selected.y2;
-            selected.plcData.type = selected.isClockwise ? PLC_TYPES.ARC_CW : PLC_TYPES.ARC_CCW;
+            selected.plcData.type = selected.sweep < 0 ? PLC_TYPES.ARC_CW : PLC_TYPES.ARC_CCW;
           }
         }
       }

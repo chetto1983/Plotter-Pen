@@ -52,24 +52,13 @@ export class ArcBuilder {
 
     // If throughRel < endRel, then going CCW (positive angle direction)
     // from start, we hit 'through' before 'end' - this is the CCW arc
-    // If throughRel > endRel, then going CW (negative angle direction)
-    // from start, we hit 'through' before 'end' - this is the CW arc
-    //
-    // clockwise = true means negative sweep (CW in math coords)
-    // In screen coordinates with Y down, this visually appears CCW
-    const clockwise = throughRel > endRel;
-
+    // Create arc with through point (determines direction)
     const arc = new Arc(
       start.x, start.y,
       end.x, end.y,
       circle.cx, circle.cy,
-      clockwise
+      { x: through.x, y: through.y }  // Through point determines arc direction
     );
-
-    // Store the through point as the actual midpoint/aux point
-    // This is the point the user clicked, so it's definitely on the correct side
-    arc._throughPoint = { x: through.x, y: through.y };
-    //console.log('fromThreePoints: set _throughPoint to', arc._throughPoint);
 
     return arc;
   }
@@ -87,10 +76,22 @@ export class ArcBuilder {
     const projectedEndX = center.x + radius * Math.cos(endAngle);
     const projectedEndY = center.y + radius * Math.sin(endAngle);
 
+    // Calculate midpoint as throughPoint (auto-detect shorter arc)
+    const startAngle = Math.atan2(startPoint.y - center.y, startPoint.x - center.x);
+    let sweep = endAngle - startAngle;
+    if (sweep > Math.PI) sweep -= TWO_PI;
+    if (sweep < -Math.PI) sweep += TWO_PI;
+    const midAngle = startAngle + sweep / 2;
+    const throughPoint = {
+      x: center.x + radius * Math.cos(midAngle),
+      y: center.y + radius * Math.sin(midAngle)
+    };
+
     return new Arc(
       startPoint.x, startPoint.y,
       projectedEndX, projectedEndY,
-      center.x, center.y
+      center.x, center.y,
+      throughPoint
     );
   }
 
@@ -107,10 +108,18 @@ export class ArcBuilder {
     const endX = center.x + radius * Math.cos(endAngle);
     const endY = center.y + radius * Math.sin(endAngle);
 
+    // Calculate through point at midpoint of sweep
+    const midAngle = startAngle + sweepAngle / 2;
+    const throughPoint = {
+      x: center.x + radius * Math.cos(midAngle),
+      y: center.y + radius * Math.sin(midAngle)
+    };
+
     return new Arc(
       startPoint.x, startPoint.y,
       endX, endY,
-      center.x, center.y
+      center.x, center.y,
+      throughPoint
     );
   }
 
@@ -132,9 +141,9 @@ export class ArcBuilder {
   /**
    * Create arc from start, end, and radius
    * Two possible arcs (minor/major) - controlled by useMinorArc parameter
-   * Two possible sides - controlled by clockwise parameter
+   * Two possible sides - controlled by side parameter (1 or -1)
    */
-  static fromStartEndRadius(start, end, radius, useMinorArc = true, clockwise = false) {
+  static fromStartEndRadius(start, end, radius, useMinorArc = true, side = 1) {
     const chord = distance(start.x, start.y, end.x, end.y);
 
     // Check if arc is possible
@@ -158,38 +167,39 @@ export class ArcBuilder {
     const halfChord = chord / 2;
     const h = Math.sqrt(r * r - halfChord * halfChord);
 
-    // Two possible centers
-    const centers = [
-      { x: midX + h * perpX, y: midY + h * perpY },
-      { x: midX - h * perpX, y: midY - h * perpY }
-    ];
+    // Choose center based on side parameter
+    const center = {
+      x: midX + side * h * perpX,
+      y: midY + side * h * perpY
+    };
 
-    // Create both arcs and choose based on parameters
-    const arcs = centers.map(c => new Arc(start.x, start.y, end.x, end.y, c.x, c.y));
+    // Calculate through point (midpoint of arc)
+    const startAngle = Math.atan2(start.y - center.y, start.x - center.x);
+    const endAngle = Math.atan2(end.y - center.y, end.x - center.x);
+    let sweep = endAngle - startAngle;
 
-    // Sort by sweep angle (minor first)
-    arcs.sort((a, b) => Math.abs(a.sweep) - Math.abs(b.sweep));
-
-    let arc = useMinorArc ? arcs[0] : arcs[1];
-
-    // If clockwise is requested and arc is CCW (or vice versa), swap
-    if (clockwise !== arc.isClockwise) {
-      // Try the other center
-      arc = useMinorArc ? arcs[1] : arcs[0];
-
-      // If still wrong direction, reverse start/end
-      if (clockwise !== arc.isClockwise) {
-        arc = new Arc(end.x, end.y, start.x, start.y, arc.cx, arc.cy);
-      }
+    // Choose minor or major arc
+    if (useMinorArc) {
+      if (sweep > Math.PI) sweep -= TWO_PI;
+      if (sweep < -Math.PI) sweep += TWO_PI;
+    } else {
+      if (sweep > 0 && sweep < Math.PI) sweep -= TWO_PI;
+      if (sweep < 0 && sweep > -Math.PI) sweep += TWO_PI;
     }
 
-    return arc;
+    const midAngle = startAngle + sweep / 2;
+    const throughPoint = {
+      x: center.x + r * Math.cos(midAngle),
+      y: center.y + r * Math.sin(midAngle)
+    };
+
+    return new Arc(start.x, start.y, end.x, end.y, center.x, center.y, throughPoint);
   }
 
   /**
    * Create arc from start, end, and bulge
    * Bulge is the tangent of 1/4 of the included angle
-   * Positive = CCW, Negative = CW
+   * Bulge sign determines which side of chord the arc curves
    */
   static fromStartEndBulge(start, end, bulge) {
     if (Math.abs(bulge) < TOLERANCE) return null;
@@ -198,8 +208,6 @@ export class ArcBuilder {
     if (chord < TOLERANCE) return null;
 
     // Calculate radius from bulge
-    // bulge = tan(theta/4), where theta is the included angle
-    // sagitta = r * (1 - cos(theta/2)) = chord/2 * bulge
     const sagitta = Math.abs(bulge) * chord / 2;
     const radius = (sagitta / 2) + (chord * chord) / (8 * sagitta);
 
@@ -220,9 +228,13 @@ export class ArcBuilder {
     const cx = midX + midToCenter * perpX * sign;
     const cy = midY + midToCenter * perpY * sign;
 
-    // Explicitly set direction: positive bulge = CCW (false), negative bulge = CW (true)
-    const clockwise = bulge < 0;
-    return new Arc(start.x, start.y, end.x, end.y, cx, cy, clockwise);
+    // Calculate through point at the sagitta location (arc peak)
+    const throughPoint = {
+      x: midX - sign * perpX * sagitta,
+      y: midY - sign * perpY * sagitta
+    };
+
+    return new Arc(start.x, start.y, end.x, end.y, cx, cy, throughPoint);
   }
 
   /**
@@ -248,14 +260,25 @@ export class ArcBuilder {
     }
 
     // Calculate radius
-    // Using the formula: r = chord / (2 * sin(beta))
     const radius = chord / (2 * Math.sin(beta));
 
     // Center is perpendicular to direction at start, at distance radius
     const cx = start.x + radius * Math.cos(directionAngle - Math.PI / 2);
     const cy = start.y + radius * Math.sin(directionAngle - Math.PI / 2);
 
-    return new Arc(start.x, start.y, end.x, end.y, cx, cy);
+    // Calculate through point at arc midpoint
+    const startAngle = Math.atan2(start.y - cy, start.x - cx);
+    const endAngle = Math.atan2(end.y - cy, end.x - cx);
+    let sweep = endAngle - startAngle;
+    if (sweep > Math.PI) sweep -= TWO_PI;
+    if (sweep < -Math.PI) sweep += TWO_PI;
+    const midAngle = startAngle + sweep / 2;
+    const throughPoint = {
+      x: cx + Math.abs(radius) * Math.cos(midAngle),
+      y: cy + Math.abs(radius) * Math.sin(midAngle)
+    };
+
+    return new Arc(start.x, start.y, end.x, end.y, cx, cy, throughPoint);
   }
 
   /**

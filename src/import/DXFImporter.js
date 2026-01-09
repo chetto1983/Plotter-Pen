@@ -220,12 +220,13 @@ export class DXFImporter {
                 const midIdx = Math.floor((i + bestArcEnd) / 2);
                 const tempArc = ArcBuilder.fromThreePoints(points[i], points[midIdx], points[bestArcEnd]);
 
-                const clockwise = tempArc ? tempArc.isClockwise : false;
+                // Use the through point from tempArc (determines arc direction)
+                const throughPoint = tempArc ? tempArc._throughPoint : { x: points[midIdx].x, y: points[midIdx].y };
 
                 result.push(new Arc(
                     points[i].x, points[i].y,
                     points[bestArcEnd].x, points[bestArcEnd].y,
-                    bestCircle.cx, bestCircle.cy, clockwise
+                    bestCircle.cx, bestCircle.cy, throughPoint
                 ));
                 i = bestArcEnd;
             } else {
