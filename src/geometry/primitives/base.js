@@ -37,7 +37,7 @@ export class Primitive {
   /**
    * Distance from point to primitive - override in subclasses
    */
-  distanceToPoint(point) {
+  distanceToPoint(_point) {
     return Infinity;
   }
 
@@ -51,14 +51,14 @@ export class Primitive {
   /**
    * Sample points for rendering - override in subclasses
    */
-  samplePoints(resolution = 1) {
+  samplePoints(_resolution = 1) {
     return [];
   }
 
   /**
    * Draw to canvas context - override in subclasses
    */
-  draw(ctx, scale = 1) {
+  draw(_ctx, _scale = 1) {
     // Override in subclasses
   }
 
@@ -72,21 +72,21 @@ export class Primitive {
   /**
    * Translate primitive by dx, dy - override in subclasses
    */
-  translate(dx, dy) {
+  translate(_dx, _dy) {
     throw new Error('translate() must be implemented by subclass');
   }
 
   /**
    * Rotate primitive around a center point - override in subclasses
    */
-  rotate(cx, cy, radians) {
+  rotate(_cx, _cy, _radians) {
     throw new Error('rotate() must be implemented by subclass');
   }
 
   /**
    * Scale primitive from a center point - override in subclasses
    */
-  scale(cx, cy, factor) {
+  scale(_cx, _cy, _factor) {
     throw new Error('scale() must be implemented by subclass');
   }
 
@@ -94,7 +94,7 @@ export class Primitive {
    * Mirror primitive around a center point - override in subclasses
    * @param {string} axis - 'x' for horizontal, 'y' for vertical
    */
-  mirror(cx, cy, axis) {
+  mirror(_cx, _cy, _axis) {
     throw new Error('mirror() must be implemented by subclass');
   }
 
@@ -136,7 +136,7 @@ export class Primitive {
   /**
    * Check if primitive intersects with a box - override in subclasses
    */
-  intersectsBox(minX, minY, maxX, maxY) {
+  intersectsBox(_minX, _minY, _maxX, _maxY) {
     return false;
   }
 

@@ -51,6 +51,8 @@ export function applyDrawingData(app, data) {
   }
 
   app.ui.updateStats();
+  if (app.renderer) app.renderer.invalidateCache();
+  if (app.snapManager) app.snapManager.setPrimitives(app.primitives);
   app.render();
   app.refreshPLCOutput();
   app.renderer.resetView();

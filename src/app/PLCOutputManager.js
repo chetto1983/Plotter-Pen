@@ -53,7 +53,11 @@ export class PLCOutputManager {
     // Use primitives directly, do NOT expand polygons/rectangles into thousands of lines
     // This optimization prevents O(N^2) path finding on huge datasets
     const optimizedPrimitives = PathOptimizer.optimizeOrder(primitivesWithData);
-    const generator = new PLCOutputGenerator();
+    // Get speed from UI or default to 100
+    const speedInput = document.getElementById('simWorkSpeed');
+    const defaultSpeed = speedInput ? parseFloat(speedInput.value) : 100.0;
+
+    const generator = new PLCOutputGenerator({ defaultSpeed });
     const commands = generator.generate(optimizedPrimitives);
     this.app.plcCommands = commands;
     this.app.plcOutput = commands.map((c) => c.command);
@@ -78,6 +82,7 @@ export class PLCOutputManager {
       await navigator.clipboard.writeText(this.app.plcOutput.join("\n"));
       this.app.ui.updateStatus("Output copiato negli appunti");
     } catch (err) {
+      console.error(err);
       this.app.ui.updateStatus("Errore nella copia");
     }
   }
@@ -111,8 +116,6 @@ export class PLCOutputManager {
 
     if (this.app.renderer.simulation && this.app.renderer.simulation.running) {
       this.app.renderer.stopSimulation();
-      this.app.ui.updateStatus("Simulazione fermata");
-      if (controlsEl) controlsEl.style.display = "none";
       if (btnSimulate) {
         btnSimulate.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
       }
@@ -121,26 +124,43 @@ export class PLCOutputManager {
 
     if (controlsEl) controlsEl.style.display = "block";
     if (btnSimulate) {
-      btnSimulate.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
+      btnSimulate.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12"/></svg>';
     }
 
     const speed = sliderEl ? parseInt(sliderEl.value, 10) : 80;
-    this.app.ui.updateStatus("Simulazione in corso...");
+    this.app.ui.updateStatus("Simulazione in corso... (premi ESC per fermare)");
 
     this.app.renderer.startSimulation(this.app.plcCommands, {
       speed,
       onComplete: () => {
         this.app.ui.updateStatus("Simulazione completata");
-        if (controlsEl) controlsEl.style.display = "none";
+        // controlsEl.style.display = "none"; // Always visible
         if (btnSimulate) {
           btnSimulate.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
         }
+        const active = document.querySelector('.cad-output-item.executing');
+        if (active) active.classList.remove('executing');
       },
-      onUpdate: () => { },
+      onUpdate: (state) => {
+        const index = state.index;
+        const grid = document.getElementById('outputGrid');
+        if (this._lastSimIndex !== index) {
+          this._lastSimIndex = index;
+          const prev = grid.querySelector('.cad-output-item.executing');
+          if (prev) prev.classList.remove('executing');
+
+          const current = grid.querySelector(`.cad-output-item[data-index="${index}"]`);
+          if (current) {
+            current.classList.add('executing');
+            current.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+          }
+        }
+      },
     });
   }
 
   async sendToPLC() {
+
     if (this.app.plcOutput.length === 0) {
       this.app.ui.updateStatus("Nessun output da inviare");
       return;

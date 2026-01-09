@@ -28,7 +28,7 @@ export class PolygonTool extends Tool {
     }
   }
 
-  onMouseDown(point, event) {
+  onMouseDown(point, _event) {
     // Check if clicking near first point to close
     if (this.points.length >= 3) {
       const first = this.points[0];
@@ -47,7 +47,7 @@ export class PolygonTool extends Tool {
     this.manager.setReferencePoint(point);
   }
 
-  onMouseMove(point, event) {
+  onMouseMove(point, _event) {
     if (this.points.length > 0) {
       const previewPoints = [...this.points, { x: point.x, y: point.y }];
       this.preview = {
@@ -58,7 +58,7 @@ export class PolygonTool extends Tool {
     }
   }
 
-  onDoubleClick(point, event) {
+  onDoubleClick(_point, _event) {
     if (this.points.length >= 3) {
       this.commit();
     }

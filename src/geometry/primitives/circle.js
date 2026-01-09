@@ -88,7 +88,7 @@ export class Circle extends Primitive {
     return points;
   }
 
-  draw(ctx, scale = 1) {
+  draw(ctx, _scale = 1) {
     ctx.beginPath();
     ctx.arc(this.center.x, this.center.y, this._radius, 0, TWO_PI);
     ctx.stroke();

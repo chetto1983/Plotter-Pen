@@ -1,3 +1,4 @@
+/* global importScripts, DxfParser */
 /**
  * DXF Worker - Processes DXF files in a background thread
  * This worker handles parsing and entity conversion off the main thread
@@ -27,34 +28,9 @@ function distance(x1, y1, x2, y2) {
     return Math.sqrt(dx * dx + dy * dy);
 }
 
-// Point to segment distance
-function pointToSegmentDistance(px, py, x1, y1, x2, y2) {
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    const lengthSq = dx * dx + dy * dy;
-    if (lengthSq < TOLERANCE) return distance(px, py, x1, y1);
 
-    const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / lengthSq));
-    const nearestX = x1 + t * dx;
-    const nearestY = y1 + t * dy;
-    return distance(px, py, nearestX, nearestY);
-}
 
-// Circle from three points
-function circleFromThreePoints(p1, p2, p3) {
-    const d = 2 * (p1.x * (p2.y - p3.y) + p2.x * (p3.y - p1.y) + p3.x * (p1.y - p2.y));
-    if (Math.abs(d) < TOLERANCE) return null;
 
-    const p1Sq = p1.x * p1.x + p1.y * p1.y;
-    const p2Sq = p2.x * p2.x + p2.y * p2.y;
-    const p3Sq = p3.x * p3.x + p3.y * p3.y;
-
-    const cx = (p1Sq * (p2.y - p3.y) + p2Sq * (p3.y - p1.y) + p3Sq * (p1.y - p2.y)) / d;
-    const cy = (p1Sq * (p3.x - p2.x) + p2Sq * (p1.x - p3.x) + p3Sq * (p2.x - p1.x)) / d;
-    const r = Math.sqrt((p1.x - cx) ** 2 + (p1.y - cy) ** 2);
-
-    return { cx, cy, r };
-}
 
 // Calculate midpoint of arc for throughPoint
 function calcThroughPoint(startAngle, endAngle, center, radius) {
@@ -132,7 +108,7 @@ function convertPolyline(entity) {
 
     for (let i = 0; i < vertices.length - 1; i++) {
         const v1 = vertices[i];
-        const v2 = vertices[i + 1];
+
         const p1 = points[i];
         const p2 = points[i + 1];
         const bulge = v1.bulge || 0;
@@ -215,7 +191,7 @@ function convertSpline(entity) {
     const controlPoints = entity.controlPoints || [];
     if (controlPoints.length < 2) return null;
 
-    const degree = entity.degreeOfSplineCurve || 3;
+    //const _degree = entity.degreeOfSplineCurve || 3;
     const fits = entity.fitPoints || [];
 
     // If we have fit points, use those

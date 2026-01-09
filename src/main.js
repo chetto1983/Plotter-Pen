@@ -213,6 +213,9 @@ class CADApplication {
       this.snapManager.setPrimitives(this.primitives);
     }
 
+    // Invalidate renderer cache
+    if (this.renderer) this.renderer.invalidateCache();
+
     this.ui.updateStats();
     this.render();
     this.refreshPLCOutput();
@@ -406,6 +409,7 @@ class CADApplication {
     if (grid) {
       grid.querySelectorAll('.cad-output-item.selected').forEach(el => el.classList.remove('selected'));
     }
+    if (this.renderer) this.renderer.invalidateCache();
     this.render();
   }
 

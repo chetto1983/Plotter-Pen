@@ -1,3 +1,4 @@
+/* global DxfParser */
 /**
  * DXF Importer - Parses DXF files and converts to Primitives
  * Uses dxf-parser library (loaded via script tag)

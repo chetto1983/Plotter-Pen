@@ -24,7 +24,7 @@ export default function interpolate(t, degree, points, knots, weights, result) {
 
     if (!knots) {
         // build knot vector of length [n + degree + 1]
-        var knots = [];
+
         for (i = 0; i < n + degree + 1; i++) {
             knots[i] = i;
         }
@@ -87,7 +87,7 @@ export default function interpolate(t, degree, points, knots, weights, result) {
     }
 
     // convert back to cartesian and return
-    var result = result || [];
+    result = result || [];
     for (i = 0; i < d; i++) {
         if (v[s][d] !== 0)
             result[i] = v[s][i] / v[s][d];

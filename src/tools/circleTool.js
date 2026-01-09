@@ -29,7 +29,7 @@ export class CircleTool extends Tool {
     }
   }
 
-  onMouseDown(point, event) {
+  onMouseDown(point, _event) {
     if (this.phase === TOOL_PHASES.IDLE) {
       this.center = { x: point.x, y: point.y };
       this.phase = TOOL_PHASES.POINT1;
@@ -37,7 +37,7 @@ export class CircleTool extends Tool {
     }
   }
 
-  onMouseMove(point, event) {
+  onMouseMove(point, _event) {
     if (this.phase === TOOL_PHASES.POINT1 && this.center) {
       const radius = Math.sqrt(
         Math.pow(point.x - this.center.x, 2) +
@@ -53,7 +53,7 @@ export class CircleTool extends Tool {
     }
   }
 
-  onMouseUp(point, event) {
+  onMouseUp(point, _event) {
     if (this.phase === TOOL_PHASES.POINT1 && this.center) {
       const radius = Math.sqrt(
         Math.pow(point.x - this.center.x, 2) +

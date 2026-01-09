@@ -853,7 +853,7 @@ async function findAvailablePort(start = DEFAULT_PORT) {
     try {
       await checkPort(port);
       return port;
-    } catch (error) {
+    } catch {
       port += 1;
       if (port > limit) {
         throw new Error("Unable to find a free port for the web server.");

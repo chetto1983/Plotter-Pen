@@ -8,7 +8,6 @@ import {
   TOLERANCE,
   normalizeAngle,
   distance,
-  areEqual,
   Vector2,
   Point,
   BoundingBox
@@ -330,7 +329,7 @@ export class Arc extends Primitive {
     };
   }
 
-  draw(ctx, scale = 1) {
+  draw(ctx, _scale = 1) {
     const { startAngle, endAngle, anticlockwise } = this.getRenderData();
     ctx.beginPath();
     ctx.arc(this.c.x, this.c.y, this.radius, startAngle, endAngle, anticlockwise);

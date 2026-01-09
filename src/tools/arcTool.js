@@ -26,11 +26,11 @@ export class ArcTool extends Tool {
     this.state.setMode(mode);
   }
 
-  onMouseDown(point, event) {
+  onMouseDown(_point, _event) {
     // Will be handled in onMouseUp for cleaner interaction
   }
 
-  onMouseMove(point, event) {
+  onMouseMove(point, _event) {
     this.state.updatePreview(point);
     this.preview = this.state.tempArc ? {
       type: 'arc',
@@ -49,7 +49,7 @@ export class ArcTool extends Tool {
     }
   }
 
-  onMouseUp(point, event) {
+  onMouseUp(point, _event) {
     const arc = this.state.addPoint(point);
 
     if (arc) {

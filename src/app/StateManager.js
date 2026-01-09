@@ -48,6 +48,8 @@ export class StateManager {
 
     // Update
     this.app.ui.updateStats();
+    if (this.app.renderer) this.app.renderer.invalidateCache();
+    if (this.app.snapManager) this.app.snapManager.setPrimitives(this.app.primitives);
     this.app.render();
     this.app.ui.updateStatus('Azione annullata');
 
@@ -74,6 +76,8 @@ export class StateManager {
 
     // Update
     this.app.ui.updateStats();
+    if (this.app.renderer) this.app.renderer.invalidateCache();
+    if (this.app.snapManager) this.app.snapManager.setPrimitives(this.app.primitives);
     this.app.render();
     this.app.ui.updateStatus('Azione ripetuta');
 

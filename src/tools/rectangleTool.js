@@ -29,7 +29,7 @@ export class RectangleTool extends Tool {
     }
   }
 
-  onMouseDown(point, event) {
+  onMouseDown(point, _event) {
     if (this.phase === TOOL_PHASES.IDLE) {
       this.corner1 = { x: point.x, y: point.y };
       this.phase = TOOL_PHASES.POINT1;
@@ -37,7 +37,7 @@ export class RectangleTool extends Tool {
     }
   }
 
-  onMouseMove(point, event) {
+  onMouseMove(point, _event) {
     if (this.phase === TOOL_PHASES.POINT1 && this.corner1) {
       this.preview = {
         type: 'rectangle',
@@ -49,7 +49,7 @@ export class RectangleTool extends Tool {
     }
   }
 
-  onMouseUp(point, event) {
+  onMouseUp(point, _event) {
     if (this.phase === TOOL_PHASES.POINT1 && this.corner1) {
       const rect = Rectangle.fromCorners(this.corner1, point);
 

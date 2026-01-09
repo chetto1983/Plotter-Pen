@@ -136,14 +136,16 @@ export class Line extends Primitive {
     ];
   }
 
-  samplePoints(resolution = 1) {
+
+  samplePoints(_resolution = 1) {
     return [
       { x: this.a.x, y: this.a.y },
       { x: this.b.x, y: this.b.y }
     ];
   }
 
-  draw(ctx, scale = 1) {
+
+  draw(ctx, _scale = 1) {
     ctx.beginPath();
     ctx.moveTo(this.a.x, this.a.y);
     ctx.lineTo(this.b.x, this.b.y);

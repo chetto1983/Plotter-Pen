@@ -1,5 +1,5 @@
 
-import { parentPort, workerData } from 'worker_threads';
+import { parentPort } from 'worker_threads';
 import DxfParser from 'dxf-parser';
 import { DXFImporter } from '../../src/import/DXFImporter.js';
 import { PathOptimizer, PLCOutputGenerator } from '../../src/plc/extraction.js';

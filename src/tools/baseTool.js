@@ -30,32 +30,32 @@ export class Tool {
   /**
    * Handle mouse down event
    */
-  onMouseDown(point, event) { }
+  onMouseDown(_point, _event) { }
 
   /**
    * Handle mouse move event
    */
-  onMouseMove(point, event) { }
+  onMouseMove(_point, _event) { }
 
   /**
    * Handle mouse up event
    */
-  onMouseUp(point, event) { }
+  onMouseUp(_point, _event) { }
 
   /**
    * Handle double click event
    */
-  onDoubleClick(point, event) { }
+  onDoubleClick(_point, _event) { }
 
   /**
    * Handle key down event
    */
-  onKeyDown(event) { }
+  onKeyDown(_event) { }
 
   /**
    * Handle command input
    */
-  processCommand(command) {
+  processCommand(_command) {
     return null;
   }
 

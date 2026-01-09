@@ -29,7 +29,7 @@ export class LineTool extends Tool {
     }
   }
 
-  onMouseDown(point, event) {
+  onMouseDown(point, _event) {
     if (this.phase === TOOL_PHASES.IDLE) {
       this.startPoint = { x: point.x, y: point.y };
       this.phase = TOOL_PHASES.POINT1;
@@ -37,7 +37,7 @@ export class LineTool extends Tool {
     }
   }
 
-  onMouseMove(point, event) {
+  onMouseMove(point, _event) {
     if (this.phase === TOOL_PHASES.POINT1 && this.startPoint) {
       this.preview = {
         type: 'line',
@@ -49,7 +49,7 @@ export class LineTool extends Tool {
     }
   }
 
-  onMouseUp(point, event) {
+  onMouseUp(point, _event) {
     if (this.phase === TOOL_PHASES.POINT1 && this.startPoint) {
       const line = new Line(
         this.startPoint.x, this.startPoint.y,

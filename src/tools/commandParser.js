@@ -9,7 +9,7 @@ export function parseNumber(str) {
     const val = parseFloat(str);
     if (isNaN(val)) return 'Numero non valido: ' + str;
     return val;
-  } catch (e) {
+  } catch (_e) {
     return 'Errore nel parsing: ' + str;
   }
 }

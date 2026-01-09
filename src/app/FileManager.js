@@ -4,7 +4,7 @@
 
 import { applyDrawingData, buildDrawingData } from "./file/drawingData.js";
 import { downloadLegacy, pickFileLegacy } from "./file/fileHelpers.js";
-import { DXFImporter } from "../import/DXFImporter.js";
+
 import { Line, Arc, Circle } from "../geometry/primitives.js";
 
 export class FileManager {
@@ -108,7 +108,7 @@ export class FileManager {
     let data;
     try {
       data = JSON.parse(content);
-    } catch (err) {
+    } catch {
       throw new Error("Formato JSON non valido");
     }
 
@@ -173,6 +173,8 @@ export class FileManager {
       this.app.ui.updateStatus(`Rendering...`);
       await new Promise(r => requestAnimationFrame(r));
 
+      if (this.app.renderer) this.app.renderer.invalidateCache();
+      if (this.app.snapManager) this.app.snapManager.setPrimitives(this.app.primitives);
       this.app.render();
 
       this.app.renderer.resetView();

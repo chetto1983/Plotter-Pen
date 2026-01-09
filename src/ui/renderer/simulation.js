@@ -16,7 +16,7 @@ export class SimulationManager {
       progress: 0,  // 0-1 progress within current command
       toolPosition: { x: 0, y: 0 },
       toolDown: false,
-      speed: 200,  // pixels per second
+      speed: 200,  // units per second (mm/sec)
       trail: [],   // path already drawn
       animationId: null,
       lastTime: 0,
@@ -44,7 +44,8 @@ export class SimulationManager {
     this.state.trail = [];
     this.state.running = true;
     this.state.paused = false;
-    this.state.speed = options.speed || 200;
+    this.state.speed = options.speed || 100;
+    this.state.rapidSpeed = options.rapidSpeed || 1000;
     this.state.onComplete = options.onComplete;
     this.state.onUpdate = options.onUpdate;
     this.state.lastTime = performance.now();
@@ -80,7 +81,13 @@ export class SimulationManager {
     }
 
     const cmd = sim.commands[sim.currentIndex];
-    const moveDistance = sim.speed * deltaTime;
+
+    // Realistic Speed Logic:
+    // If tool is DOWN, use slider speed (Feed Rate)
+    // If tool is UP, use Rapid Speed
+    const currentSpeed = sim.toolDown ? sim.speed : sim.rapidSpeed;
+
+    const moveDistance = currentSpeed * deltaTime;
 
     // Handle different command types
     if (cmd.type === 'Z_up') {
@@ -336,6 +343,12 @@ export class SimulationManager {
   setSpeed(speed) {
     if (this.state) {
       this.state.speed = speed;
+    }
+  }
+
+  setRapidSpeed(speed) {
+    if (this.state) {
+      this.state.rapidSpeed = speed;
     }
   }
 

@@ -3,7 +3,7 @@
  * Tests that arcs created from 3 points have the correct direction and aux point
  */
 
-import { Arc } from '../src/geometry/primitives.js';
+
 import { ArcBuilder } from '../src/geometry/arcBuilder.js';
 import { PLCOutputGenerator } from '../src/plc/extraction.js';
 
@@ -72,7 +72,7 @@ function testArcCurvingLeft() {
   allPass = assertLessThan(midpoint.x, 300, 'Aux point X < 300 (on LEFT side)') && allPass;
 
   // The aux point should be near the through point
-  const distToThrough = Math.sqrt((midpoint.x - through.x)**2 + (midpoint.y - through.y)**2);
+  const distToThrough = Math.sqrt((midpoint.x - through.x) ** 2 + (midpoint.y - through.y) ** 2);
   console.log(`  Distance from aux point to through point: ${distToThrough.toFixed(3)}`);
   allPass = assertLessThan(distToThrough, 50, 'Aux point near through point') && allPass;
 
@@ -113,7 +113,7 @@ function testArcCurvingRight() {
   allPass = assertGreaterThan(midpoint.x, 300, 'Aux point X > 300 (on RIGHT side)') && allPass;
 
   // The aux point should be near the through point
-  const distToThrough = Math.sqrt((midpoint.x - through.x)**2 + (midpoint.y - through.y)**2);
+  const distToThrough = Math.sqrt((midpoint.x - through.x) ** 2 + (midpoint.y - through.y) ** 2);
   console.log(`  Distance from aux point to through point: ${distToThrough.toFixed(3)}`);
   allPass = assertLessThan(distToThrough, 50, 'Aux point near through point') && allPass;
 
@@ -150,7 +150,7 @@ function testUserArc() {
   console.log(`\n  Midpoint (aux point): (${midpoint.x.toFixed(3)}, ${midpoint.y.toFixed(3)})`);
 
   // The aux point should be on the LEFT side of the chord
-  const chordMidX = (start.x + end.x) / 2;  // ~233
+  const _chordMidX = (start.x + end.x) / 2;  // ~233
   let allPass = true;
 
   // Aux point X should be less than both start and end X (on the left side)

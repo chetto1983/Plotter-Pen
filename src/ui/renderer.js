@@ -119,7 +119,61 @@ export class CanvasRenderer {
 
     this.isCacheDirty = true; // View changed
   }
-  // ...
+
+  /**
+   * Get effective scale
+   */
+  getEffectiveScale() {
+    return this.view.scaleFactor * this.dpr * this.view.zoom;
+  }
+
+  /**
+   * Transform model coordinates to screen coordinates
+   */
+  modelToScreen(point) {
+    const scale = this.view.scaleFactor * this.view.zoom;
+    return {
+      x: point.x * scale + this.view.panX,
+      y: point.y * scale + this.view.panY
+    };
+  }
+
+  /**
+   * Transform screen coordinates to model coordinates
+   */
+  screenToModel(point) {
+    const scale = this.view.scaleFactor * this.view.zoom;
+    return {
+      x: (point.x - this.view.panX) / scale,
+      y: (point.y - this.view.panY) / scale
+    };
+  }
+
+  /**
+   * Apply view transformation to context
+   */
+  applyViewTransform() {
+    const scale = this.getEffectiveScale();
+    this.ctx.setTransform(
+      scale, 0, 0, scale,
+      this.view.panX * this.dpr,
+      this.view.panY * this.dpr
+    );
+    return scale;
+  }
+
+  /**
+   * Execute drawing function with view transform
+   */
+  withViewContext(drawFn) {
+    this.ctx.save();
+    const scale = this.applyViewTransform();
+    try {
+      drawFn(this.ctx, scale);
+    } finally {
+      this.ctx.restore();
+    }
+  }
 
   /**
    * Update the static cache
@@ -484,6 +538,10 @@ export class CanvasRenderer {
 
   setSimulationSpeed(speed) {
     this.simulationManager.setSpeed(speed);
+  }
+
+  setRapidSpeed(speed) {
+    this.simulationManager.setRapidSpeed(speed);
   }
 }
 

@@ -214,20 +214,47 @@ export class UIController {
     document.getElementById('btnZoomOut')?.addEventListener('click', () => this.app.zoomOut());
     document.getElementById('btnZoomFit')?.addEventListener('click', () => this.app.zoomFit());
     document.getElementById('btnSimulate')?.addEventListener('click', () => this.app.simulatePath());
+
+    // Pause/Resume Simulation
+    document.getElementById('btnPauseSim')?.addEventListener('click', () => {
+      this.app.renderer.togglePauseSimulation();
+      const isPaused = this.app.renderer.simulationManager.state.paused;
+      const btn = document.getElementById('btnPauseSim');
+      if (btn) {
+        // If paused, show Play icon. If running, show Pause icon.
+        if (isPaused) {
+          btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
+          this.app.ui.updateStatus("Simulazione in pausa");
+        } else {
+          btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
+          this.app.ui.updateStatus("Simulazione ripresa");
+        }
+      }
+    });
+
     document.getElementById('btnCopyOutput')?.addEventListener('click', () => this.app.copyOutput());
     document.getElementById('btnDownloadOutput')?.addEventListener('click', () => this.app.downloadOutput());
     document.getElementById('btnSendPLC')?.addEventListener('click', () => this.app.sendToPLC());
 
-    // Simulation speed slider
-    const simSpeedSlider = document.getElementById('simSpeedSlider');
-    const simSpeedValue = document.getElementById('simSpeedValue');
-    if (simSpeedSlider) {
-      simSpeedSlider.addEventListener('input', (e) => {
-        const speed = parseInt(e.target.value);
-        if (simSpeedValue) simSpeedValue.textContent = `${speed} px/s`;
-        // Update simulation speed in real-time
+    // Simulation speeds
+    const workSpeedInput = document.getElementById('simWorkSpeed');
+    if (workSpeedInput) {
+      workSpeedInput.addEventListener('change', (e) => {
+        const speed = parseInt(e.target.value) || 100;
         if (this.app.renderer.simulation) {
           this.app.renderer.setSimulationSpeed(speed);
+        }
+        // Refresh PLC output to reflect new speed in commands
+        this.app.refreshPLCOutput();
+      });
+    }
+
+    const rapidSpeedInput = document.getElementById('simRapidSpeed');
+    if (rapidSpeedInput) {
+      rapidSpeedInput.addEventListener('change', (e) => {
+        const speed = parseInt(e.target.value) || 1000;
+        if (this.app.renderer.simulation) {
+          this.app.renderer.setRapidSpeed(speed);
         }
       });
     }
@@ -488,7 +515,7 @@ export class UIController {
    */
   updateSelection() {
     if (!this.autocompleteEl) return;
-    this.autocompleteEl.querySelectorAll('.cad-autocomplete-item').forEach((item, i) => {
+    this.autocompleteEl.querySelectorAll('.cad-autocomplete-item').forEach((item, _i) => {
       item.classList.toggle('selected', parseInt(item.dataset.index) === this.selectedIndex);
     });
 
@@ -670,7 +697,7 @@ export class UIController {
    * Display PLC output in grid with primitive highlighting
    * Optimized: Uses Event Delegation to prevent freezing on large lists
    */
-  displayPLCOutput(plcCommands, app) {
+  displayPLCOutput(plcCommands) {
     const grid = document.getElementById('outputGrid');
     if (!grid) return;
 

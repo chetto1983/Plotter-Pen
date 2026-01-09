@@ -41,6 +41,7 @@ export class InputHandler {
     canvas.addEventListener('mousedown', this.handleMouseDown.bind(this));
     canvas.addEventListener('mousemove', this.handleMouseMove.bind(this));
     canvas.addEventListener('mouseup', this.handleMouseUp.bind(this));
+    canvas.addEventListener('dblclick', this.handleDoubleClick.bind(this));
     canvas.addEventListener('wheel', this.handleWheel.bind(this));
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
@@ -133,6 +134,18 @@ export class InputHandler {
       // Left button - tool action
       const snappedPos = this.app.getSnappedPosition(worldPos);
       this.app.handleToolClick(snappedPos, e.shiftKey);
+    }
+  }
+
+  /**
+   * Handle double click event
+   */
+  handleDoubleClick(e) {
+    if (this.app.currentTool && typeof this.app.currentTool.onDoubleClick === 'function') {
+      const worldPos = this.screenToWorld(e.clientX, e.clientY);
+      const snappedPos = this.app.getSnappedPosition(worldPos);
+      this.app.currentTool.onDoubleClick(snappedPos, e);
+      this.app.render();
     }
   }
 
@@ -230,6 +243,7 @@ export class InputHandler {
         }
 
         this.moveStartWorld = { x: snappedPos.x, y: snappedPos.y };
+        if (this.app.renderer) this.app.renderer.invalidateCache();
         this.requestRender();
       }
       return;
@@ -282,6 +296,11 @@ export class InputHandler {
       this.moveStartWorld = null;
       this.moveHasMoved = false;
       this.app.canvas.style.cursor = 'crosshair';
+
+      // Invalidate cache and update snap manager because primitives moved
+      if (this.app.renderer) this.app.renderer.invalidateCache();
+      if (this.app.snapManager) this.app.snapManager.setPrimitives(this.app.primitives);
+
       this.app.render();
     }
 
@@ -351,7 +370,7 @@ export class InputHandler {
     }
   }
 
-  handleTouchEnd(e) {
+  handleTouchEnd(_e) {
     this.handleMouseUp({ button: 0 });
   }
 

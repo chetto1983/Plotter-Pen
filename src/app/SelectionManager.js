@@ -55,6 +55,7 @@ export class SelectionManager {
       this.app.ui.updateStatus('Selezione cancellata');
     }
 
+    if (this.app.renderer) this.app.renderer.invalidateCache();
     this.app.render();
   }
 
@@ -86,8 +87,7 @@ export class SelectionManager {
 
     if (found !== this.app.hoveredPrimitive) {
       this.app.hoveredPrimitive = found;
-      // Convert to render format for the renderer
-      this.app.renderer.setHovered(found ? this.app.toRenderFormat(found) : null);
+
       // Update cursor
       this.app.canvas.style.cursor = found ? 'pointer' : 'default';
     }
@@ -107,6 +107,8 @@ export class SelectionManager {
     this.app.selectedPrimitives.clear();
     this.app.highlightedPrimitive = null;
     this.app.ui.updateStats();
+    if (this.app.renderer) this.app.renderer.invalidateCache();
+    if (this.app.snapManager) this.app.snapManager.setPrimitives(this.app.primitives);
     this.app.render();
     this.app.refreshPLCOutput();
     this.app.ui.updateStatus('Elementi eliminati');
@@ -122,6 +124,8 @@ export class SelectionManager {
     for (const primitive of this.app.selectedPrimitives) {
       primitive.translate(dx, dy);
     }
+    if (this.app.renderer) this.app.renderer.invalidateCache();
+    if (this.app.snapManager) this.app.snapManager.setPrimitives(this.app.primitives);
     this.app.render();
     this.app.refreshPLCOutput();
     this.app.ui.updateStatus(`Spostato: ${dx.toFixed(1)}, ${dy.toFixed(1)} mm`);
@@ -185,6 +189,8 @@ export class SelectionManager {
       this.app.selectedPrimitives.add(prim);
     }
 
+    if (this.app.renderer) this.app.renderer.invalidateCache();
+    if (this.app.snapManager) this.app.snapManager.setPrimitives(this.app.primitives);
     this.app.render();
     this.app.refreshPLCOutput();
     this.app.ui.updateStatus(`Incollati: ${newPrimitives.length} elementi`);
@@ -210,6 +216,8 @@ export class SelectionManager {
       primitive.rotate(center.x, center.y, radians);
     }
 
+    if (this.app.renderer) this.app.renderer.invalidateCache();
+    if (this.app.snapManager) this.app.snapManager.setPrimitives(this.app.primitives);
     this.app.render();
     this.app.refreshPLCOutput();
     this.app.ui.updateStatus(`Ruotato: ${angle}\u00b0`);
@@ -234,6 +242,8 @@ export class SelectionManager {
       primitive.scale(center.x, center.y, factor);
     }
 
+    if (this.app.renderer) this.app.renderer.invalidateCache();
+    if (this.app.snapManager) this.app.snapManager.setPrimitives(this.app.primitives);
     this.app.render();
     this.app.refreshPLCOutput();
     this.app.ui.updateStatus(`Scalato: ${(factor * 100).toFixed(0)}%`);
@@ -258,6 +268,8 @@ export class SelectionManager {
       primitive.mirror(center.x, center.y, axis);
     }
 
+    if (this.app.renderer) this.app.renderer.invalidateCache();
+    if (this.app.snapManager) this.app.snapManager.setPrimitives(this.app.primitives);
     this.app.render();
     this.app.refreshPLCOutput();
     this.app.ui.updateStatus(`Specchiato: asse ${axis.toUpperCase()}`);
@@ -316,7 +328,7 @@ export class SelectionManager {
         // Window mode: select only primitives fully inside the box
         const bbox = primitive.getBoundingBox();
         const fullyInside = bbox.minX >= minX && bbox.maxX <= maxX &&
-                          bbox.minY >= minY && bbox.maxY <= maxY;
+          bbox.minY >= minY && bbox.maxY <= maxY;
         if (fullyInside) {
           this.app.selectedPrimitives.add(primitive);
         }
@@ -326,6 +338,7 @@ export class SelectionManager {
     const count = this.app.selectedPrimitives.size;
     const mode = crossing ? 'attraversamento' : 'finestra';
     this.app.ui.updateStatus(count > 0 ? `Selezionati: ${count} (${mode})` : 'Nessun elemento selezionato');
+    if (this.app.renderer) this.app.renderer.invalidateCache();
     this.app.render();
   }
 
@@ -340,6 +353,8 @@ export class SelectionManager {
     this.app.selectedPrimitives.clear();
     this.app.highlightedPrimitive = null;
     this.app.ui.updateStats();
+    if (this.app.renderer) this.app.renderer.invalidateCache();
+    if (this.app.snapManager) this.app.snapManager.setPrimitives(this.app.primitives);
     this.app.render();
     this.app.refreshPLCOutput();
     this.app.ui.updateStatus('Area di lavoro pulita');

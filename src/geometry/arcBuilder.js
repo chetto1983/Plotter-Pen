@@ -3,7 +3,7 @@
  * Inspired by AutoCAD arc creation methods
  */
 
-import { TWO_PI, TOLERANCE, normalizeAngle, distance, Vector2 } from './core.js';
+import { TWO_PI, TOLERANCE, normalizeAngle, distance } from './core.js';
 import { Arc } from './primitives.js';
 
 /**

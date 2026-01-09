@@ -168,7 +168,7 @@ export class Polygon extends Primitive {
     return points;
   }
 
-  draw(ctx, scale = 1) {
+  draw(ctx, _scale = 1) {
     if (this.points.length < 2) return;
 
     ctx.beginPath();

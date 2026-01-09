@@ -3,7 +3,7 @@
  * Converts drawing data into line/arc primitives for plotter output
  */
 
-import { distance, Vector2, TOLERANCE } from '../geometry/core.js';
+import { distance } from '../geometry/core.js';
 import { Line, Arc } from '../geometry/primitives.js';
 import { ArcBuilder } from '../geometry/arcBuilder.js';
 
@@ -565,6 +565,7 @@ export class PLCOutputGenerator {
   constructor(config = {}) {
     this.precision = config.precision ?? 3;
     this.includeZMovements = config.includeZMovements ?? true;
+    this.defaultSpeed = config.defaultSpeed ?? 100.0;
   }
 
   /**
@@ -613,11 +614,10 @@ export class PLCOutputGenerator {
           primitive: null
         });
 
-        // Jump to start point
         commands.push({
           index: commands.length,
           type: 'waypoint',
-          command: `J X ${x1.toFixed(this.precision)}, Y ${y1.toFixed(this.precision)}, Z 1`,
+          command: `J X ${x1.toFixed(this.precision)}, Y ${y1.toFixed(this.precision)}`,
           primitive: null
         });
 
@@ -680,7 +680,7 @@ export class PLCOutputGenerator {
     if (primitive.type === 'line') {
       const x2 = data.x2 ?? primitive.x2;
       const y2 = data.y2 ?? primitive.y2;
-      command = `L X ${fmt(x2)}, Y ${fmt(y2)}`;
+      command = `L X ${fmt(x2)}, Y ${fmt(y2)}, V ${fmt(this.defaultSpeed)}`;
     } else if (primitive.type === 'arc') {
       // Robot post-processor style: end point (X, Y) + aux point on arc (I, J)
       const x2 = data.x2 ?? primitive.x2;
@@ -720,7 +720,7 @@ export class PLCOutputGenerator {
         }
       }
 
-      command = `A X ${fmt(x2)}, Y ${fmt(y2)}, I ${fmt(auxX)}, J ${fmt(auxY)}`;
+      command = `A X ${fmt(x2)}, Y ${fmt(y2)}, I ${fmt(auxX)}, J ${fmt(auxY)}, V ${fmt(this.defaultSpeed)}`;
     } else if (primitive.type === 'circle') {
       // Circle is drawn as two semicircular arcs (robot 3-point style)
       // This method returns an array of commands for circles
@@ -746,7 +746,7 @@ export class PLCOutputGenerator {
         cmds.push({
           index: index + i,
           type: 'line',
-          command: `L X ${fmt(pts[i + 1].x)}, Y ${fmt(pts[i + 1].y)}`,
+          command: `L X ${fmt(pts[i + 1].x)}, Y ${fmt(pts[i + 1].y)}, V ${fmt(this.defaultSpeed)}`,
           primitive: primitive
         });
       }
@@ -765,7 +765,7 @@ export class PLCOutputGenerator {
         cmds.push({
           index: index + cmdIdx,
           type: 'line',
-          command: `L X ${fmt(pts[i + 1].x)}, Y ${fmt(pts[i + 1].y)}`,
+          command: `L X ${fmt(pts[i + 1].x)}, Y ${fmt(pts[i + 1].y)}, V ${fmt(this.defaultSpeed)}`,
           primitive: primitive
         });
         cmdIdx++;
@@ -776,7 +776,7 @@ export class PLCOutputGenerator {
         cmds.push({
           index: index + cmdIdx,
           type: 'line',
-          command: `L X ${fmt(pts[0].x)}, Y ${fmt(pts[0].y)}`,
+          command: `L X ${fmt(pts[0].x)}, Y ${fmt(pts[0].y)}, V ${fmt(this.defaultSpeed)}`,
           primitive: primitive
         });
       }
@@ -827,14 +827,14 @@ export class PLCOutputGenerator {
       {
         index: startIndex,
         type: 'arc',
-        command: `A X ${fmt(midX)}, Y ${fmt(midY)}, I ${fmt(aux1X)}, J ${fmt(aux1Y)}`,
+        command: `A X ${fmt(midX)}, Y ${fmt(midY)}, I ${fmt(aux1X)}, J ${fmt(aux1Y)}, V ${fmt(this.defaultSpeed)}`,
         primitive: primitive,
         isCirclePart: 1
       },
       {
         index: startIndex + 1,
         type: 'arc',
-        command: `A X ${fmt(startX)}, Y ${fmt(startY)}, I ${fmt(aux2X)}, J ${fmt(aux2Y)}`,
+        command: `A X ${fmt(startX)}, Y ${fmt(startY)}, I ${fmt(aux2X)}, J ${fmt(aux2Y)}, V ${fmt(this.defaultSpeed)}`,
         primitive: primitive,
         isCirclePart: 2
       }

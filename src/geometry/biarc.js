@@ -382,7 +382,7 @@ export function fitArcsAndLines(points, options = {}) {
         // Try arc fitting (need at least 3 points)
         let bestArcEnd = -1;
         let bestCircle = null;
-        let bestError = Infinity;
+
 
         if (i + 2 < points.length) {
             // Try to find the longest arc that fits within tolerance
@@ -408,7 +408,7 @@ export function fitArcsAndLines(points, options = {}) {
                 if (fits) {
                     bestArcEnd = j;
                     bestCircle = circle;
-                    bestError = maxErr;
+
                 }
                 // Keep searching for longer arcs even if this one fits
             }

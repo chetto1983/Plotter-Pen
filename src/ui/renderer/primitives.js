@@ -18,6 +18,10 @@ export class PrimitiveRenderer {
     const selectedLineWidth = lineWidth * 1.5;
 
     if (!primitives || primitives.length === 0) return;
+
+    // DEBUG: Log primitives info
+    // console.log(`[PrimitiveRenderer] Drawing ${primitives.length} primitives. First:`, primitives[0]);
+
     // Debug large datasets
     if (primitives.length > 500) {
       // console.log(`Drawing ${primitives.length} primitives`);
@@ -35,6 +39,7 @@ export class PrimitiveRenderer {
     const deferredArcs = [];
     const deferredCircles = [];
     const deferredPolygons = [];
+    const deferredRectangles = [];
 
     for (const prim of primitives) {
       if (!prim) continue; // Skip nulls
@@ -57,6 +62,8 @@ export class PrimitiveRenderer {
         deferredCircles.push(prim);
       } else if (prim.type === 'polygon' || prim.type === 'polyline') {
         deferredPolygons.push(prim);
+      } else if (prim.type === 'rectangle') {
+        deferredRectangles.push(prim);
       }
     }
 
@@ -106,6 +113,15 @@ export class PrimitiveRenderer {
           ctx.lineTo(poly.points[i].x, poly.points[i].y);
         }
         if (poly.closed || poly.type === 'polygon') ctx.closePath();
+      }
+      ctx.stroke();
+    }
+
+    // Batch Rectangles
+    if (deferredRectangles.length > 0) {
+      ctx.beginPath();
+      for (const rect of deferredRectangles) {
+        ctx.rect(rect.x, rect.y, rect.width, rect.height);
       }
       ctx.stroke();
     }
@@ -404,6 +420,40 @@ export class PrimitiveRenderer {
         ctx.beginPath();
         ctx.arc(cx, cy, markerSize, 0, Math.PI * 2);
         ctx.fill();
+      } else if (primitive.type === 'rectangle') {
+        ctx.beginPath();
+        ctx.rect(primitive.x, primitive.y, primitive.width, primitive.height);
+        ctx.stroke();
+
+        // Draw corner markers
+        const markerSize = 4 / scale;
+        ctx.fillStyle = '#00ff00';
+        ctx.fillRect(primitive.x - markerSize, primitive.y - markerSize, markerSize * 2, markerSize * 2);
+        ctx.fillRect(primitive.x + primitive.width - markerSize, primitive.y - markerSize, markerSize * 2, markerSize * 2);
+        ctx.fillRect(primitive.x + primitive.width - markerSize, primitive.y + primitive.height - markerSize, markerSize * 2, markerSize * 2);
+        ctx.fillRect(primitive.x - markerSize, primitive.y + primitive.height - markerSize, markerSize * 2, markerSize * 2);
+
+      } else if (primitive.type === 'polygon' || primitive.type === 'polyline') {
+        if (primitive.points && primitive.points.length >= 2) {
+          ctx.beginPath();
+          ctx.moveTo(primitive.points[0].x, primitive.points[0].y);
+          for (let i = 1; i < primitive.points.length; i++) {
+            ctx.lineTo(primitive.points[i].x, primitive.points[i].y);
+          }
+          if (primitive.closed || primitive.type === 'polygon') {
+            ctx.closePath();
+          }
+          ctx.stroke();
+
+          // Draw vertex markers
+          const markerSize = 4 / scale;
+          ctx.fillStyle = '#00ff00';
+          for (const pt of primitive.points) {
+            ctx.beginPath();
+            ctx.arc(pt.x, pt.y, markerSize, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
       }
 
       ctx.restore();

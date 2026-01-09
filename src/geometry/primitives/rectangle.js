@@ -77,7 +77,7 @@ export class Rectangle extends Primitive {
 
   containsPoint(point) {
     return point.x >= this._x && point.x <= this._x + this._width &&
-           point.y >= this._y && point.y <= this._y + this._height;
+      point.y >= this._y && point.y <= this._y + this._height;
   }
 
   getSnapPoints() {
@@ -106,7 +106,7 @@ export class Rectangle extends Primitive {
     ];
   }
 
-  draw(ctx, scale = 1) {
+  draw(ctx, _scale = 1) {
     ctx.beginPath();
     ctx.rect(this._x, this._y, this._width, this._height);
     ctx.stroke();
@@ -158,9 +158,9 @@ export class Rectangle extends Primitive {
   intersectsBox(minX, minY, maxX, maxY) {
     // Simple AABB overlap test
     return !(this._x + this._width < minX ||
-             this._x > maxX ||
-             this._y + this._height < minY ||
-             this._y > maxY);
+      this._x > maxX ||
+      this._y + this._height < minY ||
+      this._y > maxY);
   }
 
   toJSON() {

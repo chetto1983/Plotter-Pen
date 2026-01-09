@@ -4,7 +4,7 @@
  */
 
 import { TOLERANCE, distance, Vector2 } from './core.js';
-import { Line, Arc, Circle, Rectangle, Polygon } from './primitives.js';
+
 
 /**
  * Snap point types
@@ -133,6 +133,16 @@ export class SnapManager {
    */
   addIntersectionAnchors() {
     const prims = this.primitives.filter(p => p.visible);
+
+    // Performance safeguard: for large drawings, O(N^2) intersection checks cause freeze.
+    // Limit global intersection snapping to < 500 primitives.
+    if (prims.length > 500) {
+      if (!this._warnedIntersectionLimit) {
+        console.warn('Simulazione CAD: Disabilitato snap intersezioni globali per prestazioni (elementi > 500)');
+        this._warnedIntersectionLimit = true;
+      }
+      return;
+    }
 
     for (let i = 0; i < prims.length; i++) {
       for (let j = i + 1; j < prims.length; j++) {
@@ -507,170 +517,7 @@ export class SnapManager {
     return bestResult;
   }
 
-  /**
-   * Find intersections between primitives
-   */
-  findIntersections() {
-    const intersections = [];
-    const n = this.primitives.length;
 
-    for (let i = 0; i < n; i++) {
-      for (let j = i + 1; j < n; j++) {
-        const points = this.intersect(this.primitives[i], this.primitives[j]);
-        for (const p of points) {
-          intersections.push({
-            point: p,
-            type: SNAP_TYPES.INTERSECTION,
-            sources: [this.primitives[i], this.primitives[j]],
-            label: 'Intersezione'
-          });
-        }
-      }
-    }
-
-    return intersections;
-  }
-
-  /**
-   * Calculate intersections between two primitives
-   */
-  intersect(prim1, prim2) {
-    if (prim1 instanceof Line && prim2 instanceof Line) {
-      return this.lineLineIntersection(prim1, prim2);
-    }
-    if (prim1 instanceof Line && prim2 instanceof Arc) {
-      return this.lineArcIntersection(prim1, prim2);
-    }
-    if (prim1 instanceof Arc && prim2 instanceof Line) {
-      return this.lineArcIntersection(prim2, prim1);
-    }
-    if (prim1 instanceof Line && prim2 instanceof Circle) {
-      return this.lineCircleIntersection(prim1, prim2);
-    }
-    if (prim1 instanceof Circle && prim2 instanceof Line) {
-      return this.lineCircleIntersection(prim2, prim1);
-    }
-    if (prim1 instanceof Arc && prim2 instanceof Arc) {
-      return this.arcArcIntersection(prim1, prim2);
-    }
-    if (prim1 instanceof Circle && prim2 instanceof Circle) {
-      return this.circleCircleIntersection(prim1, prim2);
-    }
-    // Add more combinations as needed
-    return [];
-  }
-
-  /**
-   * Line-Line intersection
-   */
-  lineLineIntersection(line1, line2) {
-    const x1 = line1.x1, y1 = line1.y1, x2 = line1.x2, y2 = line1.y2;
-    const x3 = line2.x1, y3 = line2.y1, x4 = line2.x2, y4 = line2.y2;
-
-    const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
-    if (Math.abs(denom) < TOLERANCE) return []; // Parallel
-
-    const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
-    const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom;
-
-    if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
-      return [new Vector2(x1 + t * (x2 - x1), y1 + t * (y2 - y1))];
-    }
-
-    return [];
-  }
-
-  /**
-   * Line-Circle intersection
-   */
-  lineCircleIntersection(line, circle) {
-    const dx = line.x2 - line.x1;
-    const dy = line.y2 - line.y1;
-    const fx = line.x1 - circle.cx;
-    const fy = line.y1 - circle.cy;
-
-    const a = dx * dx + dy * dy;
-    const b = 2 * (fx * dx + fy * dy);
-    const c = fx * fx + fy * fy - circle.radius * circle.radius;
-
-    let discriminant = b * b - 4 * a * c;
-    if (discriminant < 0) return [];
-
-    discriminant = Math.sqrt(discriminant);
-    const results = [];
-
-    const t1 = (-b - discriminant) / (2 * a);
-    const t2 = (-b + discriminant) / (2 * a);
-
-    if (t1 >= 0 && t1 <= 1) {
-      results.push(new Vector2(line.x1 + t1 * dx, line.y1 + t1 * dy));
-    }
-    if (t2 >= 0 && t2 <= 1 && Math.abs(t1 - t2) > TOLERANCE) {
-      results.push(new Vector2(line.x1 + t2 * dx, line.y1 + t2 * dy));
-    }
-
-    return results;
-  }
-
-  /**
-   * Line-Arc intersection
-   */
-  lineArcIntersection(line, arc) {
-    // First find line-circle intersections
-    const tempCircle = new Circle(arc.cx, arc.cy, arc.radius);
-    const circleIntersections = this.lineCircleIntersection(line, tempCircle);
-
-    // Filter to only points on the arc
-    return circleIntersections.filter(p => arc.isPointInsideSector(p));
-  }
-
-  /**
-   * Circle-Circle intersection
-   */
-  circleCircleIntersection(c1, c2) {
-    const d = distance(c1.cx, c1.cy, c2.cx, c2.cy);
-
-    if (d > c1.radius + c2.radius) return []; // Too far apart
-    if (d < Math.abs(c1.radius - c2.radius)) return []; // One inside other
-    if (d < TOLERANCE && Math.abs(c1.radius - c2.radius) < TOLERANCE) return []; // Same circle
-
-    const a = (c1.radius * c1.radius - c2.radius * c2.radius + d * d) / (2 * d);
-    const h = Math.sqrt(Math.max(0, c1.radius * c1.radius - a * a));
-
-    const px = c1.cx + a * (c2.cx - c1.cx) / d;
-    const py = c1.cy + a * (c2.cy - c1.cy) / d;
-
-    const results = [];
-
-    if (h < TOLERANCE) {
-      results.push(new Vector2(px, py));
-    } else {
-      results.push(new Vector2(
-        px + h * (c2.cy - c1.cy) / d,
-        py - h * (c2.cx - c1.cx) / d
-      ));
-      results.push(new Vector2(
-        px - h * (c2.cy - c1.cy) / d,
-        py + h * (c2.cx - c1.cx) / d
-      ));
-    }
-
-    return results;
-  }
-
-  /**
-   * Arc-Arc intersection
-   */
-  arcArcIntersection(arc1, arc2) {
-    const tempC1 = new Circle(arc1.cx, arc1.cy, arc1.radius);
-    const tempC2 = new Circle(arc2.cx, arc2.cy, arc2.radius);
-    const circleIntersections = this.circleCircleIntersection(tempC1, tempC2);
-
-    // Filter to points on both arcs
-    return circleIntersections.filter(p =>
-      arc1.isPointInsideSector(p) && arc2.isPointInsideSector(p)
-    );
-  }
 
   /**
    * Update configuration
