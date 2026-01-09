@@ -22,7 +22,14 @@ export class DXFImporter {
         };
     }
 
-    async parse(dxfContent) {
+    /**
+     * Parse DXF content and convert to primitives.
+     * Processes entities in chunks to keep UI responsive.
+     * @param {string} dxfContent - Raw DXF file content
+     * @param {function} onProgress - Optional callback (progress: 0-1, message: string)
+     * @returns {Promise<{primitives: Array, bounds: Object}>}
+     */
+    async parse(dxfContent, onProgress = null) {
         let dxf;
         try {
             dxf = this.parser.parseSync(dxfContent);
@@ -49,12 +56,33 @@ export class DXFImporter {
             console.log(`DXF Units: ${units}, Scale Factor: ${this.scaleFactor}`);
         }
 
+        // Process entities in chunks to keep UI responsive
+        const entities = dxf.entities;
+        const totalEntities = entities.length;
+        const CHUNK_SIZE = 100; // Process 100 entities per frame
         const primitives = [];
-        for (const entity of dxf.entities) {
-            const prim = this.convertEntity(entity);
-            if (prim) {
-                if (Array.isArray(prim)) primitives.push(...prim);
-                else primitives.push(prim);
+
+        for (let i = 0; i < totalEntities; i += CHUNK_SIZE) {
+            const chunkEnd = Math.min(i + CHUNK_SIZE, totalEntities);
+
+            // Process this chunk
+            for (let j = i; j < chunkEnd; j++) {
+                const prim = this.convertEntity(entities[j]);
+                if (prim) {
+                    if (Array.isArray(prim)) primitives.push(...prim);
+                    else primitives.push(prim);
+                }
+            }
+
+            // Report progress and yield to UI
+            if (onProgress) {
+                const progress = chunkEnd / totalEntities;
+                onProgress(progress, `Elaborazione entità ${chunkEnd}/${totalEntities}...`);
+            }
+
+            // Yield to browser to keep UI responsive
+            if (i + CHUNK_SIZE < totalEntities) {
+                await new Promise(resolve => requestAnimationFrame(resolve));
             }
         }
 

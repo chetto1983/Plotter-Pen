@@ -5,6 +5,7 @@
 import { applyDrawingData, buildDrawingData } from "./file/drawingData.js";
 import { downloadLegacy, pickFileLegacy } from "./file/fileHelpers.js";
 import { DXFImporter } from "../import/DXFImporter.js";
+import { Line, Arc, Circle } from "../geometry/primitives.js";
 
 export class FileManager {
   constructor(app) {
@@ -118,29 +119,86 @@ export class FileManager {
   async loadFromDXF(file, contentOverride = null) {
     this.app.ui.updateStatus(`Caricamento DXF ${file.name}...`);
     const content = contentOverride ?? await file.text();
-    const importer = new DXFImporter();
-    const { primitives, bounds } = await importer.parse(content);
 
-    if (!primitives || primitives.length === 0) {
-      this.app.ui.updateStatus("DXF senza entita importabili");
-      return;
+    try {
+      // Send DXF content to backend for parsing
+      this.app.ui.updateStatus('Invio al backend...');
+      const response = await fetch('/api/parse-dxf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: content
+      });
+
+      const result = await response.json();
+
+      if (result.status !== 'ok') {
+        throw new Error(result.message || 'Backend parsing failed');
+      }
+
+      // Convert raw data to primitive instances (chunked to avoid freeze)
+      this.app.ui.updateStatus(`Creazione ${result.primitives.length} primitive...`);
+      const primitives = await this.createPrimitivesFromDataAsync(result.primitives);
+
+      if (!primitives || primitives.length === 0) {
+        this.app.ui.updateStatus("DXF senza entita importabili");
+        return;
+      }
+
+      this.app.state.pushState();
+      this.app.primitives = primitives;
+      this.app.selectedPrimitives.clear();
+      this.app.highlightedPrimitive = null;
+
+      this.app.ui.updateStatus('Applicazione bounds...');
+      await this.applyDXFBoundsAsync(result.bounds);
+
+      this.app.ui.updateStats();
+      this.app.ui.updateStatus(`Rendering...`);
+      await new Promise(r => requestAnimationFrame(r));
+      this.app.render();
+      this.app.refreshPLCOutput();
+      this.app.renderer.resetView();
+      this.app.ui.updateStatus(`DXF importato: ${primitives.length} primitive`);
+    } catch (error) {
+      console.error('DXF import error:', error);
+      this.app.ui.updateStatus(`Errore: ${error.message}`);
+      throw error;
     }
-
-    this.app.state.pushState();
-    this.app.primitives = primitives;
-    this.app.selectedPrimitives.clear();
-    this.app.highlightedPrimitive = null;
-
-    this.applyDXFBounds(bounds);
-
-    this.app.ui.updateStats();
-    this.app.render();
-    this.app.refreshPLCOutput();
-    this.app.renderer.resetView();
-    this.app.ui.updateStatus("DXF importato con successo");
   }
 
-  applyDXFBounds(bounds) {
+  /**
+   * Create primitive instances from raw data with chunked processing
+   */
+  async createPrimitivesFromDataAsync(data) {
+    const primitives = [];
+    const CHUNK_SIZE = 500;
+    const total = data.length;
+
+    for (let i = 0; i < total; i += CHUNK_SIZE) {
+      const end = Math.min(i + CHUNK_SIZE, total);
+
+      for (let j = i; j < end; j++) {
+        const d = data[j];
+        if (d.type === 'line') {
+          primitives.push(new Line(d.x1, d.y1, d.x2, d.y2));
+        } else if (d.type === 'arc') {
+          primitives.push(new Arc(d.x1, d.y1, d.x2, d.y2, d.cx, d.cy, d.throughPoint));
+        } else if (d.type === 'circle') {
+          primitives.push(new Circle(d.cx, d.cy, d.radius));
+        }
+      }
+
+      // Update progress and yield to browser
+      if (i + CHUNK_SIZE < total) {
+        this.app.ui.updateStatus(`Creazione primitive ${end}/${total}...`);
+        await new Promise(r => requestAnimationFrame(r));
+      }
+    }
+
+    return primitives;
+  }
+
+  async applyDXFBoundsAsync(bounds) {
     if (!bounds) return;
 
     const padding = 10;
@@ -148,8 +206,17 @@ export class FileManager {
     const offsetY = bounds.minY < 0 ? -bounds.minY + padding : 0;
 
     if (offsetX || offsetY) {
-      for (const primitive of this.app.primitives) {
-        primitive.translate(offsetX, offsetY);
+      // Chunked translation to avoid freeze
+      const CHUNK_SIZE = 500;
+      const prims = this.app.primitives;
+      for (let i = 0; i < prims.length; i += CHUNK_SIZE) {
+        const end = Math.min(i + CHUNK_SIZE, prims.length);
+        for (let j = i; j < end; j++) {
+          prims[j].translate(offsetX, offsetY);
+        }
+        if (i + CHUNK_SIZE < prims.length) {
+          await new Promise(r => requestAnimationFrame(r));
+        }
       }
     }
 

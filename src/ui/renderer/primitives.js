@@ -7,22 +7,93 @@ export class PrimitiveRenderer {
   }
 
   /**
-   * Draw all primitives
+   * Draw all primitives with batched rendering for performance
    */
   drawPrimitives(ctx, scale) {
     const lineWidth = this.renderer.lineWidth / scale;
+    const selectedLineWidth = lineWidth * 1.5;
+    const primitives = this.renderer.primitives;
 
-    for (const prim of this.renderer.primitives) {
+    if (primitives.length === 0) return;
+
+    // Batch all non-selected lines together
+    ctx.save();
+    ctx.strokeStyle = COLORS.primitive;
+    ctx.lineWidth = lineWidth;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+
+    const deferredSelected = [];
+    const deferredArcs = [];
+    const deferredCircles = [];
+    const deferredPolygons = [];
+
+    for (const prim of primitives) {
       if (!prim.visible) continue;
 
+      if (prim.selected) {
+        deferredSelected.push(prim);
+        continue;
+      }
+
+      // Batch lines directly into path
+      if (prim.type === 'line') {
+        ctx.moveTo(prim.x1, prim.y1);
+        ctx.lineTo(prim.x2, prim.y2);
+      } else if (prim.type === 'arc') {
+        deferredArcs.push(prim);
+      } else if (prim.type === 'circle') {
+        deferredCircles.push(prim);
+      } else if (prim.type === 'polygon' || prim.type === 'polyline') {
+        deferredPolygons.push(prim);
+      }
+    }
+
+    // Stroke all batched lines at once
+    ctx.stroke();
+
+    // Draw arcs (need individual paths due to arc() behavior)
+    for (const arc of deferredArcs) {
+      const render = arc.getRenderData();
+      ctx.beginPath();
+      ctx.arc(render.cx, render.cy, render.r, render.startAngle, render.endAngle, render.anticlockwise);
+      ctx.stroke();
+    }
+
+    // Draw circles
+    for (const circle of deferredCircles) {
+      ctx.beginPath();
+      ctx.arc(circle.cx, circle.cy, circle.radius, 0, TWO_PI);
+      ctx.stroke();
+    }
+
+    // Draw polygons/polylines
+    for (const poly of deferredPolygons) {
+      if (!poly.points || poly.points.length < 2) continue;
+      ctx.beginPath();
+      ctx.moveTo(poly.points[0].x, poly.points[0].y);
+      for (let i = 1; i < poly.points.length; i++) {
+        ctx.lineTo(poly.points[i].x, poly.points[i].y);
+      }
+      if (poly.closed || poly.type === 'polygon') ctx.closePath();
+      ctx.stroke();
+    }
+
+    ctx.restore();
+
+    // Draw selected primitives with different style
+    if (deferredSelected.length > 0) {
       ctx.save();
-      // Use selected color for selected primitives
-      ctx.strokeStyle = prim.selected ? COLORS.primitiveSelected : COLORS.primitive;
-      ctx.lineWidth = prim.selected ? lineWidth * 1.5 : lineWidth;
+      ctx.strokeStyle = COLORS.primitiveSelected;
+      ctx.lineWidth = selectedLineWidth;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
 
-      this.drawPrimitive(ctx, prim, scale);
+      for (const prim of deferredSelected) {
+        this.drawPrimitive(ctx, prim, scale);
+      }
+
       ctx.restore();
     }
   }
