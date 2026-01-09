@@ -263,6 +263,7 @@ class CADApplication {
     if (this.selectionManager) {
       this.selectionManager.deleteSelected();
       this.snapManager.setPrimitives(this.primitives);
+      if (this.renderer) this.renderer.invalidateCache();
     }
   }
 
