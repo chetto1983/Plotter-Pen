@@ -902,7 +902,7 @@ fitToContent(bounds) {
 
 ### 5.2 DXF Export
 
-- [ ] Export current drawing to DXF
+- [ ] Export current drawing to DXF use (<https://www.npmjs.com/package/dxf-writer>)
 - [ ] Support LINE, ARC, CIRCLE, POLYLINE entities
 - [ ] Preserve layer information
 - [ ] Unit conversion (mm/inches)

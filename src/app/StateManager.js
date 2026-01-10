@@ -148,10 +148,25 @@ export class StateManager {
     if (restoreView && this.app.renderer) {
       if (data.workspace) {
         this.app.renderer.workspace = { ...data.workspace };
+        // Sync app-level settings
+        this.app.workspaceWidth = data.workspace.width;
+        this.app.workspaceHeight = data.workspace.height;
         this.app.renderer.resizeCanvas();
+        // Update UI inputs
+        const widthInput = document.getElementById('workspaceWidth');
+        const heightInput = document.getElementById('workspaceHeight');
+        if (widthInput) widthInput.value = this.app.workspaceWidth;
+        if (heightInput) heightInput.value = this.app.workspaceHeight;
       }
       if (data.grid) {
         this.app.renderer.setGridOptions(data.grid);
+        // Sync app-level settings
+        this.app.gridSpacing = data.grid.spacing ?? 10;
+        this.app.showGrid = data.grid.show ?? true;
+        this.app.snapToGrid = data.grid.snapToGrid ?? false;
+        // Update UI inputs
+        const gridInput = document.getElementById('gridSpacing');
+        if (gridInput) gridInput.value = this.app.gridSpacing;
       }
       if (data.view) {
         this.app.renderer.view = { ...data.view };

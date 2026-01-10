@@ -230,11 +230,25 @@ export class FileManager {
   async applyDXFBoundsAsync(bounds) {
     if (!bounds) return;
 
-    const padding = 10;
-    const offsetX = bounds.minX < 0 ? -bounds.minX + padding : 0;
-    const offsetY = bounds.minY < 0 ? -bounds.minY + padding : 0;
+    // Calculate drawing dimensions
+    const drawingWidth = bounds.maxX - bounds.minX;
+    const drawingHeight = bounds.maxY - bounds.minY;
 
-    if (offsetX || offsetY) {
+    // Expand workspace if needed
+    const padding = 20;
+    const requiredWidth = drawingWidth + padding * 2;
+    const requiredHeight = drawingHeight + padding * 2;
+
+    const nextWidth = Math.max(this.app.workspaceWidth, Math.ceil(requiredWidth));
+    const nextHeight = Math.max(this.app.workspaceHeight, Math.ceil(requiredHeight));
+
+    // Calculate centering offset
+    const centerX = (nextWidth - drawingWidth) / 2;
+    const centerY = (nextHeight - drawingHeight) / 2;
+    const offsetX = centerX - bounds.minX;
+    const offsetY = centerY - bounds.minY;
+
+    if (Math.abs(offsetX) > 0.01 || Math.abs(offsetY) > 0.01) {
       // Chunked translation to avoid freeze
       const CHUNK_SIZE = 500;
       const prims = this.app.primitives;
@@ -248,11 +262,6 @@ export class FileManager {
         }
       }
     }
-
-    const maxX = bounds.maxX + offsetX;
-    const maxY = bounds.maxY + offsetY;
-    const nextWidth = Math.max(this.app.workspaceWidth, Math.ceil(maxX + padding));
-    const nextHeight = Math.max(this.app.workspaceHeight, Math.ceil(maxY + padding));
 
     if (nextWidth !== this.app.workspaceWidth || nextHeight !== this.app.workspaceHeight) {
       this.app.workspaceWidth = nextWidth;

@@ -223,6 +223,15 @@ class CADApplication {
   }
 
   /**
+   * Refresh PLC output (wrapper for manager method)
+   */
+  refreshPLCOutput() {
+    if (this.plcOutputManager) {
+      this.plcOutputManager.refreshPLCOutput();
+    }
+  }
+
+  /**
    * Validate that a primitive fits within workspace boundaries
    */
   validateBoundaries(primitive) {

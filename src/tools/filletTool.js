@@ -1,7 +1,7 @@
 import { Tool } from './baseTool.js';
-import { Arc, Line } from '../geometry/primitives.js';
+import { Arc } from '../geometry/primitives.js';
 import { computeFilletGeometry } from '../geometry/fillet.js';
-import { Vector2, distance, toDegrees } from '../geometry/core.js';
+import { Vector2, distance } from '../geometry/core.js';
 
 export class FilletTool extends Tool {
     constructor(manager) {

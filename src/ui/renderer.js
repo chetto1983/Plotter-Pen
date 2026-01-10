@@ -108,13 +108,14 @@ export class CanvasRenderer {
       this.isCacheDirty = true;
     }
 
-    // Calculate scale to fit workspace
+    // Calculate scale to fit workspace (maintain 1:1 aspect ratio)
     const scaleX = width / this.workspace.width;
     const scaleY = height / this.workspace.height;
     this.view.scaleFactor = Math.min(scaleX, scaleY) * 0.9;
 
-    // Center the workspace
+    // Center the workspace horizontally
     this.view.panX = (width - this.workspace.width * this.view.scaleFactor) / 2;
+    // For Y-flipped coords: panY is the distance from bottom of canvas to bottom of workspace
     this.view.panY = (height - this.workspace.height * this.view.scaleFactor) / 2;
 
     this.isCacheDirty = true; // View changed
@@ -129,35 +130,41 @@ export class CanvasRenderer {
 
   /**
    * Transform model coordinates to screen coordinates
+   * ISO WCS: Origin at bottom-left, Y points up
    */
   modelToScreen(point) {
     const scale = this.view.scaleFactor * this.view.zoom;
+    const canvasHeight = this.canvas.clientHeight;
     return {
       x: point.x * scale + this.view.panX,
-      y: point.y * scale + this.view.panY
+      y: canvasHeight - (point.y * scale + this.view.panY)
     };
   }
 
   /**
    * Transform screen coordinates to model coordinates
+   * ISO WCS: Origin at bottom-left, Y points up
    */
   screenToModel(point) {
     const scale = this.view.scaleFactor * this.view.zoom;
+    const canvasHeight = this.canvas.clientHeight;
     return {
       x: (point.x - this.view.panX) / scale,
-      y: (point.y - this.view.panY) / scale
+      y: (canvasHeight - point.y - this.view.panY) / scale
     };
   }
 
   /**
    * Apply view transformation to context
+   * ISO WCS: Flip Y-axis so origin is at bottom-left
    */
   applyViewTransform() {
     const scale = this.getEffectiveScale();
+    const canvasHeight = this.canvas.height; // Already in device pixels
     this.ctx.setTransform(
-      scale, 0, 0, scale,
+      scale, 0, 0, -scale, // Negative Y scale to flip
       this.view.panX * this.dpr,
-      this.view.panY * this.dpr
+      canvasHeight - this.view.panY * this.dpr // Translate origin to bottom
     );
     return scale;
   }

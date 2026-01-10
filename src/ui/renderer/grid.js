@@ -42,15 +42,54 @@ export function drawGrid(ctx, scale, workspace, grid) {
   }
   ctx.stroke();
 
-  // Origin crosshair
-  ctx.strokeStyle = COLORS.gridOrigin;
+  // WCS Indicator - Standard CAD colors (Red=X, Green=Y)
+  const axisLength = 40 / scale;
+  const boxSize = 6 / scale;
+  const labelOffset = 8 / scale;
+
+  // X-Axis (Red/Magenta)
+  ctx.strokeStyle = '#ff0000';
   ctx.lineWidth = lineWidth * 2;
   ctx.beginPath();
   ctx.moveTo(0, 0);
-  ctx.lineTo(Math.min(50, workspace.width), 0);
-  ctx.moveTo(0, 0);
-  ctx.lineTo(0, Math.min(50, workspace.height));
+  ctx.lineTo(axisLength, 0);
   ctx.stroke();
+
+  // Y-Axis (Green)
+  ctx.strokeStyle = '#00ff00';
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(0, axisLength);
+  ctx.stroke();
+
+  // Origin box (white/gray outline)
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = lineWidth;
+  ctx.strokeRect(-boxSize / 2, -boxSize / 2, boxSize, boxSize);
+
+  // Axis labels - flip text to counter the Y-axis inversion
+  ctx.save();
+  ctx.font = `${10 / scale}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  // X label (red) - flip Y to draw text right-side up
+  ctx.save();
+  ctx.translate(axisLength + labelOffset, 0);
+  ctx.scale(1, -1);  // Counter the Y-flip
+  ctx.fillStyle = '#ff0000';
+  ctx.fillText('X', 0, 0);
+  ctx.restore();
+
+  // Y label (green) - flip Y to draw text right-side up
+  ctx.save();
+  ctx.translate(0, axisLength + labelOffset);
+  ctx.scale(1, -1);  // Counter the Y-flip
+  ctx.fillStyle = '#00ff00';
+  ctx.fillText('Y', 0, 0);
+  ctx.restore();
+
+  ctx.restore();
 }
 
 export default drawGrid;
