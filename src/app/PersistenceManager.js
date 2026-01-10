@@ -58,6 +58,11 @@ export class PersistenceManager {
                 // Restore state with View settings enabled (true)
                 this.app.state.restoreState(result.data, true);
 
+                // Update snap manager with restored primitives
+                if (this.app.snapManager) {
+                    this.app.snapManager.setPrimitives(this.app.primitives);
+                }
+
                 // Force renderer update
                 if (this.app.renderer) {
                     this.app.renderer.resizeCanvas(); // Ensure correct size

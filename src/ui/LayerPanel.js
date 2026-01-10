@@ -160,9 +160,17 @@ export class LayerPanel {
       });
 
       // Delete layer
-      item.querySelector('[data-action="delete"]')?.addEventListener('click', (e) => {
+      item.querySelector('[data-action="delete"]')?.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (confirm('Eliminare questo livello? Le primitive verranno spostate al livello predefinito.')) {
+        const modal = getModalManager();
+        const confirmed = await modal.confirm({
+          title: 'Elimina Livello',
+          message: 'Eliminare questo livello? Le primitive verranno spostate al livello predefinito.',
+          confirmText: 'Elimina',
+          cancelText: 'Annulla',
+          danger: true
+        });
+        if (confirmed) {
           this.layerManager.deleteLayer(layerId);
         }
       });
@@ -181,28 +189,24 @@ export class LayerPanel {
   }
 
   /**
-   * Show inline color picker
+   * Show custom color picker modal
    * @param {string} layerId - Layer ID
    * @param {HTMLElement} target - Color swatch element
    */
-  showColorPicker(layerId, target) {
-    // Create hidden color input
-    const input = document.createElement('input');
-    input.type = 'color';
-    input.value = this.layerManager.layers.get(layerId)?.color || '#00ff00';
-    input.style.position = 'absolute';
-    input.style.opacity = '0';
-    input.style.pointerEvents = 'none';
+  async showColorPicker(layerId, target) {
+    const layer = this.layerManager.layers.get(layerId);
+    if (!layer) return;
 
-    input.addEventListener('input', (e) => {
-      this.layerManager.setLayerColor(layerId, e.target.value);
-      target.style.backgroundColor = e.target.value;
+    const modal = getModalManager();
+    const newColor = await modal.colorPicker({
+      title: 'Colore Livello',
+      currentColor: layer.color
     });
 
-    input.addEventListener('blur', () => input.remove());
-
-    document.body.appendChild(input);
-    input.click();
+    if (newColor) {
+      this.layerManager.setLayerColor(layerId, newColor);
+      target.style.backgroundColor = newColor;
+    }
   }
 
   /**

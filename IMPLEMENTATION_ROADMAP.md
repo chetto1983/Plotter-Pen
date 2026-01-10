@@ -891,14 +891,16 @@ fitToContent(bounds) {
 
 ## Phase 5: Professional CAD Features (Planned)
 
-### 5.1 Layer System
+### 5.1 Layer System ✅ IMPLEMENTED
 
-- [ ] Layer panel in sidebar (add/remove/rename layers)
-- [ ] Layer visibility toggle (eye icon)
-- [ ] Layer lock (prevent editing)
-- [ ] Assign primitives to layers
-- [ ] Layer colors/styles
-- [ ] "Send to layer" context menu
+- [x] Layer panel in sidebar (add/remove/rename layers)
+- [x] Layer visibility toggle (eye icon)
+- [x] Layer lock (prevent editing)
+- [x] Assign primitives to layers
+- [x] Layer colors/styles
+- [x] "Send to layer" context menu (move selection to layer)
+- [x] Custom modal dialogs (prompt, confirm) - Ultra-modern 2026 design
+- [x] Custom color picker modal with preset swatches
 
 ### 5.2 DXF Export
 
@@ -918,7 +920,7 @@ fitToContent(bounds) {
 
 - [ ] Fillet tool (round corners)
 - [ ] Chamfer tool (cut corners)
-- [ ] Offset tool (parallel copy)
+- [x] Offset tool (parallel copy) ✅ IMPLEMENTED
 - [ ] Trim/Extend tool
 - [ ] Array tool (rectangular/polar)
 
