@@ -28,7 +28,6 @@ export class InputHandler {
     this.inputTicking = false;
     this.pendingMouseEvent = null;
   }
-
   /**
    * Setup all input event listeners
    */
@@ -57,7 +56,6 @@ export class InputHandler {
     // Window resize
     window.addEventListener('resize', () => this.app.renderer.resizeCanvas());
   }
-
   /**
    * Convert screen coordinates to world coordinates
    * Clamps result to workspace boundaries
@@ -75,7 +73,6 @@ export class InputHandler {
 
     return new Vector2(x, y);
   }
-
   /**
    * Handle mouse down event
    */
@@ -137,7 +134,6 @@ export class InputHandler {
       this.app.handleToolClick(snappedPos, e.shiftKey);
     }
   }
-
   /**
    * Handle double click event
    */
@@ -149,7 +145,6 @@ export class InputHandler {
       this.app.render();
     }
   }
-
   /**
    * Update selection box position and size
    */
@@ -180,7 +175,6 @@ export class InputHandler {
     const isCrossing = currentX < this.boxStartScreen.x;
     this.selectionBoxEl.classList.toggle('crossing', isCrossing);
   }
-
   /**
    * Handle mouse move event
    */
@@ -197,7 +191,6 @@ export class InputHandler {
       });
     }
   }
-
   processMouseMove() {
     const e = this.pendingMouseEvent;
     if (!e) return;

@@ -50,9 +50,6 @@ export class CanvasRenderer {
     // Styling
     this.lineWidth = 1;
 
-    // Styling
-    this.lineWidth = 1;
-
     // Rendering helpers
     this.primitiveRenderer = new PrimitiveRenderer(this);
     this.simulationManager = new SimulationManager(this);
@@ -318,52 +315,6 @@ export class CanvasRenderer {
       ctx.strokeStyle = 'rgba(100, 150, 255, 0.4)';
       ctx.lineWidth = 2 / scale;
       ctx.strokeRect(0, 0, this.workspace.width, this.workspace.height);
-    });
-  }
-
-  /**
-   * Draw workspace with primitives
-   */
-  /**
-   * Draw workspace with primitives
-   */
-  drawWorkspace(primitives, selection, preview, hovered, highlighted) {
-    this.withViewContext((ctx, scale) => {
-      // Clip to workspace
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(0, 0, this.workspace.width, this.workspace.height);
-      ctx.clip();
-
-      // Convert selection to Set if it isn't one (legacy support)
-      const selectedSet = selection instanceof Set ? selection : (selection ? new Set([selection]) : new Set());
-
-      // Draw primitives
-      if (primitives) {
-        this.primitiveRenderer.drawPrimitives(ctx, scale, primitives, selectedSet);
-      }
-
-      // Draw preview
-      if (preview) {
-        this.primitiveRenderer.drawPreview(ctx, preview, scale);
-      }
-
-      // Draw highlighted primitive (PLC)
-      if (highlighted) {
-        this.primitiveRenderer.drawHighlightedPrimitive(highlighted);
-      }
-
-      // Draw hovered (if not selected)
-      if (hovered && !selectedSet.has(hovered)) {
-        this.primitiveRenderer.drawHovered(ctx, hovered, scale);
-      }
-
-      // Draw simulation overlay
-      if (this.simulation && this.simulation.running) {
-        this.simulationManager.draw(ctx, scale);
-      }
-
-      ctx.restore();
     });
   }
 

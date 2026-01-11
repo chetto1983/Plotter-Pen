@@ -24,6 +24,7 @@ const ROOT_DIR = __dirname;
 const CONFIG_PATH = path.join(ROOT_DIR, "opcua_config.json");
 const TARGET_PAGE = "plotter_pen.html";
 const HOST = coalesce(process.env.HOST, process.env.BIND_HOST) ?? "127.0.0.1";
+const API_TOKEN = coalesce(process.env.API_TOKEN, process.env.API_KEY);
 const DEFAULT_PORT = (() => {
   const envPort = toInt(process.env.PORT);
   return envPort && envPort > 0 && envPort < 65536 ? envPort : 8000;
@@ -36,6 +37,21 @@ async function start() {
 
   app.use(express.json({ limit: MAX_JSON_SIZE }));
   app.use(express.static(ROOT_DIR, { index: TARGET_PAGE }));
+
+  if (API_TOKEN) {
+    app.use("/api", (req, res, next) => {
+      const authHeader = req.get("authorization");
+      const apiKeyHeader = req.get("x-api-key");
+      const bearer = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : authHeader;
+      const token = apiKeyHeader || bearer;
+
+      if (token !== API_TOKEN) {
+        return res.status(401).json({ status: "error", message: "Unauthorized" });
+      }
+
+      next();
+    });
+  }
 
   // === OPC UA CONFIGURATION ===
   app.get("/api/opcua/config", async (req, res) => {

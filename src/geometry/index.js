@@ -48,6 +48,7 @@ export {
 export {
   SNAP_TYPES,
   SnapResult,
-  SnapManager,
-  CollisionDetector
+  SnapManager
 } from './snap.js';
+
+export { CollisionDetector } from './collision.js';

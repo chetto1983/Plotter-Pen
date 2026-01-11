@@ -15,6 +15,7 @@ services:
       OPCUA_TRIGGER_RESET_DELAY_MS: '250'
       OPCUA_VALUE_TYPE: string_array
       OPCUA_ARRAY_LENGTH: '512'
+      DB_PATH: '/cfg-data/database.sqlite'
     ports:
       - '41880:8000'
     mem_limit: 512m
