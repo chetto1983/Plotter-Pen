@@ -25,14 +25,23 @@ Edit `opcua_config.json` to match your environment. All fields are optional exce
 - `triggerResetDelayMs`: Delay in milliseconds before writing `triggerResetValue` (default `250`).
 - `valueType`: Primary payload type. Use `string_array` to send one command per array element or `string` to send a single block (defaults to `string`).
 - `arrayLength`: Optional maximum number of array entries to send when `valueType` is an array type.
+- `operationTimeoutMs`: Optional OPC UA operation timeout in milliseconds (default `15000`).
 
 You can override any of these at runtime with environment variables (for example `OPCUA_ENDPOINT`, `OPCUA_NODE_ID`, `OPCUA_TRIGGER_NODE_ID`, `OPCUA_VALUE_TYPE`, `OPCUA_ARRAY_LENGTH`, etc.) or per-request overrides when calling the REST endpoint.
+
+Additional runtime variables:
+- `OPCUA_USERNAME`, `OPCUA_PASSWORD` for authenticated OPC UA servers.
+- `OPCUA_OPERATION_TIMEOUT_MS` (or `OPCUA_TIMEOUT_MS`) for OPC UA client timeouts.
+- `HOST` / `BIND_HOST` and `PORT` to control the web server address.
+- `DISABLE_AUTO_BROWSER` or `NO_AUTO_BROWSER` to prevent auto-opening the UI.
+- `API_TOKEN` (or `API_KEY`) to protect `/api/*` routes with a static token.
+- `DB_PATH` (or `DATABASE_PATH`) to override the SQLite file location.
 
 ## Running the server
 ```bash
 npm start
 ```
-The server scans for a free port starting at `8000`, serves static files from the project directory, and attempts to open `plotter_pen.html` in your default browser. If the browser does not open automatically, visit `http://127.0.0.1:<port>/plotter_pen.html` manually.
+The server scans for a free port starting at `8000` (or `PORT`), serves static files from the project directory, and attempts to open `plotter_pen.html` in your default browser. If the browser does not open automatically, visit `http://127.0.0.1:<port>/plotter_pen.html` manually.
 
 ## Run with Docker
 1. Build the image:
@@ -52,14 +61,14 @@ The server scans for a free port starting at `8000`, serves static files from th
 The container exposes port `8000` and honours the same environment variables used by `opcua_config.json`. Mounting the config file is optional; environment variables take precedence.
 
 ## Docker Compose
-1. Create or update a `.env` file with any overrides (for example `OPCUA_ENDPOINT`, `OPCUA_NODE_ID`, `PLOTTER_PORT`).
+1. Create or update a `.env` file with any overrides (for example `OPCUA_ENDPOINT`, `OPCUA_NODE_ID`, `PORT`).
 2. Launch the stack:
    ```bash
    docker compose up --build
    ```
-3. Open the web UI at `http://127.0.0.1:8000/plotter_pen.html`.
+3. Open the web UI at `http://127.0.0.1:41880/plotter_pen.html` (adjust if you change the port mapping).
 
-The compose service builds this repository, publishes port `8000`, and mounts `opcua_config.json` inside the container so you can edit it locally.
+The compose service builds this repository, publishes port `41880:8000`, and stores the SQLite database under `./cfg-data` via `DB_PATH`. If you want to edit `opcua_config.json` locally, add a bind mount for it.
 
 ## Using the web UI
 1. Load `plotter_pen.html` in your browser.
@@ -67,7 +76,14 @@ The compose service builds this repository, publishes port `8000`, and mounts `o
 3. Click the send button to push the program to the configured OPC UA node. The UI displays confirmation and any truncation or padding applied to match the OPC UA array length.
 
 ## REST API
-The server exposes a JSON endpoint for automation: `POST /api/opcua/send`.
+The server exposes JSON endpoints for automation:
+- `GET /api/opcua/config` and `PUT /api/opcua/config` for config management.
+- `POST /api/opcua/send` to push commands to the OPC UA node.
+- `POST /api/parse-dxf` to parse DXF content in the backend.
+- `POST /api/smart-import` to import DXF using a worker thread.
+- `POST /api/export-dxf` to export a drawing to DXF.
+- `GET /api/state` and `POST /api/state` for autosave state.
+- `GET /api/drawings`, `POST /api/drawings`, `GET /api/drawings/:name`, `DELETE /api/drawings/:name` for named drawings.
 
 Example request:
 ```bash
@@ -85,6 +101,11 @@ curl -X POST http://127.0.0.1:8000/api/opcua/send \
 - Use the optional `overrides` object to supply connection details without modifying the config file.
 - The response reports any truncation or padding, the resolved node IDs, and trigger results.
 
+If `API_TOKEN` or `API_KEY` is set, pass the token as `Authorization: Bearer <token>` or `X-API-Key: <token>`.
+
+## Persistence
+Autosave state and named drawings are stored in a local SQLite database. By default the file is `database.sqlite` in the project root. Override the path with `DB_PATH` or `DATABASE_PATH`.
+
 ## Troubleshooting
 - `BadNodeId` or `BadOutOfRange` errors indicate incorrect node IDs or mismatched array sizes. Confirm the target variable type and length in your OPC UA server.
 - If the server cannot find a free port starting at `8000`, stop any conflicting processes or set the `PORT` environment variable before running `npm start`.
@@ -93,4 +114,5 @@ curl -X POST http://127.0.0.1:8000/api/opcua/send \
 - Static assets (`plotter_pen.html`, `style.css`) live alongside `server.js`; updates are served without rebuilding.
 - The project uses ES modules. When adding new files, prefer `import`/`export` syntax.
 - Restart `npm start` after changing server-side code to pick up the latest changes.
+- Use `npm run dev` for watch mode during development.
 
