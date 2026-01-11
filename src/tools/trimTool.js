@@ -100,12 +100,19 @@ export class TrimTool extends Tool {
 
     findPrimitiveAt(point) {
         const primitives = this.manager.app.primitives;
-        let bestDist = 10 / this.manager.app.renderer.getEffectiveScale();
+        const scale = this.manager.app.renderer.getEffectiveScale();
+        let bestDist = 10 / scale;
         let bestPrim = null;
 
+        console.log('findPrimitiveAt', { point, primitiveCount: primitives.length, scale, threshold: bestDist });
+
         for (const p of primitives) {
-            if (p.type !== 'line') continue; // Only lines for now
+            // Removed restricted type check to see what we find
+            // if (p.type !== 'line') continue; 
+
             const d = p.distanceToPoint(point);
+            // console.log(`Check ${p.id} (${p.type}): dist=${d}`); // Verbose but useful if stuck
+
             if (d < bestDist) {
                 bestDist = d;
                 bestPrim = p;

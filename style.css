@@ -2824,8 +2824,8 @@ body.config-shell .config-status.error {
   margin-top: -1px;
   /* Overlap with tab border */
   z-index: 1;
-  overflow-x: auto;
-  scrollbar-width: thin;
+  overflow: visible;
+  /* Allow dropdowns to pop out */
 }
 
 .ribbon-panel {
@@ -2844,40 +2844,47 @@ body.config-shell .config-status.error {
 .ribbon-panel .cad-toolbar-group {
   display: flex;
   flex-direction: column;
-  /* Stack buttons and label */
+  /* Stack Buttons (Top) and Label (Bottom) */
   align-items: center;
   padding: 0 8px;
   border-right: 1px solid var(--border-light);
+  /* Vertical Separator */
   height: 100%;
   justify-content: space-between;
+  gap: 2px;
 }
 
 .ribbon-panel .cad-toolbar-group:last-child {
   border-right: none;
 }
 
+/* Buttons Container within Group */
+.ribbon-panel .cad-toolbar-buttons {
+  display: flex;
+  flex-direction: row;
+  /* Buttons sit side-by-side */
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  /* Take up remaining space */
+  order: 1;
+  /* Top */
+}
+
 /* Group Label at Bottom */
 .ribbon-panel .cad-toolbar-label {
   order: 2;
-  /* Label at bottom */
+  /* Bottom */
+  display: block;
+  /* Ensure it's visible */
   font-size: 10px;
   color: var(--muted);
-  margin-top: 4px;
   text-align: center;
   width: 100%;
   opacity: 0.7;
 }
 
-/* Buttons Container */
-.ribbon-panel .cad-toolbar-buttons {
-  order: 1;
-  /* Buttons at top */
-  display: flex;
-  gap: 4px;
-  flex: 1;
-  align-items: center;
-  /* Center buttons vertically in their space */
-}
+
 
 /* Large Button Style (Icon Top, Text Bottom) */
 .cad-tool-btn {
