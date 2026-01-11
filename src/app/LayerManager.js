@@ -46,6 +46,7 @@ export class LayerManager {
 
         /** @type {string} */
         this.activeLayerId = DEFAULT_LAYER.id;
+        this.layerIdCounter = 0;
 
         // Create default layer
         this.layers.set(DEFAULT_LAYER.id, { ...DEFAULT_LAYER });
@@ -78,7 +79,7 @@ export class LayerManager {
      * @returns {Layer} - The created layer
      */
     createLayer(name, color) {
-        const id = `layer_${Date.now()}`;
+        const id = `layer_${Date.now()}_${this.layerIdCounter++}`;
         const order = this.layers.size;
 
         const layer = {

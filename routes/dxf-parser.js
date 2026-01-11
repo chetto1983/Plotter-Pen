@@ -11,7 +11,7 @@ const TOLERANCE = 1e-6;
  * Convert DXF coordinates to model coordinates
  */
 function toModel(x, y, scaleFactor) {
-    return { x: x * scaleFactor, y: -y * scaleFactor };
+    return { x: x * scaleFactor, y: y * scaleFactor };
 }
 
 /**
@@ -65,9 +65,8 @@ function convertArc(entity, scaleFactor) {
     const center = toModel(entity.center.x, entity.center.y, scaleFactor);
     const radius = entity.radius * scaleFactor;
     // DXF angles are in degrees, counter-clockwise from positive X
-    // We flip Y, so start/end swap roles
-    const startAngle = -entity.endAngle * Math.PI / 180;
-    const endAngle = -entity.startAngle * Math.PI / 180;
+    const startAngle = entity.startAngle * Math.PI / 180;
+    const endAngle = entity.endAngle * Math.PI / 180;
     const start = {
         x: center.x + radius * Math.cos(startAngle),
         y: center.y + radius * Math.sin(startAngle)
@@ -93,15 +92,14 @@ function arcFromBulge(p1, p2, bulge) {
     const chord = distance(p1.x, p1.y, p2.x, p2.y);
     if (chord < TOLERANCE) return null;
 
-    const b = -bulge;
-    const sagitta = Math.abs(b) * chord / 2;
+    const sagitta = Math.abs(bulge) * chord / 2;
     const radius = (sagitta / 2) + (chord * chord) / (8 * sagitta);
     const midX = (p1.x + p2.x) / 2;
     const midY = (p1.y + p2.y) / 2;
     const dx = p2.x - p1.x, dy = p2.y - p1.y;
     const perpX = -dy / chord, perpY = dx / chord;
     const midToCenter = radius - sagitta;
-    const sign = b > 0 ? -1 : 1;
+    const sign = bulge > 0 ? -1 : 1;
     const cx = midX + midToCenter * perpX * sign;
     const cy = midY + midToCenter * perpY * sign;
     const throughPoint = {
@@ -141,9 +139,17 @@ function convertPolyline(entity, scaleFactor) {
 
     // Close polyline if needed
     if (closed && vertices.length > 2) {
-        const p1 = toModel(vertices[vertices.length - 1].x, vertices[vertices.length - 1].y, scaleFactor);
+        const last = vertices[vertices.length - 1];
+        const p1 = toModel(last.x, last.y, scaleFactor);
         const p2 = toModel(vertices[0].x, vertices[0].y, scaleFactor);
-        primitives.push({ type: 'line', x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y });
+        const bulge = last.bulge || 0;
+
+        if (Math.abs(bulge) < TOLERANCE) {
+            primitives.push({ type: 'line', x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y });
+        } else {
+            const arc = arcFromBulge(p1, p2, bulge);
+            if (arc) primitives.push(arc);
+        }
     }
 
     return primitives;

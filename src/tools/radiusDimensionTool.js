@@ -2,7 +2,6 @@
 import { Tool } from './baseTool.js';
 import { TOOLS } from './constants.js';
 import { RadiusDimension } from '../geometry/primitives/radiusDimension.js';
-import { parseVector } from './commandParser.js';
 
 export class RadiusDimensionTool extends Tool {
     constructor(manager) {
@@ -214,7 +213,7 @@ export class RadiusDimensionTool extends Tool {
         }
     }
 
-    processCommand(command) {
+    processCommand(_command) {
         // CMD support
         return null;
     }

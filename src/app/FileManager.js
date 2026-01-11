@@ -328,6 +328,94 @@ export class FileManager {
       this.app.ui.updateStatus('Errore esportazione DXF');
     }
   }
+
+  /**
+   * DATABASE OPERATIONS
+   */
+
+  async saveToDatabase(name) {
+    if (!name) return;
+    this.app.ui.updateStatus(`Salvataggio "${name}" nel database...`);
+
+    try {
+      const data = buildDrawingData(this.app);
+
+      // Generate preview
+      let preview = null;
+      if (this.app.renderer && this.app.renderer.canvas) {
+        // Temporarily render without grid/ui for clean preview? 
+        // For now, simple snapshot
+        preview = this.app.renderer.canvas.toDataURL('image/jpeg', 0.5);
+      }
+
+      const response = await fetch('/api/drawings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, data, preview })
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.message || 'Save failed');
+      }
+
+      this.app.ui.updateStatus(`Disegno "${name}" salvato`);
+      return true;
+    } catch (err) {
+      console.error('DB Save error:', err);
+      this.app.ui.updateStatus(`Errore salvataggio: ${err.message}`);
+      return false;
+    }
+  }
+
+  async listDrawings() {
+    try {
+      const response = await fetch('/api/drawings');
+      if (!response.ok) throw new Error('Failed to fetch list');
+      const res = await response.json();
+      return res.data || [];
+    } catch (err) {
+      console.error('DB List error:', err);
+      this.app.ui.updateStatus('Errore recupero lista disegni');
+      return [];
+    }
+  }
+
+  async loadFromDatabase(name) {
+    this.app.ui.updateStatus(`Caricamento "${name}"...`);
+    try {
+      const response = await fetch(`/api/drawings/${encodeURIComponent(name)}`);
+      if (!response.ok) throw new Error('Failed to load drawing');
+
+      const res = await response.json();
+      const data = res.data;
+
+      if (!data) throw new Error('Empty data');
+
+      applyDrawingData(this.app, data);
+      this.app.ui.updateStatus(`Disegno "${name}" caricato`);
+      return true;
+    } catch (err) {
+      console.error('DB Load error:', err);
+      this.app.ui.updateStatus(`Errore caricamento: ${err.message}`);
+      return false;
+    }
+  }
+
+  async deleteDrawing(name) {
+    try {
+      const response = await fetch(`/api/drawings/${encodeURIComponent(name)}`, {
+        method: 'DELETE'
+      });
+      if (!response.ok) throw new Error('Delete failed');
+      this.app.ui.updateStatus(`Disegno "${name}" eliminato`);
+      return true;
+    } catch (err) {
+      console.error('DB Delete error:', err);
+      this.app.ui.updateStatus(`Errore eliminazione: ${err.message}`);
+      return false;
+    }
+  }
 }
 
 export default FileManager;

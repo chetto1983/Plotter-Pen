@@ -164,9 +164,11 @@ export class DXFImporter {
         const degree = entity.degreeOfSplineCurve || 3;
         const knots = entity.knotValues;
         const s = this.scaleFactor;
-        const controlPoints = entity.controlPoints.map(p => [p.x * s, p.y * s]);
+        const rawControlPoints = entity.controlPoints;
 
-        if (!controlPoints || controlPoints.length < degree + 1) return null;
+        if (!rawControlPoints || rawControlPoints.length < degree + 1) return null;
+
+        const controlPoints = rawControlPoints.map(p => [p.x * s, p.y * s]);
 
         try {
             let minT = 0, maxT = 1;

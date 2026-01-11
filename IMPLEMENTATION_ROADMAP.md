@@ -1131,12 +1131,13 @@ M30          ; Program end
 |---------|--------|
 | 5.1 Layer System | ✅ Complete |
 | 5.2 DXF Export | ✅ Complete |
-| 5.3 Dimension Annotations | 🚧 In Progress |
+| 5.3 Dimension Annotations | ✅ Complete |
 | 5.4 Offset Tool | ✅ Complete |
 | 5.4 Fillet Tool | ✅ Complete |
-| 5.4 Chamfer Tool | 🔲 Planned |
-| 5.4 Trim/Extend Tool | 🔲 Planned |
-| 5.4 Array Tool | 🔲 Planned |
+| 5.5 Database Persistence | ✅ Complete |
+| 5.6 Chamfer Tool | 🔲 Planned |
+| 5.7 Trim/Extend Tool | 🔲 Planned |
+| 5.8 Array Tool | 🔲 Planned |
 
 ---
 

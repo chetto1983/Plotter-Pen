@@ -21,6 +21,7 @@ export class InputHandler {
     this.isMovingSelection = false;
     this.moveStartWorld = null;
     this.moveHasMoved = false;
+    this.lastTouchPos = null;
 
     // Optimization
     this.renderRequested = false;
@@ -375,6 +376,7 @@ export class InputHandler {
   handleTouchStart(e) {
     if (e.touches.length === 1) {
       const touch = e.touches[0];
+      this.lastTouchPos = { clientX: touch.clientX, clientY: touch.clientY };
       this.handleMouseDown({ clientX: touch.clientX, clientY: touch.clientY, button: 0 });
     }
   }
@@ -382,12 +384,18 @@ export class InputHandler {
   handleTouchMove(e) {
     if (e.touches.length === 1) {
       const touch = e.touches[0];
+      this.lastTouchPos = { clientX: touch.clientX, clientY: touch.clientY };
       this.handleMouseMove({ clientX: touch.clientX, clientY: touch.clientY });
     }
   }
 
   handleTouchEnd(_e) {
-    this.handleMouseUp({ button: 0 });
+    if (this.lastTouchPos) {
+      this.handleMouseUp({ button: 0, ...this.lastTouchPos });
+    } else {
+      this.handleMouseUp({ button: 0 });
+    }
+    this.lastTouchPos = null;
   }
 
   /**

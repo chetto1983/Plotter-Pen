@@ -22,33 +22,38 @@ export class PLCOutputManager {
       return;
     }
 
-    const primitivesWithData = this.app.primitives.map((p) => {
-      // Create a shallow copy to attach plcData without polluting original too much
-      // (Actually original code modified 'p' directly which is risky but I will stick to it for now or copy)
-      // The original code returned 'p' with 'plcData'.
+    const supportedTypes = new Set(["line", "arc", "circle", "rectangle", "polygon", "polyline"]);
+    const primitivesWithData = this.app.primitives
+      .filter((p) => supportedTypes.has(p.type))
+      .map((p) => {
+        const copy = p.clone();
+        copy.sourcePrimitive = p;
 
-      if (p.type === "line") {
-        p.plcData = { type: 1, x1: p.x1, y1: p.y1, x2: p.x2, y2: p.y2 };
-      } else if (p.type === "arc") {
-        p.plcData = {
-          type: p.isClockwise ? 2 : 3,
-          x1: p.x1, y1: p.y1, x2: p.x2, y2: p.y2, cx: p.cx, cy: p.cy,
-        };
-      } else if (p.type === "circle") {
-        p.plcData = {
-          type: 3,
-          x1: p.center.x + p.radius, y1: p.center.y,
-          x2: p.center.x + p.radius, y2: p.center.y,
-          cx: p.center.x, cy: p.center.y,
-        };
-      } else if (p.type === "rectangle") {
-        p.plcData = { type: "rectangle", x: p.x, y: p.y, width: p.width, height: p.height };
-      } else if (p.type === "polygon" || p.type === "polyline") {
-        // Prepare data for polygon/polyline
-        p.plcData = { type: p.type, points: p.points, closed: p.closed };
-      }
-      return p;
-    });
+        if (copy.type === "line") {
+          copy.plcData = { type: 1, x1: copy.x1, y1: copy.y1, x2: copy.x2, y2: copy.y2 };
+        } else if (copy.type === "arc") {
+          copy.plcData = {
+            type: copy.isClockwise ? 2 : 3,
+            x1: copy.x1, y1: copy.y1, x2: copy.x2, y2: copy.y2, cx: copy.cx, cy: copy.cy,
+          };
+        } else if (copy.type === "circle") {
+          const cx = copy.center?.x ?? copy.cx;
+          const cy = copy.center?.y ?? copy.cy;
+          const r = copy.radius ?? copy._radius;
+          copy.plcData = {
+            type: 3,
+            x1: cx + r, y1: cy,
+            x2: cx + r, y2: cy,
+            cx: cx, cy: cy,
+          };
+        } else if (copy.type === "rectangle") {
+          copy.plcData = { type: "rectangle", x: copy.x, y: copy.y, width: copy.width, height: copy.height };
+        } else if (copy.type === "polygon" || copy.type === "polyline") {
+          copy.plcData = { type: copy.type, points: copy.points, closed: copy.closed };
+        }
+
+        return copy;
+      });
 
     // Use primitives directly, do NOT expand polygons/rectangles into thousands of lines
     // This optimization prevents O(N^2) path finding on huge datasets
@@ -61,6 +66,11 @@ export class PLCOutputManager {
 
     const generator = new PLCOutputGenerator({ defaultSpeed, rapidSpeed });
     const commands = generator.generate(optimizedPrimitives);
+    for (const cmd of commands) {
+      if (cmd.primitive?.sourcePrimitive) {
+        cmd.primitive = cmd.primitive.sourcePrimitive;
+      }
+    }
     this.app.plcCommands = commands;
     this.app.plcOutput = commands.map((c) => c.command);
 

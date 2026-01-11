@@ -7,6 +7,7 @@ export class PersistenceManager {
         this.app = app;
         this.autoSaveTimer = null;
         this.autoSaveDelay = 1000; // 1 second debounce
+        this.saveQueue = Promise.resolve();
     }
 
     /**
@@ -14,7 +15,13 @@ export class PersistenceManager {
      */
     triggerAutoSave() {
         if (this.autoSaveTimer) clearTimeout(this.autoSaveTimer);
-        this.autoSaveTimer = setTimeout(() => this.saveState(), this.autoSaveDelay);
+        this.autoSaveTimer = setTimeout(() => this.queueSave(), this.autoSaveDelay);
+    }
+
+    queueSave() {
+        this.saveQueue = this.saveQueue
+            .then(() => this.saveState())
+            .catch(() => { });
     }
 
     /**

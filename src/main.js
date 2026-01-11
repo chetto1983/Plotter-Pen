@@ -68,6 +68,10 @@ class CADApplication {
     // Clipboard for copy/paste
     this.clipboard = [];
 
+    // Cached layer render settings
+    this._layerSettingsCache = {};
+    this._layerSettingsKey = '';
+
     // Initialize
     this.init();
   }
@@ -317,6 +321,122 @@ class CADApplication {
 
 
 
+
+  setupModals() {
+    // Save Modal
+    const saveModal = document.getElementById('saveModal');
+    const closeSave = document.getElementById('closeSaveModal');
+    const btnSaveDb = document.getElementById('btnSaveDb');
+    const btnSaveFile = document.getElementById('btnSaveFile');
+    const nameInput = document.getElementById('saveNameInput');
+
+    // Load Modal
+    const loadModal = document.getElementById('loadModal');
+    const closeLoad = document.getElementById('closeLoadModal');
+    const drawingList = document.getElementById('drawingList');
+    const emptyMsg = document.getElementById('drawingListEmpty');
+    const pickFileBtn = document.getElementById('btnPickFile');
+    const tabs = document.querySelectorAll('.cad-modal-tab');
+
+    // --- Save Logic ---
+    document.getElementById('btnSave').addEventListener('click', () => {
+      saveModal.hidden = false;
+      nameInput.value = `Drawing ${new Date().toLocaleString()}`;
+      nameInput.focus();
+      nameInput.select();
+    });
+
+    closeSave.addEventListener('click', () => saveModal.hidden = true);
+
+    btnSaveDb.addEventListener('click', async () => {
+      const name = nameInput.value.trim();
+      if (!name) return alert('Inserisci un nome valido');
+      const success = await this.fileManager.saveToDatabase(name);
+      if (success) saveModal.hidden = true;
+    });
+
+    btnSaveFile.addEventListener('click', () => {
+      this.fileManager.saveToFile();
+      saveModal.hidden = true;
+    });
+
+    // --- Load Logic ---
+    document.getElementById('btnLoad').addEventListener('click', async () => {
+      loadModal.hidden = false;
+      await refreshList();
+    });
+
+    closeLoad.addEventListener('click', () => loadModal.hidden = true);
+
+    pickFileBtn.addEventListener('click', () => {
+      this.fileManager.loadFromFile();
+      loadModal.hidden = true;
+    });
+
+    // Tab Switching
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const mode = tab.dataset.tab; // 'db' or 'file'
+        document.getElementById('loadTabDb').style.display = mode === 'db' ? 'block' : 'none';
+        document.getElementById('loadTabFile').style.display = mode === 'file' ? 'block' : 'none';
+      });
+    });
+
+    const refreshList = async () => {
+      drawingList.innerHTML = '<div style="color:var(--muted); padding:20px;">Caricamento...</div>';
+      const items = await this.fileManager.listDrawings();
+      drawingList.innerHTML = '';
+
+      if (items.length === 0) {
+        emptyMsg.style.display = 'block';
+      } else {
+        emptyMsg.style.display = 'none';
+        items.forEach(item => {
+          const el = document.createElement('div');
+          el.className = 'cad-drawing-item';
+          el.innerHTML = `
+            <div class="cad-drawing-preview ${!item.preview_img ? 'placeholder' : ''}">
+              ${item.preview_img
+              ? `<img src="${item.preview_img}" alt="Preview">`
+              : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="width:40px;height:40px;opacity:0.5"><image x="2" y="2" width="20" height="20" rx="2"/><circle cx="12" cy="12" r="5"/></svg>'}
+            </div>
+            <div class="cad-drawing-info">
+              <div class="cad-drawing-name" title="${item.name}">${item.name}</div>
+              <div class="cad-drawing-date">${new Date(item.updated_at).toLocaleString()}</div>
+            </div>
+            <div class="cad-drawing-actions">
+              <button class="cad-drawing-btn delete" title="Elimina">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+              </button>
+            </div>
+          `;
+
+          // Click to Load
+          el.addEventListener('click', (e) => {
+            if (e.target.closest('.delete')) return; // Ignore if delete btn clicked
+            this.fileManager.loadFromDatabase(item.name);
+            loadModal.hidden = true;
+          });
+
+          // Delete Action
+          el.querySelector('.delete').addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (confirm(`Eliminare "${item.name}"?`)) {
+              await this.fileManager.deleteDrawing(item.name);
+              refreshList(); // Reload list
+            }
+          });
+
+          drawingList.appendChild(el);
+        });
+      }
+    };
+  }
+
   /**
    * Render the canvas
    */
@@ -343,18 +463,7 @@ class CADApplication {
       ? this.primitives.filter(p => this.layerManager.isPrimitiveVisible(p))
       : this.primitives;
 
-    // Map layer settings for rendering (includes color, lineWeight, fontSize)
-    const layerSettings = {};
-    if (this.layerManager) {
-      for (const layer of this.layerManager.layers.values()) {
-        layerSettings[layer.id] = {
-          color: layer.color,
-          lineWeight: layer.lineWeight ?? 1,
-          fontSize: layer.fontSize ?? 12,
-          textOffset: layer.textOffset ?? 5
-        };
-      }
-    }
+    const layerSettings = this.getLayerSettings();
 
     // Single render call with all state
     this.renderer.render(
@@ -381,6 +490,41 @@ class CADApplication {
     if (this.persistenceManager) {
       this.persistenceManager.triggerAutoSave();
     }
+  }
+
+  getLayerSettings() {
+    if (!this.layerManager) {
+      return this._layerSettingsCache;
+    }
+
+    const layers = Array.from(this.layerManager.layers.values());
+    const key = layers.map((layer) =>
+      [
+        layer.id,
+        layer.color,
+        layer.lineWeight ?? 1,
+        layer.fontSize ?? 12,
+        layer.textOffset ?? 5
+      ].join(':')
+    ).join('|');
+
+    if (this._layerSettingsKey === key) {
+      return this._layerSettingsCache;
+    }
+
+    const nextSettings = {};
+    for (const layer of layers) {
+      nextSettings[layer.id] = {
+        color: layer.color,
+        lineWeight: layer.lineWeight ?? 1,
+        fontSize: layer.fontSize ?? 12,
+        textOffset: layer.textOffset ?? 5
+      };
+    }
+
+    this._layerSettingsCache = nextSettings;
+    this._layerSettingsKey = key;
+    return nextSettings;
   }
 
   // Helper methods removed: toRenderFormat, previewToRenderFormat

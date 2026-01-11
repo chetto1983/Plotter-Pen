@@ -214,7 +214,7 @@ export class UIController {
 
     document.getElementById('gridSpacing')?.addEventListener('change', (e) => {
       this.app.gridSpacing = parseInt(e.target.value) || 10;
-      this.app.snapManager.gridSize = this.app.gridSpacing;
+      this.app.snapManager.gridSpacing = this.app.gridSpacing;
       this.app.renderer.grid.spacing = this.app.gridSpacing;
       this.app.render();
     });
