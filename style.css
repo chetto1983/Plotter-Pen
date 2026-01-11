@@ -2371,10 +2371,6 @@ body.config-shell .config-status.error {
   margin: 0;
 }
 
-.cad-layer-input[type="number"] {
-  -moz-appearance: textfield;
-}
-
 /* ============================================
    CUSTOM MODAL DIALOGS - 2026 Ultra Modern
    ============================================ */

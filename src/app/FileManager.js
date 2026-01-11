@@ -159,9 +159,10 @@ export class FileManager {
       }
       this.app.primitives = primitives;
 
-      // PRE-CALCULATED PLC COMMANDS
-      this.app.plcCommands = result.plcCommands;
-      this.app.plcOutput = result.plcOutput;
+      // Note: Backend provides result.plcCommands, but these are based on the original DXF coordinates
+      // (normalized to positive quadrant 1,1). We will translate the primitives to center them,
+      // so we must REGENERATE the PLC commands after translation to match the visual output.
+      // Ignoring result.plcCommands / result.plcOutput from backend.
 
       this.app.selectedPrimitives.clear();
       this.app.highlightedPrimitive = null;
@@ -180,13 +181,11 @@ export class FileManager {
       this.app.renderer.resetView();
       this.app.ui.updateStatus(`DXF importato: ${primitives.length} primitive`);
 
-      // 8. Update UI with PLC Commands (Sliced to prevent freeze)
-      const maxDisplay = 2000;
-      const displayCommands = this.app.plcCommands.length > maxDisplay
-        ? this.app.plcCommands.slice(0, maxDisplay).concat([{ command: `... (${this.app.plcCommands.length - maxDisplay} instructions hidden)` }])
-        : this.app.plcCommands;
-
-      this.app.ui.displayPLCOutput(displayCommands, this.app);
+      // REGENERATE PLC OUTPUT with correct origin
+      // This ensures that the generated G-code matches the centered drawing on screen
+      this.app.ui.updateStatus('Rigenerazione percorso PLC...');
+      await new Promise(r => requestAnimationFrame(r));
+      this.app.plcOutputManager.refreshPLCOutput();
 
     } catch (error) {
       console.error('DXF import error:', error);

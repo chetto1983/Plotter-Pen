@@ -39,3 +39,4 @@ src/_deprecated/
 #example
 /Example/*
 .claude/settings.local.json
+database.*
