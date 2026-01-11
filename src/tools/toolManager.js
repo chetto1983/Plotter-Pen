@@ -10,6 +10,8 @@ export { CircleTool } from './circleTool.js';
 export { RectangleTool } from './rectangleTool.js';
 export { PolygonTool } from './polygonTool.js';
 export { DimensionTool } from './dimensionTool.js';
+export { AngularDimensionTool } from './angularDimensionTool.js';
+export { RadiusDimensionTool } from './radiusDimensionTool.js';
 export { FilletTool } from './filletTool.js';
 export { parseNumber, parseVector, parseCommandInput } from './commandParser.js';
 export { ToolManager } from './toolManagerCore.js';

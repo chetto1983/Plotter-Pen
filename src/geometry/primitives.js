@@ -10,4 +10,6 @@ export { Circle } from './primitives/circle.js';
 export { Rectangle } from './primitives/rectangle.js';
 export { Polygon, Polyline } from './primitives/polygon.js';
 export { Dimension } from './primitives/dimension.js';
+export { AngularDimension } from './primitives/angularDimension.js';
+export { RadiusDimension } from './primitives/radiusDimension.js';
 export { createPrimitiveFromJSON } from './primitives/factory.js';

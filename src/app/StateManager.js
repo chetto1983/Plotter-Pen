@@ -2,7 +2,7 @@
  * State Manager - Handles undo/redo and primitive serialization
  */
 
-import { Line, Arc, Circle, Rectangle, Polygon, Polyline, Dimension } from '../geometry/primitives.js';
+import { Line, Arc, Circle, Rectangle, Polygon, Polyline, Dimension, AngularDimension, RadiusDimension } from '../geometry/primitives.js';
 
 export class StateManager {
   constructor(app, maxHistory = 50) {
@@ -214,6 +214,12 @@ export class StateManager {
 
         case 'dimension':
           return Dimension.fromJSON(item);
+
+        case 'angularDimension':
+          return AngularDimension.fromJSON(item);
+
+        case 'radiusDimension':
+          return RadiusDimension.fromJSON(item);
 
         default:
           console.warn('Unknown primitive type:', item.type);

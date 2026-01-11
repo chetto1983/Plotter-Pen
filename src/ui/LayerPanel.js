@@ -251,9 +251,9 @@ export class LayerPanel {
 
         // Custom color picker modal
         const modal = getModalManager();
-        const newColor = await modal.inputColor({
+        const newColor = await modal.colorPicker({
           title: 'Colore Livello',
-          defaultValue: layer.color
+          currentColor: layer.color
         });
 
         if (newColor) {

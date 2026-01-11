@@ -9,6 +9,8 @@ import { CircleTool } from './circleTool.js';
 import { RectangleTool } from './rectangleTool.js';
 import { PolygonTool } from './polygonTool.js';
 import { DimensionTool } from './dimensionTool.js';
+import { AngularDimensionTool } from './angularDimensionTool.js';
+import { FilletTool } from './filletTool.js';
 
 export class ToolManager {
   constructor() {
@@ -33,6 +35,8 @@ export class ToolManager {
     this.tools[TOOLS.RECTANGLE] = new RectangleTool(this);
     this.tools[TOOLS.POLYGON] = new PolygonTool(this);
     this.tools[TOOLS.DIMENSION] = new DimensionTool(this);
+    this.tools[TOOLS.ANGULAR_DIMENSION] = new AngularDimensionTool(this);
+    this.tools[TOOLS.FILLET] = new FilletTool(this);
   }
 
   setActiveTool(toolName) {

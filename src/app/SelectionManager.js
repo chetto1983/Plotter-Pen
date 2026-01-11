@@ -70,7 +70,7 @@ export class SelectionManager {
     if (!this.app.selectMode) {
       if (this.app.hoveredPrimitive) {
         this.app.hoveredPrimitive = null;
-        this.app.renderer.setHovered(null);
+        this.app.setHoveredPrimitive(null);
         this.app.canvas.style.cursor = 'crosshair';
       }
       return;

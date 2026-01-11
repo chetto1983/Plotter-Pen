@@ -2,7 +2,7 @@
  * Tool Controller - Manages active tool selection
  */
 
-import { LineTool, ArcTool, CircleTool, RectangleTool, PolygonTool, DimensionTool, FilletTool } from '../tools/toolManager.js';
+import { LineTool, ArcTool, CircleTool, RectangleTool, PolygonTool, DimensionTool, AngularDimensionTool, RadiusDimensionTool, FilletTool } from '../tools/toolManager.js';
 
 export class ToolController {
   constructor(app) {
@@ -11,9 +11,12 @@ export class ToolController {
 
   getToolManager() {
     return {
+      app: this.app,
       addPrimitive: (primitive) => this.app.addPrimitive(primitive),
       setReferencePoint: (point) => { this.app.lastReferencePoint = point; },
-      referencePoint: this.app.lastReferencePoint || { x: 0, y: 0 }
+      referencePoint: this.app.lastReferencePoint || { x: 0, y: 0 },
+      notifyHintChanged: () => { }, // Mock notification
+      notifyPreviewChanged: () => { } // Mock notification
     };
   }
 
@@ -45,6 +48,15 @@ export class ToolController {
         break;
       case 'dimension':
         this.app.currentTool = new DimensionTool(manager);
+        break;
+      case 'linear_dimension':
+        this.app.currentTool = new DimensionTool(manager);
+        break;
+      case 'angular_dimension':
+        this.app.currentTool = new AngularDimensionTool(manager);
+        break;
+      case 'radius_dimension':
+        this.app.currentTool = new RadiusDimensionTool(manager);
         break;
       case 'fillet':
         this.app.currentTool = new FilletTool(manager);

@@ -258,6 +258,22 @@ export class InputHandler {
     // Update hover detection for select mode
     this.app.selectionManager.updateHover(snappedPos);
 
+    // Auto-highlight primitive under snap (for dimension tools etc)
+    if (this.app.snapManager && this.app.snapManager.lastSnapResult && this.app.snapManager.lastSnapResult.isValid) {
+      const source = this.app.snapManager.lastSnapResult.source;
+      if (source && !Array.isArray(source)) {
+        this.app.setHoveredPrimitive(source);
+      } else {
+        this.app.setHoveredPrimitive(null);
+      }
+    } else {
+      // Only clear if not in a tool that manages it? 
+      // If we clear here, RadiusTool will set it again in onMouseMove if needed.
+      // But if RadiusTool *fails* to find something (e.g. far from circle), it stays null.
+      // This is safe.
+      this.app.setHoveredPrimitive(null);
+    }
+
     // Update tool preview if tool is active
     if (this.app.currentTool) {
       this.app.currentTool.onMouseMove(snappedPos);

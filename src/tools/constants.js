@@ -10,6 +10,8 @@ export const TOOLS = {
   RECTANGLE: 'rectangle',
   POLYGON: 'polygon',
   DIMENSION: 'dimension',
+  ANGULAR_DIMENSION: 'angular_dimension',
+  RADIUS_DIMENSION: 'radius_dimension',
   FILLET: 'fillet',
   FREEHAND: 'freehand',
   DELETE: 'delete',

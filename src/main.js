@@ -293,6 +293,16 @@ class CADApplication {
   }
 
   /**
+   * Set hovered primitive
+   */
+  setHoveredPrimitive(primitive) {
+    if (this.hoveredPrimitive !== primitive) {
+      this.hoveredPrimitive = primitive;
+      this.render();
+    }
+  }
+
+  /**
    * Clear primitive highlight
    */
   clearHighlight() {

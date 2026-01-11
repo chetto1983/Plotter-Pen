@@ -7,6 +7,9 @@ import { Arc } from './arc.js';
 import { Circle } from './circle.js';
 import { Rectangle } from './rectangle.js';
 import { Polygon, Polyline } from './polygon.js';
+import { Dimension } from './dimension.js';
+import { AngularDimension } from './angularDimension.js';
+import { RadiusDimension } from './radiusDimension.js';
 
 export function createPrimitiveFromJSON(data) {
   switch (data.type) {
@@ -22,6 +25,12 @@ export function createPrimitiveFromJSON(data) {
       return Polygon.fromJSON(data);
     case 'polyline':
       return Polyline.fromJSON(data);
+    case 'dimension':
+      return Dimension.fromJSON(data);
+    case 'angularDimension':
+      return AngularDimension.fromJSON(data);
+    case 'radiusDimension':
+      return RadiusDimension.fromJSON(data);
     default:
       throw new Error(`Unknown primitive type: ${data.type}`);
   }

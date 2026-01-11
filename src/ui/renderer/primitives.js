@@ -1,9 +1,11 @@
 import { TWO_PI } from '../../geometry/core.js';
 import { COLORS } from './colors.js';
+import { DimensionRenderer } from './dimensionRenderer.js';
 
 export class PrimitiveRenderer {
   constructor(renderer) {
     this.renderer = renderer;
+    this.dimensionRenderer = new DimensionRenderer(renderer);
   }
 
   /**
@@ -81,6 +83,8 @@ export class PrimitiveRenderer {
     const deferredPolygons = [];
     const deferredRectangles = [];
     const deferredDimensions = [];
+    const deferredAngularDimensions = [];
+    const deferredRadiusDimensions = [];
 
     for (const prim of primitives) {
       if (prim.type === 'line') {
@@ -96,6 +100,10 @@ export class PrimitiveRenderer {
         deferredRectangles.push(prim);
       } else if (prim.type === 'dimension') {
         deferredDimensions.push(prim);
+      } else if (prim.type === 'angularDimension') {
+        deferredAngularDimensions.push(prim);
+      } else if (prim.type === 'radiusDimension') {
+        deferredRadiusDimensions.push(prim);
       }
     }
 
@@ -163,7 +171,21 @@ export class PrimitiveRenderer {
     // Draw Dimensions (cannot be batched due to text rendering)
     if (deferredDimensions.length > 0) {
       for (const dim of deferredDimensions) {
-        this.drawDimension(ctx, dim, scale, settings);
+        this.dimensionRenderer.drawDimension(ctx, dim, scale, settings);
+      }
+    }
+
+    // Draw Angular Dimensions
+    if (deferredAngularDimensions.length > 0) {
+      for (const dim of deferredAngularDimensions) {
+        this.dimensionRenderer.drawAngularDimension(ctx, dim, scale, settings);
+      }
+    }
+
+    // Draw Radius Dimensions
+    if (deferredRadiusDimensions.length > 0) {
+      for (const dim of deferredRadiusDimensions) {
+        this.dimensionRenderer.drawRadiusDimension(ctx, dim, scale, settings);
       }
     }
   }
@@ -192,7 +214,13 @@ export class PrimitiveRenderer {
         this.drawPolygon(ctx, prim);
         break;
       case 'dimension':
-        this.drawDimension(ctx, prim, scale);
+        this.dimensionRenderer.drawDimension(ctx, prim, scale);
+        break;
+      case 'angularDimension':
+        this.dimensionRenderer.drawAngularDimension(ctx, prim, scale);
+        break;
+      case 'radiusDimension':
+        this.dimensionRenderer.drawRadiusDimension(ctx, prim, scale);
         break;
     }
   }
@@ -348,7 +376,11 @@ export class PrimitiveRenderer {
         ctx.stroke();
       }
     } else if (preview.type === 'dimension') {
-      this.drawDimension(ctx, preview, scale);
+      this.dimensionRenderer.drawDimension(ctx, preview, scale);
+    } else if (preview.type === 'angularDimension') {
+      this.dimensionRenderer.drawAngularDimension(ctx, preview, scale);
+    } else if (preview.type === 'radiusDimension') {
+      this.dimensionRenderer.drawRadiusDimension(ctx, preview, scale);
     }
 
     ctx.restore();
@@ -488,128 +520,7 @@ export class PrimitiveRenderer {
       ctx.restore();
     });
   }
-  /**
-   * Draw dimension
-   */
-  drawDimension(ctx, dim, scale, settings = {}) {
-    if (!dim) return;
-
-    // Calculate geometry in World Space
-    const dx = dim.x2 - dim.x1;
-    const dy = dim.y2 - dim.y1;
-    const angle = Math.atan2(dy, dx);
-    const length = Math.sqrt(dx * dx + dy * dy);
-
-    // Perpendicular vector for offset
-    const px = -Math.sin(angle) * dim.offset;
-    const py = Math.cos(angle) * dim.offset;
-
-    // Points for dimension line
-    const d1x = dim.x1 + px;
-    const d1y = dim.y1 + py;
-    const d2x = dim.x2 + px;
-    const d2y = dim.y2 + py;
-
-    const extensionOverride = 5 / scale; // Extend 5px past dim line
-
-    ctx.beginPath();
-    // Extension lines
-    ctx.moveTo(dim.x1, dim.y1);
-    ctx.lineTo(d1x + (px > 0 ? px * 0.1 : px * 0.1), d1y + (py > 0 ? py * 0.1 : py * 0.1)); // Simplified extension
-
-    // Better extension lines: from origin to offset point + small overshoot
-    // Calculate normalized perp vector
-    const normLen = Math.sqrt(px * px + py * py);
-    let uPx = 0, uPy = 0;
-    if (normLen > 0) {
-      uPx = px / normLen;
-      uPy = py / normLen;
-    }
-
-    // Draw extension 1
-    ctx.moveTo(dim.x1, dim.y1);
-    ctx.lineTo(d1x + uPx * extensionOverride, d1y + uPy * extensionOverride);
-
-    // Draw extension 2
-    ctx.moveTo(dim.x2, dim.y2);
-    ctx.lineTo(d2x + uPx * extensionOverride, d2y + uPy * extensionOverride);
-
-    // Dimension line
-    ctx.moveTo(d1x, d1y);
-    ctx.lineTo(d2x, d2y);
-    ctx.stroke();
-
-    // Arrows
-    this.drawArrow(ctx, d1x, d1y, angle + Math.PI, scale);
-    this.drawArrow(ctx, d2x, d2y, angle, scale);
-
-    // Text configuration
-    const nominalFontSize = dim.fontSize || settings.fontSize || 12;
-    const fontSize = nominalFontSize / scale;
-    const textGap = (dim.textOffset ?? settings.textOffset ?? 5) / scale;
-
-    // Text value
-    const text = dim.text || length.toFixed(2);
-    const midX = (d1x + d2x) / 2;
-    const midY = (d1y + d2y) / 2;
-
-    // Position text at midpoint of dimension line (offset handled by fillText)
-    const tx = midX;
-    const ty = midY;
-
-    ctx.save();
-    ctx.translate(tx, ty);
-
-    // Re-flip Y axis for text (counter the global CAD Y-flip)
-    ctx.scale(1, -1);
-
-    // Calculate screen angle for text
-    // Model Angle is CCW (Y-up), Screen Angle is negated (Y-down)
-    let screenAngle = -angle;
-
-    // Normalize angle to [-PI, PI]
-    while (screenAngle <= -Math.PI) screenAngle += Math.PI * 2;
-    while (screenAngle > Math.PI) screenAngle -= Math.PI * 2;
-
-    // Ensure text is readable (from bottom or right)
-    // Preference: -90 (Up) to 90 (Down), favoring Up
-    if (screenAngle > Math.PI / 2) {
-      screenAngle -= Math.PI;
-    } else if (screenAngle <= -Math.PI / 2) {
-      screenAngle += Math.PI;
-    }
-
-    ctx.rotate(screenAngle);
-
-    // Inverse scale font size
-    ctx.font = `${fontSize}px monospace`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'bottom'; // Draw above the baseline
-    ctx.fillStyle = ctx.strokeStyle;
-
-    // Draw text with offset
-    // In local coords (Y-down), negative Y is Up (above line)
-    ctx.fillText(text, 0, -textGap);
-    ctx.restore();
-  }
-
-  drawArrow(ctx, x, y, angle, scale) {
-    const size = 10 / scale; // 10px visual size
-    const arrowAngle = Math.PI / 6;
-
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(
-      x - size * Math.cos(angle - arrowAngle),
-      y - size * Math.sin(angle - arrowAngle)
-    );
-    ctx.moveTo(x, y);
-    ctx.lineTo(
-      x - size * Math.cos(angle + arrowAngle),
-      y - size * Math.sin(angle + arrowAngle)
-    );
-    ctx.stroke();
-  }
+  /* Dimensions handled by DimensionRenderer */
 }
 
 export default PrimitiveRenderer;

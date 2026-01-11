@@ -17,6 +17,14 @@ export class PLCOutputGenerator {
 
         for (let i = 0; i < primitives.length; i++) {
             const prim = primitives[i];
+
+            // Skip dimensions and annotations
+            if (prim.type === 'dimension' ||
+                prim.type === 'angularDimension' ||
+                prim.type === 'radiusDimension') {
+                continue;
+            }
+
             const data = prim.plcData || {};
 
             let x1, y1;
@@ -100,7 +108,10 @@ export class PLCOutputGenerator {
 
     primitiveToCommand(primitive, index) {
         const data = primitive.plcData || {};
-        const fmt = (v) => v.toFixed(this.precision);
+        const fmt = (v) => {
+            if (typeof v !== 'number' || isNaN(v)) return '0.000';
+            return v.toFixed(this.precision);
+        };
 
         let command = '';
 
@@ -207,7 +218,10 @@ export class PLCOutputGenerator {
 
     circleToCommands(primitive, startIndex) {
         const data = primitive.plcData || {};
-        const fmt = (v) => v.toFixed(this.precision);
+        const fmt = (v) => {
+            if (typeof v !== 'number' || isNaN(v)) return '0.000';
+            return v.toFixed(this.precision);
+        };
 
         const cx = data.cx ?? primitive.cx ?? primitive.center?.x;
         const cy = data.cy ?? primitive.cy ?? primitive.center?.y;

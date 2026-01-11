@@ -909,19 +909,39 @@ fitToContent(bounds) {
 - [x] Preserve layer information
 - [x] Unit conversion (mm)
 
-### 5.3 Dimension Annotations
+## 5. Dimension Annotations
 
-- [x] Linear dimension tool
-- [ ] Angular dimension tool
-- [ ] Radius/diameter dimension
-- [x] Dimension display formatting (Font size, Text offset, Text rotation)
+### Current State
 
-### 5.4 Advanced Drawing Tools
+- Linear Dimension: **Done**
+- Angular Dimension: **Done** (with automatic shortest-arc logic)
+- Radius Dimension: **Done** (with automatic snap highlighting)
+- Renderer Refactoring: **Done** (`DimensionRenderer` extracted)
+- UI: **Done** (Dropdown menu for dimensions)
 
-- [ ] Fillet tool (round corners)
-- [ ] Chamfer tool (cut corners)
-- [x] Offset tool (parallel copy) ✅ IMPLEMENTED but missing paste button
-- [ ] Trim/Extend tool
+### Implementation Steps
+
+#### 5.1 Radius Dimension Tool (Completed)
+
+- [x] Create `RadiusDimension` primitive
+- [x] Create `RadiusDimensionTool`
+- [x] Implement rendering in `DimensionRenderer`
+- [x] Add to tool palette
+
+#### 5.2 Hover Highlighting (Completed)
+
+- [x] Add `setHoveredPrimitive` to `CADApplication`
+- [x] Update `InputHandler` to highlight snapped primitives
+- [x] Update `SelectionManager` to support global hover state
+
+---
+
+## 6. Professional CAD Features
+
+- [ ] Print/Plot Support
+- [ ] Layer Properties (Lineweight, Color, Locked) - **Partially Done**
+- [ ] Block/Group Support
+- [ ] Undo/Redo System - **Done**
 - [ ] Array tool (rectangular/polar)
 
 ---
