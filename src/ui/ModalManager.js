@@ -291,6 +291,123 @@ export class ModalManager {
     }
 
     /**
+     * Show array tool configuration modal
+     * @returns {Promise<Object|null>} - Array configuration or null if canceled
+     */
+    arrayDialog() {
+        return new Promise((resolve) => {
+            const modal = this.createModal(`
+                <div class="cad-modal-header">
+                    <h3 class="cad-modal-title">Crea Serie (Array)</h3>
+                    <button type="button" class="cad-modal-close" data-action="close">&times;</button>
+                </div>
+                <div class="cad-modal-body">
+                    <div class="cad-tabs">
+                        <button class="cad-tab-btn active" data-tab="rectangular">Rettangolare</button>
+                        <button class="cad-tab-btn" data-tab="polar">Polare</button>
+                    </div>
+                    
+                    <div id="rectangular-tab" class="cad-tab-content active">
+                        <div class="cad-form-group">
+                            <label>Righe:</label>
+                            <input type="number" id="array-rows" class="cad-modal-input" value="3" min="1">
+                        </div>
+                        <div class="cad-form-group">
+                            <label>Colonne:</label>
+                            <input type="number" id="array-cols" class="cad-modal-input" value="4" min="1">
+                        </div>
+                        <div class="cad-form-group">
+                            <label>Spaziatura X (mm):</label>
+                            <input type="number" id="array-space-x" class="cad-modal-input" value="10">
+                        </div>
+                        <div class="cad-form-group">
+                            <label>Spaziatura Y (mm):</label>
+                            <input type="number" id="array-space-y" class="cad-modal-input" value="10">
+                        </div>
+                    </div>
+
+                    <div id="polar-tab" class="cad-tab-content" style="display:none;">
+                        <div class="cad-form-group">
+                            <label>Numero Elementi:</label>
+                            <input type="number" id="array-count" class="cad-modal-input" value="6" min="2">
+                        </div>
+                        <div class="cad-form-group">
+                            <label>Angolo Totale (gradi):</label>
+                            <input type="number" id="array-angle" class="cad-modal-input" value="360">
+                        </div>
+                        <div class="cad-form-group">
+                            <label class="cad-checkbox-label">
+                                <input type="checkbox" id="array-rotate-items" checked>
+                                Ruota elementi
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="cad-modal-footer">
+                    <button type="button" class="cad-modal-btn cad-modal-btn-secondary" data-action="cancel">Annulla</button>
+                    <button type="button" class="cad-modal-btn cad-modal-btn-primary" data-action="confirm">Crea</button>
+                </div>
+            `);
+
+            // Tab handling
+            const rectBtn = modal.querySelector('[data-tab="rectangular"]');
+            const polarBtn = modal.querySelector('[data-tab="polar"]');
+            const rectTab = modal.querySelector('#rectangular-tab');
+            const polarTab = modal.querySelector('#polar-tab');
+            let activeType = 'rectangular';
+
+            rectBtn.addEventListener('click', () => {
+                activeType = 'rectangular';
+                rectBtn.classList.add('active');
+                polarBtn.classList.remove('active');
+                rectTab.style.display = 'block';
+                polarTab.style.display = 'none';
+            });
+
+            polarBtn.addEventListener('click', () => {
+                activeType = 'polar';
+                polarBtn.classList.add('active');
+                rectBtn.classList.remove('active');
+                polarTab.style.display = 'block';
+                rectTab.style.display = 'none';
+            });
+
+            const closeBtn = modal.querySelector('[data-action="close"]');
+            const cancelBtn = modal.querySelector('[data-action="cancel"]');
+            const confirmBtn = modal.querySelector('[data-action="confirm"]');
+
+            const handleConfirm = () => {
+                const result = { type: activeType };
+
+                if (activeType === 'rectangular') {
+                    result.rows = parseInt(modal.querySelector('#array-rows').value);
+                    result.cols = parseInt(modal.querySelector('#array-cols').value);
+                    result.spacingX = parseFloat(modal.querySelector('#array-space-x').value);
+                    result.spacingY = parseFloat(modal.querySelector('#array-space-y').value);
+                } else {
+                    result.count = parseInt(modal.querySelector('#array-count').value);
+                    result.angle = parseFloat(modal.querySelector('#array-angle').value);
+                    result.rotateItems = modal.querySelector('#array-rotate-items').checked;
+                }
+
+                this.close(result);
+                resolve(result);
+            };
+
+            const handleCancel = () => {
+                this.close(null);
+                resolve(null);
+            };
+
+            closeBtn.addEventListener('click', handleCancel);
+            cancelBtn.addEventListener('click', handleCancel);
+            confirmBtn.addEventListener('click', handleConfirm);
+
+            this.show(modal);
+        });
+    }
+
+    /**
      * Close modal
      */
     close() {

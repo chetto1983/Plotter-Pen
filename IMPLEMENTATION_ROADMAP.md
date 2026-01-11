@@ -858,7 +858,7 @@ fitToContent(bounds) {
 - [x] Delete multiple selected primitives
 - [x] Arrow keys move selection (1mm steps)
 - [x] Shift+Arrow keys move selection (10mm steps)
-- [ ] Mouse drag moves selection (not implemented)
+- [x] Mouse drag moves selection
 - [x] Undo/redo works after move/delete
 
 ### Box Selection ✅ IMPLEMENTED
@@ -934,6 +934,28 @@ fitToContent(bounds) {
 - [x] Update `InputHandler` to highlight snapped primitives
 - [x] Update `SelectionManager` to support global hover state
 
+### 5.6 Chamfer Tool ✅ IMPLEMENTED
+
+- [x] Chamfer logic (D distance)
+- [x] Chamfer tool implementation
+- [x] UI Button added
+- [x] Command input support (D value)
+
+### 5.7 Trim/Extend Tool ✅ IMPLEMENTED
+
+- [x] Intersection logic (Line-Line)
+- [x] Trim functionality (click to remove)
+- [x] Extend functionality (click to extend)
+- [x] Shift toggle support
+- [x] UI Button added
+
+### 5.8 Array Tool ✅ IMPLEMENTED
+
+- [x] Rectangular Array (Rows, Cols, Spacing)
+- [x] Polar Array (Count, Angle, Rotation)
+- [x] Custom Config Dialog (ModalManager)
+- [x] Array Tool Logic (UI -> Selection -> Params -> Generation)
+
 ---
 
 ## 6. Professional CAD Features
@@ -941,7 +963,7 @@ fitToContent(bounds) {
 - [ ] Print/Plot Support
 - [ ] Layer Properties (Lineweight, Color, Locked) - **Partially Done**
 - [ ] Block/Group Support
-- [ ] Undo/Redo System - **Done**
+- [x] Undo/Redo System - **Done**
 - [ ] Array tool (rectangular/polar)
 
 ---
@@ -1135,9 +1157,9 @@ M30          ; Program end
 | 5.4 Offset Tool | ✅ Complete |
 | 5.4 Fillet Tool | ✅ Complete |
 | 5.5 Database Persistence | ✅ Complete |
-| 5.6 Chamfer Tool | 🔲 Planned |
-| 5.7 Trim/Extend Tool | 🔲 Planned |
-| 5.8 Array Tool | 🔲 Planned |
+| 5.6 Chamfer Tool | ✅ Complete |
+| 5.7 Trim/Extend Tool | ✅ Complete |
+| 5.8 Array Tool | ✅ Complete |
 
 ---
 

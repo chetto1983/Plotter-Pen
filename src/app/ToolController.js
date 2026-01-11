@@ -2,7 +2,7 @@
  * Tool Controller - Manages active tool selection
  */
 
-import { LineTool, ArcTool, CircleTool, RectangleTool, PolygonTool, DimensionTool, AngularDimensionTool, RadiusDimensionTool, FilletTool } from '../tools/toolManager.js';
+import { LineTool, ArcTool, CircleTool, RectangleTool, PolygonTool, DimensionTool, AngularDimensionTool, RadiusDimensionTool, FilletTool, ChamferTool, TrimTool, ArrayTool } from '../tools/toolManager.js';
 
 export class ToolController {
   constructor(app) {
@@ -60,6 +60,15 @@ export class ToolController {
         break;
       case 'fillet':
         this.app.currentTool = new FilletTool(manager);
+        break;
+      case 'chamfer':
+        this.app.currentTool = new ChamferTool(manager);
+        break;
+      case 'trim':
+        this.app.currentTool = new TrimTool(manager);
+        break;
+      case 'array':
+        this.app.currentTool = new ArrayTool(manager);
         break;
       case 'select':
         this.app.currentTool = null;
