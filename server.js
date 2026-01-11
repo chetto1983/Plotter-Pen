@@ -9,6 +9,7 @@ import opcua from "node-opcua-client";
 import { dxfParseHandler } from "./routes/dxf-parser.js";
 import { smartImportRouter } from "./routes/import-dxf.js";
 import { persistenceRouter } from "./routes/persistence.js";
+import { exportDxfRouter } from "./routes/export-dxf.js";
 
 const {
   OPCUAClient,
@@ -1068,6 +1069,9 @@ async function start() {
 
   // Persistence (SQLite)
   app.use("/api", persistenceRouter);
+
+  // DXF Export
+  app.use("/api", exportDxfRouter);
 
   const port = await findAvailablePort(DEFAULT_PORT);
   const server = app.listen(port, HOST, () => {

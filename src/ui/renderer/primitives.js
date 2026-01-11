@@ -13,14 +13,14 @@ export class PrimitiveRenderer {
    * @param {Array} primitives - Array of domain objects (Line, Arc, etc.)
    * @param {Set} selectedPrimitives - Set of selected primitive objects
    */
-  drawPrimitives(ctx, scale, primitives, selectedPrimitives = new Set(), layerColors = {}) {
-    const lineWidth = this.renderer.lineWidth / scale;
-    const selectedLineWidth = lineWidth * 1.5;
+  drawPrimitives(ctx, scale, primitives, selectedPrimitives = new Set(), layerSettings = {}) {
+    const baseLineWidth = this.renderer.lineWidth / scale;
+    const selectedLineWidth = baseLineWidth * 1.5;
 
     if (!primitives || primitives.length === 0) return;
 
-    // Group by color (non-selected)
-    const byColor = new Map();
+    // Group by layer (for lineWeight support)
+    const byLayer = new Map();
     const deferredSelected = [];
     const defaultColor = COLORS.primitive;
 
@@ -33,26 +33,24 @@ export class PrimitiveRenderer {
         continue;
       }
 
-      // Determine color: Style > Layer > Default
-      let color = prim.style?.strokeColor;
-      if (!color && prim.layerId && layerColors[prim.layerId]) {
-        color = layerColors[prim.layerId];
-      }
-      if (!color) color = defaultColor;
-
-      if (!byColor.has(color)) byColor.set(color, []);
-      byColor.get(color).push(prim);
+      const layerId = prim.layerId || '_default';
+      if (!byLayer.has(layerId)) byLayer.set(layerId, []);
+      byLayer.get(layerId).push(prim);
     }
 
-    ctx.lineWidth = lineWidth;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    // Draw batches by color
-    for (const [color, group] of byColor) {
+    // Draw batches by layer (to apply correct lineWeight per layer)
+    for (const [layerId, group] of byLayer) {
+      const settings = layerSettings[layerId] || {};
+      const color = settings.color || defaultColor;
+      const lineWeight = settings.lineWeight ?? 1;
+
       ctx.save();
       ctx.strokeStyle = color;
-      this.drawBatch(ctx, group);
+      ctx.lineWidth = (baseLineWidth * lineWeight);
+      this.drawBatch(ctx, group, scale, settings);
       ctx.restore();
     }
 
@@ -75,13 +73,14 @@ export class PrimitiveRenderer {
   /**
    * internal batch drawer for a specific color group
    */
-  drawBatch(ctx, primitives) {
+  drawBatch(ctx, primitives, scale = 1, settings = {}) {
     ctx.beginPath();
 
     const deferredArcs = [];
     const deferredCircles = [];
     const deferredPolygons = [];
     const deferredRectangles = [];
+    const deferredDimensions = [];
 
     for (const prim of primitives) {
       if (prim.type === 'line') {
@@ -95,6 +94,8 @@ export class PrimitiveRenderer {
         deferredPolygons.push(prim);
       } else if (prim.type === 'rectangle') {
         deferredRectangles.push(prim);
+      } else if (prim.type === 'dimension') {
+        deferredDimensions.push(prim);
       }
     }
 
@@ -137,10 +138,14 @@ export class PrimitiveRenderer {
       for (const poly of deferredPolygons) {
         if (!poly.points || poly.points.length < 2) continue;
 
-        ctx.moveTo(poly.points[0].x, poly.points[0].y);
+        const p0 = poly.points[0];
+        ctx.moveTo(p0.x, p0.y);
+
         for (let i = 1; i < poly.points.length; i++) {
-          ctx.lineTo(poly.points[i].x, poly.points[i].y);
+          const p = poly.points[i];
+          ctx.lineTo(p.x, p.y);
         }
+
         if (poly.closed || poly.type === 'polygon') ctx.closePath();
       }
       ctx.stroke();
@@ -153,6 +158,13 @@ export class PrimitiveRenderer {
         ctx.rect(rect.x, rect.y, rect.width, rect.height);
       }
       ctx.stroke();
+    }
+
+    // Draw Dimensions (cannot be batched due to text rendering)
+    if (deferredDimensions.length > 0) {
+      for (const dim of deferredDimensions) {
+        this.drawDimension(ctx, dim, scale, settings);
+      }
     }
   }
 
@@ -479,7 +491,7 @@ export class PrimitiveRenderer {
   /**
    * Draw dimension
    */
-  drawDimension(ctx, dim, scale) {
+  drawDimension(ctx, dim, scale, settings = {}) {
     if (!dim) return;
 
     // Calculate geometry in World Space
@@ -531,32 +543,53 @@ export class PrimitiveRenderer {
     this.drawArrow(ctx, d1x, d1y, angle + Math.PI, scale);
     this.drawArrow(ctx, d2x, d2y, angle, scale);
 
-    // Text
+    // Text configuration
+    const nominalFontSize = dim.fontSize || settings.fontSize || 12;
+    const fontSize = nominalFontSize / scale;
+    const textGap = (dim.textOffset ?? settings.textOffset ?? 5) / scale;
+
+    // Text value
     const text = dim.text || length.toFixed(2);
     const midX = (d1x + d2x) / 2;
     const midY = (d1y + d2y) / 2;
 
-    // Create text offset (slightly above line)
-    const textGap = 5 / scale;
-    const tx = midX + uPx * textGap;
-    const ty = midY + uPy * textGap;
+    // Position text at midpoint of dimension line (offset handled by fillText)
+    const tx = midX;
+    const ty = midY;
 
     ctx.save();
     ctx.translate(tx, ty);
 
-    // Ensure text is readable
-    let textAngle = angle;
-    if (textAngle > Math.PI / 2 || textAngle < -Math.PI / 2) {
-      textAngle += Math.PI;
+    // Re-flip Y axis for text (counter the global CAD Y-flip)
+    ctx.scale(1, -1);
+
+    // Calculate screen angle for text
+    // Model Angle is CCW (Y-up), Screen Angle is negated (Y-down)
+    let screenAngle = -angle;
+
+    // Normalize angle to [-PI, PI]
+    while (screenAngle <= -Math.PI) screenAngle += Math.PI * 2;
+    while (screenAngle > Math.PI) screenAngle -= Math.PI * 2;
+
+    // Ensure text is readable (from bottom or right)
+    // Preference: -90 (Up) to 90 (Down), favoring Up
+    if (screenAngle > Math.PI / 2) {
+      screenAngle -= Math.PI;
+    } else if (screenAngle <= -Math.PI / 2) {
+      screenAngle += Math.PI;
     }
-    ctx.rotate(textAngle);
+
+    ctx.rotate(screenAngle);
 
     // Inverse scale font size
-    ctx.font = `${12 / scale}px monospace`;
+    ctx.font = `${fontSize}px monospace`;
     ctx.textAlign = 'center';
-    ctx.textBaseline = 'bottom';
-    ctx.fillStyle = ctx.strokeStyle; // Use same color as line
-    ctx.fillText(text, 0, 0);
+    ctx.textBaseline = 'bottom'; // Draw above the baseline
+    ctx.fillStyle = ctx.strokeStyle;
+
+    // Draw text with offset
+    // In local coords (Y-down), negative Y is Up (above line)
+    ctx.fillText(text, 0, -textGap);
     ctx.restore();
   }
 

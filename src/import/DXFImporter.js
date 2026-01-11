@@ -28,9 +28,11 @@ export class DXFImporter {
 
 
     toModelPoint(x, y) {
+        // Note: No Y-flip here - the renderer handles the CAD coordinate system
+        // with Y pointing up via its view transform
         return {
             x: x * this.scaleFactor,
-            y: -y * this.scaleFactor
+            y: y * this.scaleFactor
         };
     }
 

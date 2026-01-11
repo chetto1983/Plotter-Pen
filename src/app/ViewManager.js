@@ -14,17 +14,20 @@ export class ViewManager {
     const newZoom = Math.min(10, this.app.renderer.view.zoom * 1.2);
     this.app.renderer.setZoom(newZoom);
     this.app.ui.updateZoomDisplay();
+    this.app.render();
   }
 
   zoomOut() {
     const newZoom = Math.max(0.1, this.app.renderer.view.zoom / 1.2);
     this.app.renderer.setZoom(newZoom);
     this.app.ui.updateZoomDisplay();
+    this.app.render();
   }
 
   zoomFit() {
     this.app.renderer.resetView();
     this.app.ui.updateZoomDisplay();
+    this.app.render();
   }
 
   /**

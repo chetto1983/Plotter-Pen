@@ -333,11 +333,16 @@ class CADApplication {
       ? this.primitives.filter(p => this.layerManager.isPrimitiveVisible(p))
       : this.primitives;
 
-    // Map layer colors for rendering
-    const layerColors = {};
+    // Map layer settings for rendering (includes color, lineWeight, fontSize)
+    const layerSettings = {};
     if (this.layerManager) {
       for (const layer of this.layerManager.layers.values()) {
-        layerColors[layer.id] = layer.color;
+        layerSettings[layer.id] = {
+          color: layer.color,
+          lineWeight: layer.lineWeight ?? 1,
+          fontSize: layer.fontSize ?? 12,
+          textOffset: layer.textOffset ?? 5
+        };
       }
     }
 
@@ -348,7 +353,7 @@ class CADApplication {
       preview,
       this.hoveredPrimitive,
       this.highlightedPrimitive,
-      layerColors
+      layerSettings
     );
 
     // Draw snap indicator if available

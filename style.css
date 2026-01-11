@@ -609,7 +609,7 @@ body.cad-app {
   background: rgba(10, 16, 27, 0.6);
   border: 1px solid var(--border);
   border-radius: 10px;
-  overflow: hidden;
+  /* overflow: hidden; Removed to fix truncation */
 }
 
 .cad-panel-section.cad-panel-fill {
@@ -2233,6 +2233,13 @@ body.config-shell .config-status.error {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  max-height: 50vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 2px;
+  padding-bottom: 10px;
+  /* Reduced from 40px */
+  /* Space for expansion */
 }
 
 .cad-layer-item {
@@ -2289,6 +2296,83 @@ body.config-shell .config-status.error {
   border-radius: 2px;
   border: 1px solid rgba(255, 255, 255, 0.3);
   flex-shrink: 0;
+}
+
+/* Layer item new layout with settings row */
+.cad-layer-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.cad-layer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.cad-layer-settings {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0 0 24px;
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+  transition: opacity 0.15s, max-height 0.2s;
+}
+
+.cad-layer-item:hover .cad-layer-settings,
+.cad-layer-item.active .cad-layer-settings {
+  opacity: 1;
+  max-height: 32px;
+}
+
+.cad-layer-setting {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cad-layer-setting label {
+  display: flex;
+  align-items: center;
+  color: var(--muted);
+}
+
+.cad-layer-input {
+  width: 50px;
+  padding: 3px 6px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  color: var(--fg);
+  font-size: 11px;
+  text-align: center;
+}
+
+.cad-layer-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.cad-layer-input::-webkit-inner-spin-button,
+.cad-layer-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+}
+
+.cad-layer-input[type="number"] {
+  -moz-appearance: textfield;
 }
 
 /* ============================================

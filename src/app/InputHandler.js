@@ -390,13 +390,13 @@ export class InputHandler {
       case 'ArrowUp':
         if (this.app.selectedPrimitives.size > 0) {
           e.preventDefault();
-          this.app.selectionManager.moveSelected(0, -moveAmount);
+          this.app.selectionManager.moveSelected(0, moveAmount);  // +Y = up in CAD coords
         }
         break;
       case 'ArrowDown':
         if (this.app.selectedPrimitives.size > 0) {
           e.preventDefault();
-          this.app.selectionManager.moveSelected(0, moveAmount);
+          this.app.selectionManager.moveSelected(0, -moveAmount);  // -Y = down in CAD coords
         }
         break;
       case 'ArrowLeft':
@@ -435,8 +435,11 @@ export class InputHandler {
         }
         break;
       case 'e':
-        // E = Rotate 90° CW (clockwise, negative in math convention)
-        if (this.app.selectedPrimitives.size > 0) {
+        if ((e.ctrlKey || e.metaKey) && e.shiftKey) {
+          e.preventDefault();
+          this.app.fileManager.exportDXF();
+        } else if (this.app.selectedPrimitives.size > 0) {
+          // E = Rotate 90° CW (clockwise, negative in math convention)
           this.app.selectionManager.rotateSelected(-90);
         }
         break;

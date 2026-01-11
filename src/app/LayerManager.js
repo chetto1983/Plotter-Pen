@@ -11,6 +11,9 @@
  * @property {boolean} visible - Whether primitives on this layer are visible
  * @property {boolean} locked - Whether primitives on this layer can be edited
  * @property {number} order - Layer order (0 = bottom)
+ * @property {number} lineWeight - Line weight in pixels (default: 1)
+ * @property {number} fontSize - Font size for dimensions/text (default: 12)
+ * @property {number} textOffset - Text offset from line (default: 5)
  */
 
 /**
@@ -22,7 +25,10 @@ const DEFAULT_LAYER = {
     color: '#00ff00',
     visible: true,
     locked: false,
-    order: 0
+    order: 0,
+    lineWeight: 1,
+    fontSize: 12,
+    textOffset: 5
 };
 
 /**
@@ -81,7 +87,10 @@ export class LayerManager {
             color: color || this.generateColor(order),
             visible: true,
             locked: false,
-            order
+            order,
+            lineWeight: 1,
+            fontSize: 12,
+            textOffset: 5
         };
 
         this.layers.set(id, layer);
@@ -148,6 +157,54 @@ export class LayerManager {
 
         layer.color = color;
         this.notifyChange();
+        return true;
+    }
+
+    /**
+     * Set layer line weight
+     * @param {string} layerId - Layer ID
+     * @param {number} lineWeight - Line weight in pixels
+     * @returns {boolean} - Success
+     */
+    setLayerLineWeight(layerId, lineWeight) {
+        const layer = this.layers.get(layerId);
+        if (!layer) return false;
+
+        layer.lineWeight = Math.max(0.1, Math.min(10, lineWeight));
+        this.notifyChange();
+        this.app.render();
+        return true;
+    }
+
+    /**
+     * Set layer font size
+     * @param {string} layerId - Layer ID
+     * @param {number} fontSize - Font size in points
+     * @returns {boolean} - Success
+     */
+    setLayerFontSize(layerId, fontSize) {
+        const layer = this.layers.get(layerId);
+        if (!layer) return false;
+
+        layer.fontSize = Math.max(6, Math.min(72, fontSize));
+        this.notifyChange();
+        this.app.render();
+        return true;
+    }
+
+    /**
+     * Set layer text offset
+     * @param {string} layerId - Layer ID
+     * @param {number} offset - Text offset in points
+     * @returns {boolean} - Success
+     */
+    setLayerTextOffset(layerId, offset) {
+        const layer = this.layers.get(layerId);
+        if (!layer) return false;
+
+        layer.textOffset = Math.max(0, Math.min(50, offset));
+        this.notifyChange();
+        this.app.render();
         return true;
     }
 

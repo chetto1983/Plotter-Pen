@@ -145,6 +145,7 @@ export class UIController {
   setupActionButtons() {
     document.getElementById('btnSave')?.addEventListener('click', () => this.app.fileManager.saveToFile());
     document.getElementById('btnLoad')?.addEventListener('click', () => this.app.fileManager.loadFromFile());
+    document.getElementById('btnExportDXF')?.addEventListener('click', () => this.app.fileManager.exportDXF());
     document.getElementById('btnUndo')?.addEventListener('click', () => this.app.state.undo());
     document.getElementById('btnRedo')?.addEventListener('click', () => this.app.state.redo());
     document.getElementById('btnClear')?.addEventListener('click', () => this.app.selectionManager.clearAll());

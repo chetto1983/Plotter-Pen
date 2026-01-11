@@ -9,6 +9,8 @@ export const TOOLS = {
   CIRCLE: 'circle',
   RECTANGLE: 'rectangle',
   POLYGON: 'polygon',
+  DIMENSION: 'dimension',
+  FILLET: 'fillet',
   FREEHAND: 'freehand',
   DELETE: 'delete',
   PAN: 'pan',

@@ -8,6 +8,7 @@ import { ArcTool } from './arcTool.js';
 import { CircleTool } from './circleTool.js';
 import { RectangleTool } from './rectangleTool.js';
 import { PolygonTool } from './polygonTool.js';
+import { DimensionTool } from './dimensionTool.js';
 
 export class ToolManager {
   constructor() {
@@ -31,6 +32,7 @@ export class ToolManager {
     this.tools[TOOLS.CIRCLE] = new CircleTool(this);
     this.tools[TOOLS.RECTANGLE] = new RectangleTool(this);
     this.tools[TOOLS.POLYGON] = new PolygonTool(this);
+    this.tools[TOOLS.DIMENSION] = new DimensionTool(this);
   }
 
   setActiveTool(toolName) {

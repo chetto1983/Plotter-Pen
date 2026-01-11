@@ -14,13 +14,17 @@ export class Dimension extends Primitive {
      * @param {number} offset - Offset distance from measure line (perpendicular)
      */
     constructor(id, x1, y1, x2, y2, offset = 20) {
-        super(id, 'dimension');
+        super('dimension', id);
         this.x1 = x1;
         this.y1 = y1;
         this.x2 = x2;
         this.y2 = y2;
         this.offset = offset;
         this.text = ''; // Auto-calculated if empty
+
+        // Text customization
+        this.fontSize = null;    // Font size in points (null = inherit from layer)
+        this.textOffset = null;  // Distance from dimension line to text (null = use layer default)
     }
 
     /**
@@ -241,13 +245,17 @@ export class Dimension extends Primitive {
             x2: this.x2,
             y2: this.y2,
             offset: this.offset,
-            text: this.text
+            text: this.text,
+            fontSize: this.fontSize,
+            textOffset: this.textOffset
         };
     }
 
     static fromJSON(data) {
         const dim = new Dimension(data.id, data.x1, data.y1, data.x2, data.y2, data.offset);
-        dim.text = data.text;
+        dim.text = data.text || '';
+        dim.fontSize = data.fontSize;
+        dim.textOffset = data.textOffset;
         dim.layerId = data.layerId;
         dim.color = data.color;
         return dim;

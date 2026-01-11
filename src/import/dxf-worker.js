@@ -14,10 +14,11 @@ const TOLERANCE = 1e-6;
 let scaleFactor = 1.0;
 
 // Convert DXF coordinates to model coordinates
+// Note: No Y-flip here - the renderer handles the CAD coordinate system
 function toModelPoint(x, y) {
     return {
         x: x * scaleFactor,
-        y: -y * scaleFactor  // Flip Y for screen coordinates
+        y: y * scaleFactor
     };
 }
 
@@ -73,9 +74,9 @@ function convertArc(entity) {
     const radius = entity.radius * scaleFactor;
 
     // DXF angles are in degrees, counter-clockwise from positive X
-    // We flip Y, so start/end swap roles
-    const startAngle = -entity.endAngle * Math.PI / 180;
-    const endAngle = -entity.startAngle * Math.PI / 180;
+    // No Y-flip needed - renderer handles coordinate system
+    const startAngle = entity.startAngle * Math.PI / 180;
+    const endAngle = entity.endAngle * Math.PI / 180;
 
     const start = {
         x: center.x + radius * Math.cos(startAngle),
@@ -121,8 +122,8 @@ function convertPolyline(entity) {
                 x2: p2.x, y2: p2.y
             });
         } else {
-            // Arc segment from bulge
-            const arc = createArcFromBulge(p1, p2, -bulge); // Negate bulge for Y-flip
+            // Arc segment from bulge (no negation - renderer handles Y-flip)
+            const arc = createArcFromBulge(p1, p2, bulge);
             if (arc) primitives.push(arc);
         }
     }
@@ -141,7 +142,7 @@ function convertPolyline(entity) {
                 x2: p2.x, y2: p2.y
             });
         } else {
-            const arc = createArcFromBulge(p1, p2, -lastBulge);
+            const arc = createArcFromBulge(p1, p2, lastBulge);
             if (arc) primitives.push(arc);
         }
     }

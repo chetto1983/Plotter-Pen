@@ -893,7 +893,7 @@ fitToContent(bounds) {
 
 ### 5.1 Layer System ✅ IMPLEMENTED
 
-- [x] Layer panel in sidebar (add/remove/rename layers)
+- [x] Layer panel in sidebar (add/remove/rename layers + rename button)
 - [x] Layer visibility toggle (eye icon)
 - [x] Layer lock (prevent editing)
 - [x] Assign primitives to layers
@@ -902,25 +902,25 @@ fitToContent(bounds) {
 - [x] Custom modal dialogs (prompt, confirm) - Ultra-modern 2026 design
 - [x] Custom color picker modal with preset swatches
 
-### 5.2 DXF Export
+### 5.2 DXF Export ✅ IMPLEMENTED
 
-- [ ] Export current drawing to DXF use (<https://www.npmjs.com/package/dxf-writer>)
-- [ ] Support LINE, ARC, CIRCLE, POLYLINE entities
-- [ ] Preserve layer information
-- [ ] Unit conversion (mm/inches)
+- [x] Export current drawing to DXF use (<https://www.npmjs.com/package/dxf-writer>)
+- [x] Support LINE, ARC, CIRCLE, POLYLINE entities
+- [x] Preserve layer information
+- [x] Unit conversion (mm)
 
 ### 5.3 Dimension Annotations
 
-- [ ] Linear dimension tool
+- [x] Linear dimension tool
 - [ ] Angular dimension tool
 - [ ] Radius/diameter dimension
-- [ ] Dimension display formatting
+- [x] Dimension display formatting (Font size, Text offset, Text rotation)
 
 ### 5.4 Advanced Drawing Tools
 
 - [ ] Fillet tool (round corners)
 - [ ] Chamfer tool (cut corners)
-- [x] Offset tool (parallel copy) ✅ IMPLEMENTED
+- [x] Offset tool (parallel copy) ✅ IMPLEMENTED but missing paste button
 - [ ] Trim/Extend tool
 - [ ] Array tool (rectangular/polar)
 
@@ -1099,11 +1099,24 @@ M30          ; Program end
 | 2 | Box Selection | ✅ Complete |
 | 3 | Save/Load JSON | ✅ Complete |
 | 4 | DXF Import | ✅ Complete |
-| 5 | Professional CAD | 🔲 Planned |
+| 5 | Professional CAD | 🚧 In Progress |
 | 6 | Enterprise Features | 🔲 Planned |
 | 7 | Quality & Packaging | 🔲 Planned |
 | 8 | Commercial Distribution | 🔲 Planned |
 | 9 | Milling / CAM | 🔲 Planned |
+
+### Phase 5 Details
+
+| Feature | Status |
+|---------|--------|
+| 5.1 Layer System | ✅ Complete |
+| 5.2 DXF Export | ✅ Complete |
+| 5.3 Dimension Annotations | 🚧 In Progress |
+| 5.4 Offset Tool | ✅ Complete |
+| 5.4 Fillet Tool | ✅ Complete |
+| 5.4 Chamfer Tool | 🔲 Planned |
+| 5.4 Trim/Extend Tool | 🔲 Planned |
+| 5.4 Array Tool | 🔲 Planned |
 
 ---
 
