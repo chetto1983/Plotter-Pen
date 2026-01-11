@@ -16,6 +16,9 @@ export class LayerPanel {
   constructor(layerManager, containerId = 'layerPanel') {
     this.layerManager = layerManager;
     this.container = document.getElementById(containerId);
+    this.expandedLayerIds = new Set();
+    this.hasInitializedExpansion = false;
+    this.isPanelCollapsed = false;
 
     // Listen for layer changes
     document.addEventListener('layersChanged', () => this.render());
@@ -44,17 +47,39 @@ export class LayerPanel {
 
     const layers = this.layerManager.getAllLayers();
     const activeId = this.layerManager.activeLayerId;
+    const layerIdSet = new Set(layers.map(layer => layer.id));
+
+    for (const layerId of this.expandedLayerIds) {
+      if (!layerIdSet.has(layerId)) {
+        this.expandedLayerIds.delete(layerId);
+      }
+    }
+
+    if (!this.hasInitializedExpansion && activeId) {
+      this.expandedLayerIds.add(activeId);
+      this.hasInitializedExpansion = true;
+    }
+
+    const listStyle = this.isPanelCollapsed ? 'display: none;' : '';
+    const panelToggleRotation = this.isPanelCollapsed ? 'transform: rotate(-90deg);' : '';
 
     let html = `
       <div class="cad-layer-header">
         <span class="cad-layer-title">Livelli</span>
-        <button class="cad-layer-btn cad-layer-add" title="Nuovo livello">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 5v14M5 12h14"/>
-          </svg>
-        </button>
+        <div class="cad-layer-header-actions" style="display: flex; align-items: center; gap: 6px;">
+          <button class="cad-layer-btn cad-layer-toggle-panel" data-action="toggle-panel" title="${this.isPanelCollapsed ? 'Espandi' : 'Comprimi'}" aria-expanded="${!this.isPanelCollapsed}">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="${panelToggleRotation}">
+              <path d="M6 9l6 6 6-6"/>
+            </svg>
+          </button>
+          <button class="cad-layer-btn cad-layer-add" title="Nuovo livello">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 5v14M5 12h14"/>
+            </svg>
+          </button>
+        </div>
       </div>
-      <div class="cad-layer-list">
+      <div class="cad-layer-list" style="${listStyle}">
     `;
 
     for (const layer of layers) {
@@ -64,9 +89,14 @@ export class LayerPanel {
       const lineWeight = layer.lineWeight ?? 1;
       const fontSize = layer.fontSize ?? 12;
       const textOffset = layer.textOffset ?? 5;
+      const isExpanded = this.expandedLayerIds.has(layer.id);
+      const settingsStyle = isExpanded
+        ? 'opacity: 1; max-height: 32px; pointer-events: auto;'
+        : 'opacity: 0; max-height: 0; pointer-events: none;';
+      const toggleRotation = isExpanded ? 'transform: rotate(180deg);' : '';
 
       html += `
-        <div class="cad-layer-item ${isActive ? 'active' : ''} ${layer.locked ? 'locked' : ''}" data-layer-id="${layer.id}">
+        <div class="cad-layer-item ${isActive ? 'active' : ''} ${layer.locked ? 'locked' : ''} ${isExpanded ? 'expanded' : ''}" data-layer-id="${layer.id}">
           <div class="cad-layer-row">
             <div class="cad-layer-controls">
               <button class="cad-layer-btn cad-layer-visibility ${layer.visible ? '' : 'off'}" data-action="visibility" title="${layer.visible ? 'Nascondi' : 'Mostra'}">
@@ -91,6 +121,11 @@ export class LayerPanel {
                   <line x1="12" y1="16" x2="12" y2="2"/>
                 </svg>
               </button>` : ''}
+              <button class="cad-layer-btn cad-layer-toggle-settings" data-action="toggle-settings" title="${isExpanded ? 'Chiudi impostazioni' : 'Apri impostazioni'}" aria-expanded="${isExpanded}">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="${toggleRotation}">
+                  <path d="M6 9l6 6 6-6"/>
+                </svg>
+              </button>
               <button class="cad-layer-btn cad-layer-rename" data-action="rename" title="Rinomina">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
@@ -103,7 +138,7 @@ export class LayerPanel {
               </button>
             </div>
           </div>
-          <div class="cad-layer-settings">
+          <div class="cad-layer-settings" style="${settingsStyle}">
             <div class="cad-layer-setting">
               <label title="Spessore Linea">
                 <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3">
@@ -147,6 +182,12 @@ export class LayerPanel {
     if (!this.container) return;
 
     // Add layer button
+    this.container.querySelector('[data-action="toggle-panel"]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.isPanelCollapsed = !this.isPanelCollapsed;
+      this.render();
+    });
+
     this.container.querySelector('.cad-layer-add')?.addEventListener('click', async () => {
       const modal = getModalManager();
       const name = await modal.prompt({
@@ -157,8 +198,10 @@ export class LayerPanel {
         cancelText: 'Annulla'
       });
       if (name !== null) {
+        this.isPanelCollapsed = false;
         const layer = this.layerManager.createLayer(name);
         this.layerManager.setActiveLayer(layer.id);
+        this.expandedLayerIds.add(layer.id);
       }
     });
 
@@ -183,6 +226,17 @@ export class LayerPanel {
         this.layerManager.setActiveLayer(layerId);
       });
 
+      // Toggle settings
+      item.querySelector('[data-action="toggle-settings"]')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (this.expandedLayerIds.has(layerId)) {
+          this.expandedLayerIds.delete(layerId);
+        } else {
+          this.expandedLayerIds.add(layerId);
+        }
+        this.render();
+      });
+
       // Delete layer
       item.querySelector('[data-action="delete"]')?.addEventListener('click', async (e) => {
         e.stopPropagation();
@@ -195,6 +249,7 @@ export class LayerPanel {
           danger: true
         });
         if (confirmed) {
+          this.expandedLayerIds.delete(layerId);
           this.layerManager.deleteLayer(layerId);
         }
       });
