@@ -1,5 +1,5 @@
 
-import { PrimitiveExtractor } from './src/plc/PrimitiveExtractor.js';
+import { PrimitiveExtractor } from '../src/plc/PrimitiveExtractor.js';
 // Mock dependency imports if Node resolve fails, or ensure we run with appropriate flags
 // PrimitiveExtractor imports from ../geometry/primitives.js. We rely on Node resolving relative paths.
 

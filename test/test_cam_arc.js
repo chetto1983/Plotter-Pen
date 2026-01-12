@@ -1,6 +1,6 @@
 
 import { GCodeParser } from '@polar3d/gcode-viewer';
-import { GCodeGenerator } from './src/cam/GCodeGenerator.js';
+import { GCodeGenerator } from '../src/cam/GCodeGenerator.js';
 
 // ... (preparePreviewGCode omitted for brevity, logic assumed same or imported if possible)
 // Re-pasting the function since I cannot import it easily in this env

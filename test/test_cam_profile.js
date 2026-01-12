@@ -1,7 +1,7 @@
 
-import { ToolpathGenerator } from './src/cam/ToolpathGenerator.js';
-import { MachineConfig } from './src/cam/MachineConfig.js';
-import { ToolLibrary } from './src/cam/ToolLibrary.js';
+import { ToolpathGenerator } from '../src/cam/ToolpathGenerator.js';
+import { MachineConfig } from '../src/cam/MachineConfig.js';
+import { ToolLibrary } from '../src/cam/ToolLibrary.js';
 
 // Mock Clipper (since loading it in node is tricky with the current global hack)
 // We will manually load it or mock the wrapper if needed.
@@ -13,7 +13,7 @@ const require = createRequire(import.meta.url);
 // Global patch for Clipper
 if (!global.self) global.self = global;
 try {
-    require('./src/lib/clipper.js');
+    require('../src/lib/clipper.js');
 } catch (e) { console.log('Clipper Load Error', e); }
 
 async function testProfile() {

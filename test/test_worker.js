@@ -2,8 +2,8 @@
 import { parentPort as _parentPort } from 'worker_threads'; // Mock if needed, or just ignore for this test
 
 import DxfParser from 'dxf-parser';
-import { DXFImporter } from './src/import/DXFImporter.js';
-import { PathOptimizer } from './src/plc/extraction.js';
+import { DXFImporter } from '../src/import/DXFImporter.js';
+import { PathOptimizer } from '../src/plc/extraction.js';
 import fs from 'fs';
 import path from 'path';
 
