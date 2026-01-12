@@ -46,9 +46,10 @@ export class InputHandler {
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
     // Touch events
-    canvas.addEventListener('touchstart', this.handleTouchStart.bind(this));
-    canvas.addEventListener('touchmove', this.handleTouchMove.bind(this));
-    canvas.addEventListener('touchend', this.handleTouchEnd.bind(this));
+    // Touch events
+    canvas.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
+    canvas.addEventListener('touchmove', this.handleTouchMove.bind(this), { passive: false });
+    canvas.addEventListener('touchend', this.handleTouchEnd.bind(this), { passive: false });
 
     // Keyboard events
     document.addEventListener('keydown', this.handleKeyDown.bind(this));

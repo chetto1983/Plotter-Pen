@@ -13,13 +13,6 @@
   <!-- Header / Menu Bar -->
   <header class="cad-header">
     <div class="cad-header-left">
-      <button type="button" class="cad-menu-btn" id="menuBtn" aria-label="Menu">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="3" y1="6" x2="21" y2="6" />
-          <line x1="3" y1="12" x2="21" y2="12" />
-          <line x1="3" y1="18" x2="21" y2="18" />
-        </svg>
-      </button>
       <div class="cad-brand">
         <span class="cad-brand-name">Sacchi Plotter Pen</span>
         <span class="cad-brand-version">v2.2</span>
@@ -28,39 +21,7 @@
     <nav class="cad-nav" id="mainNav">
       <a href="plotter_pen.html" class="cad-nav-link active">Editor</a>
     </nav>
-    <!-- Hamburger Menu Dropdown -->
-    <div class="cad-hamburger-menu" id="hamburgerMenu">
-      <a href="plotter_pen.html" class="cad-hamburger-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 19l7-7 3 3-7 7-3-3z" />
-          <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
-          <path d="M2 2l7.586 7.586" />
-          <circle cx="11" cy="11" r="2" />
-        </svg>
-        <span>Editor</span>
-      </a>
-      <a href="plc_config.html" class="cad-hamburger-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="4" y="4" width="16" height="16" rx="2" />
-          <line x1="9" y1="9" x2="15" y2="9" />
-          <line x1="9" y1="13" x2="15" y2="13" />
-          <line x1="9" y1="17" x2="12" y2="17" />
-        </svg>
-        <span>Configurazione PLC</span>
-      </a>
-      <button type="button" class="cad-hamburger-item" id="btnShowShortcuts">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="2" y="4" width="20" height="16" rx="2" />
-          <line x1="6" y1="8" x2="6" y2="8" />
-          <line x1="10" y1="8" x2="18" y2="8" />
-          <line x1="6" y1="12" x2="6" y2="12" />
-          <line x1="10" y1="12" x2="18" y2="12" />
-          <line x1="6" y1="16" x2="6" y2="16" />
-          <line x1="10" y1="16" x2="14" y2="16" />
-        </svg>
-        <span>Scorciatoie (F1)</span>
-      </button>
-    </div>
+
   </header>
 
   <!-- RIBBON UI -->
@@ -386,6 +347,15 @@
               </svg>
               <span>Setup</span>
             </button>
+            <button type="button" class="cad-tool-btn" id="btnOpenPLCConfig" title="Configurazione PLC">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="4" y="4" width="16" height="16" rx="2" />
+                <path d="M9 9h6" />
+                <path d="M9 13h6" />
+                <path d="M9 17h4" />
+              </svg>
+              <span>PLC Config</span>
+            </button>
           </div>
           <span class="cad-toolbar-label">Setup</span>
         </div>
@@ -672,13 +642,13 @@
       <div class="cad-panel-section cad-panel-fill" id="camPanel">
         <div class="cad-panel-header">
           <!-- Main Header -->
-          <div style="display:flex; align-items:center;">
+          <div class="cad-flex-align">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path
                 d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3-3a1 1 0 0 0-1.4-1.4l-2.3 2.3-1-1a1 1 0 0 0-1.3 0.1z" />
               <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
             </svg>
-            <span style="font-weight:600; margin-left:8px;">CAM & G-Code</span>
+            <span class="cad-header-label">CAM & G-Code</span>
           </div>
         </div>
 
@@ -698,7 +668,7 @@
               <ul id="camOperationsList" class="cad-cam-ops-list">
                 <li class="cad-cam-ops-empty">Nessuna operazione</li>
               </ul>
-              <div style="display:flex; gap:5px; margin-top:10px;">
+              <div class="cad-actions-row">
                 <!-- Buttons are in ribbon, but maybe add quick actions here? -->
               </div>
             </div>
@@ -714,7 +684,7 @@
           </div>
 
           <!-- SUBTAB: G-CODE -->
-          <div id="cam-subtab-code" class="cam-subtab no-pad" style="display:none;">
+          <div id="cam-subtab-code" class="cam-subtab no-pad" hidden>
             <div class="cad-gcode-toolbar">
               <div class="cad-gcode-actions">
                 <button type="button" class="cad-gcode-btn" id="btnGCodeEdit">Modifica</button>
@@ -727,7 +697,7 @@
               <textarea id="gcodeEditor" class="cad-gcode-editor" spellcheck="false"
                 placeholder="G-Code non ancora generato"></textarea>
             </div>
-            <div class="cad-output-grid" id="gcodeOutputList" style="border:none; border-radius:0;">
+            <div class="cad-output-grid cad-box-flat" id="gcodeOutputList">
               <div class="cad-output-empty">G-Code non ancora generato</div>
             </div>
           </div>
@@ -831,6 +801,7 @@
   </div>
 
   <script src="src/lib/clipper.js"></script>
+  <script type="module" src="src/app/PLCConfigManager.js"></script>
   <script type="module" src="src/main.js"></script>
   <script>
     // Ribbon Tab Switching
@@ -863,47 +834,122 @@
           if (plcPanel) plcPanel.style.display = 'flex';
           if (camPanel) camPanel.style.display = 'none';
         }
-        // CAM Sub-Tabs
-        document.querySelectorAll('.cad-tabs .cad-tab-btn[data-subtab]').forEach(btn => {
-          btn.addEventListener('click', () => {
-            // Remove active from sibling buttons
-            btn.parentElement.querySelectorAll('.cad-tab-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
+      });
+    });
 
-            // Hide all subtabs
-            document.querySelectorAll('.cam-subtab').forEach(p => {
-              p.style.display = 'none';
-              p.classList.remove('active');
-            });
+    // CAM Sub-Tabs
+    document.querySelectorAll('.cad-tabs .cad-tab-btn[data-subtab]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        // Remove active from sibling buttons
+        btn.parentElement.querySelectorAll('.cad-tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
 
-            // Show selected
-            const subtab = document.getElementById(`cam-subtab-${btn.dataset.subtab}`);
-            if (subtab) {
-              subtab.style.display = 'flex';
-              subtab.classList.add('active');
+        // Hide all subtabs
+        document.querySelectorAll('.cam-subtab').forEach(p => {
+          p.style.display = 'none';
+          p.classList.remove('active');
+        });
 
-              // Canvas Resize Trigger for Preview
-              if (btn.dataset.subtab === 'preview') {
-                const canvas = document.getElementById('camPreviewCanvas');
-                if (canvas) {
-                  // Force slight resize or verify size to handle flex layout changes
-                  const rect = canvas.parentElement.getBoundingClientRect();
-                  if (rect.width > 0 && rect.height > 0) {
-                    canvas.width = rect.width * window.devicePixelRatio;
-                    canvas.height = rect.height * window.devicePixelRatio;
-                    // Redraw if manager available? 
-                    // The CAMManager.viewer handles redraw on setGCode, but we might need a repaint.
-                    // But we don't have global access to CAMManager instance here easily without window global.
-                    // Assuming the viewer loop or next update handles it.
-                  }
-                }
+        // Show selected
+        const subtab = document.getElementById(`cam-subtab-${btn.dataset.subtab}`);
+        if (subtab) {
+          subtab.style.display = 'flex';
+          subtab.classList.add('active');
+
+          // Canvas Resize Trigger for Preview
+          if (btn.dataset.subtab === 'preview') {
+            const canvas = document.getElementById('camPreviewCanvas');
+            if (canvas) {
+              // Force slight resize or verify size to handle flex layout changes
+              const rect = canvas.parentElement.getBoundingClientRect();
+              if (rect.width > 0 && rect.height > 0) {
+                canvas.width = rect.width * window.devicePixelRatio;
+                canvas.height = rect.height * window.devicePixelRatio;
               }
             }
-          });
-        });
+          }
+        }
       });
     });
   </script>
+  <!-- PLC Config Modal -->
+  <div class="cad-modal-overlay" id="plcConfigModal">
+    <div class="cad-modal cad-modal-config">
+      <div class="cad-modal-header">
+        <h2 class="cad-modal-title">Parametri OPC UA</h2>
+        <button type="button" class="cad-modal-close" id="btnClosePLCConfig">&times;</button>
+      </div>
+      <div class="cad-modal-body">
+        <form id="plcConfigForm" novalidate class="cad-modal-form">
+          <!-- Endpoint -->
+          <div class="cad-input-row cad-col-full">
+            <label for="endpoint">Endpoint OPC UA</label>
+            <input type="text" id="endpoint" name="endpoint" required placeholder="opc.tcp://192.168.1.100:4840"
+              class="cad-modal-input" />
+          </div>
+
+          <!-- Nodes -->
+          <div class="cad-modal-cols-2">
+            <div class="cad-input-row cad-col-full">
+              <label for="nodeId">Node ID Target</label>
+              <input type="text" id="nodeId" name="nodeId" required placeholder="ns=4;i=12" class="cad-modal-input" />
+            </div>
+            <div class="cad-input-row cad-col-full">
+              <label for="triggerNodeId">Node ID Trigger</label>
+              <input type="text" id="triggerNodeId" name="triggerNodeId" placeholder="ns=4;i=535"
+                class="cad-modal-input" />
+            </div>
+          </div>
+
+          <!-- Auth -->
+          <div class="cad-modal-cols-2">
+            <div class="cad-input-row cad-col-full">
+              <label for="username">Username</label>
+              <input type="text" id="username" name="username" placeholder="admin" autocomplete="username"
+                class="cad-modal-input" />
+            </div>
+            <div class="cad-input-row cad-col-full">
+              <label for="password">Password</label>
+              <input type="password" id="password" name="password" placeholder="••••••••"
+                autocomplete="current-password" class="cad-modal-input" />
+            </div>
+          </div>
+
+          <!-- Data -->
+          <div class="cad-modal-cols-2">
+            <div class="cad-input-row cad-col-full">
+              <label for="valueType">Tipo Valore</label>
+              <select id="valueType" name="valueType" class="cad-modal-select">
+                <option value="string_array">String Array</option>
+                <option value="string">String</option>
+                <option value="int_array">Int Array</option>
+                <option value="float_array">Float Array</option>
+                <option value="bool_array">Bool Array</option>
+              </select>
+            </div>
+            <div class="cad-input-row cad-col-full">
+              <label for="triggerResetDelayMs">Delay (ms)</label>
+              <input type="number" id="triggerResetDelayMs" name="triggerResetDelayMs" placeholder="500"
+                class="cad-modal-input" />
+            </div>
+          </div>
+
+          <input type="hidden" name="arrayLength" value="100">
+
+          <div id="configStatus" class="cad-modal-status" hidden></div>
+
+          <div class="cad-modal-actions-right">
+            <button type="button" class="cad-primary-btn cad-btn-outline" id="reloadConfigBtn">
+              Ricarica
+            </button>
+            <button type="submit" class="cad-primary-btn">
+              Salva Configurazione
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
 </body>
 
 </html>

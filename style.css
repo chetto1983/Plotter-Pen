@@ -635,7 +635,7 @@ label.cad-tool-btn {
 
 .cad-main {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr) clamp(280px, 32vw, 420px);
+  grid-template-columns: 260px minmax(0, 1fr) clamp(280px, 35vw, 600px);
   gap: 0;
   height: 100%;
   min-height: 0;
@@ -658,7 +658,7 @@ label.cad-tool-btn {
 }
 
 .cad-panel::-webkit-scrollbar-thumb {
-  background: rgba(82, 168, 255, 0.3);
+  background: var(--border-light);
   border-radius: 3px;
 }
 
@@ -672,10 +672,9 @@ label.cad-tool-btn {
 }
 
 .cad-panel-section {
-  background: rgba(10, 16, 27, 0.6);
+  background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 10px;
-  /* overflow: hidden; Removed to fix truncation */
 }
 
 .cad-panel-section.cad-panel-fill {
@@ -694,7 +693,7 @@ label.cad-tool-btn {
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  background: rgba(21, 28, 40, 0.8);
+  background: var(--bg-darker);
   border-bottom: 1px solid var(--border);
   font-size: 12px;
   font-weight: 600;
@@ -2749,6 +2748,37 @@ body.config-shell .config-status.error {
   padding: 20px 24px 24px 24px;
 }
 
+.cad-modal-select {
+  width: 100%;
+  padding: 14px 16px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  color: #fff;
+  font-size: 14px;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+}
+
+.cad-modal-select option {
+  background-color: var(--bg-lighter);
+  color: var(--fg);
+  padding: 10px;
+}
+
+.cad-modal-select:focus {
+  border-color: rgba(82, 168, 255, 0.5);
+  background: rgba(0, 0, 0, 0.4);
+  box-shadow: 0 0 0 4px rgba(82, 168, 255, 0.1);
+}
+
 .cad-modal-message {
   margin: 0 0 16px 0;
   font-size: 14px;
@@ -3186,4 +3216,63 @@ body.config-shell .config-status.error {
 
 #fileInput {
   display: none;
+}
+
+/* Utility / Helper Classes for Refactoring Inline Styles */
+.cad-flex-align {
+  display: flex;
+  align-items: center;
+}
+
+.cad-header-label {
+  font-weight: 600;
+  margin-left: 8px;
+}
+
+.cad-actions-row {
+  display: flex;
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.cad-box-flat {
+  border: none !important;
+  border-radius: 0 !important;
+}
+
+
+/* Modal Form Utilities */
+.cad-modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cad-modal-cols-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.cad-col-full {
+  grid-template-columns: 1fr !important;
+}
+
+.cad-modal-status {
+  font-size: 12px;
+  padding: 8px;
+  border-radius: 4px;
+}
+
+.cad-modal-actions-right {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+
+.cad-modal-config {
+  width: 500px;
+  max-width: 90vw;
 }
