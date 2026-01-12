@@ -685,6 +685,10 @@ label.cad-tool-btn {
   min-height: 0;
 }
 
+#camPanel {
+  display: none;
+}
+
 .cad-panel-header {
   display: flex;
   align-items: center;

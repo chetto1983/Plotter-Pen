@@ -17,6 +17,9 @@ import { ViewManager } from './app/ViewManager.js';
 import { ToolController } from './app/ToolController.js';
 import { LayerPanel } from './ui/LayerPanel.js';
 import { PersistenceManager } from './app/PersistenceManager.js';
+// import { CAMManager } from './cam/CAMManager.js'; // Converted to dynamic
+
+console.log('MAIN: Loading main.js...');
 
 /**
  * Main CAD Application Class
@@ -80,6 +83,7 @@ class CADApplication {
    * Initialize the application
    */
   init() {
+    console.log('MAIN: init() called');
     // Get canvas element
     this.canvas = document.getElementById('cadCanvas');
     if (!this.canvas) {
@@ -113,6 +117,17 @@ class CADApplication {
     this.viewManager = new ViewManager(this);
     this.toolController = new ToolController(this);
     this.persistenceManager = new PersistenceManager(this);
+
+    console.log('MAIN: DynImporting CAMManager...');
+    import('./cam/CAMManager.js')
+      .then(module => {
+        console.log('MAIN: CAMManager module loaded.');
+        this.camManager = new module.CAMManager(this);
+        console.log('MAIN: CAMManager instantiated.');
+      })
+      .catch(err => {
+        console.error('MAIN: Failed to load CAMManager!', err);
+      });
 
     // Initialize layer panel UI
     this.layerPanel = new LayerPanel(this.layerManager, 'layerPanel');

@@ -13,6 +13,7 @@
     "dxf-parser": "^1.1.2",
     "dxf-writer": "^1.18.4",
     "express": "^5.2.1",
+    "js-clipper": "^1.0.1",
     "node-opcua-client": "^2.159.0",
     "sqlite3": "^5.1.7"
   },

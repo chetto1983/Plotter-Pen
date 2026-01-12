@@ -165,6 +165,58 @@ export class ModalManager {
     }
 
     /**
+     * Show an alert modal (replaces alert)
+     * @param {Object} options - Modal options
+     * @param {string} options.title - Modal title
+     * @param {string} options.message - Alert message
+     * @param {string} options.confirmText - Confirm button text
+     * @returns {Promise<void>}
+     */
+    alert(options = {}) {
+        const {
+            title = 'Avviso',
+            message = '',
+            confirmText = 'OK'
+        } = options;
+
+        return new Promise((resolve) => {
+            const modal = this.createModal(`
+                <div class="cad-modal-header">
+                    <h3 class="cad-modal-title">${title}</h3>
+                    <button type="button" class="cad-modal-close" data-action="close">&times;</button>
+                </div>
+                <div class="cad-modal-body">
+                    <p class="cad-modal-message">${message}</p>
+                </div>
+                <div class="cad-modal-footer">
+                    <button type="button" class="cad-modal-btn cad-modal-btn-primary" data-action="confirm">${confirmText}</button>
+                </div>
+            `);
+
+            const closeBtn = modal.querySelector('[data-action="close"]');
+            const confirmBtn = modal.querySelector('[data-action="confirm"]');
+
+            const handleClose = () => {
+                this.close();
+                resolve();
+            };
+
+            closeBtn.addEventListener('click', handleClose);
+            confirmBtn.addEventListener('click', handleClose);
+
+            // Keyboard
+            const handleKeydown = (e) => {
+                if (e.key === 'Escape' || e.key === 'Enter') handleClose();
+            };
+            document.addEventListener('keydown', handleKeydown);
+            modal._keydownHandler = handleKeydown;
+
+            this.show(modal);
+            confirmBtn.focus();
+        });
+    }
+
+    /**
      * Show a color picker modal
      * @param {Object} options - Modal options
      * @param {string} options.title - Modal title

@@ -15,6 +15,20 @@ export class PLCOutputGenerator {
         const commands = [];
         let lastPoint = { x: 0, y: 0 };
 
+        const pushCommand = (cmdObj) => {
+            // Check for duplicates
+            if (commands.length > 0) {
+                const lastCmd = commands[commands.length - 1];
+                if (lastCmd.command === cmdObj.command) {
+                    return; // Skip duplicate command
+                }
+            }
+
+            // Re-index since we might have skipped some
+            cmdObj.index = commands.length;
+            commands.push(cmdObj);
+        };
+
         for (let i = 0; i < primitives.length; i++) {
             const prim = primitives[i];
 
@@ -52,32 +66,32 @@ export class PLCOutputGenerator {
             const needsJump = Math.abs(lastPoint.x - x1) > 0.01 || Math.abs(lastPoint.y - y1) > 0.01;
 
             if (needsJump && this.includeZMovements) {
-                commands.push({
-                    index: commands.length,
+                pushCommand({
+                    index: 0, // Will be fixed in pushCommand
                     type: 'Z_up',
                     command: 'Z_UP',
                     primitive: null
                 });
 
-                commands.push({
-                    index: commands.length,
+                pushCommand({
+                    index: 0,
                     type: 'waypoint',
                     command: `J X ${x1.toFixed(this.precision)}, Y ${y1.toFixed(this.precision)}, V ${this.rapidSpeed.toFixed(this.precision)}`,
                     primitive: null
                 });
 
-                commands.push({
-                    index: commands.length,
+                pushCommand({
+                    index: 0,
                     type: 'Z_down',
                     command: 'Z_DW',
                     primitive: null
                 });
             }
 
-            const cmd = this.primitiveToCommand(prim, commands.length);
+            const cmd = this.primitiveToCommand(prim, 0); // Index irrelevant here
             if (cmd) {
                 if (Array.isArray(cmd)) {
-                    commands.push(...cmd);
+                    cmd.forEach(c => pushCommand(c));
 
                     if (prim.type === 'circle' || prim.type === 'rectangle' || prim.type === 'polygon' || prim.closed) {
                         lastPoint = { x: x1, y: y1 };
@@ -88,15 +102,15 @@ export class PLCOutputGenerator {
                         lastPoint = { x: x1, y: y1 };
                     }
                 } else {
-                    commands.push(cmd);
+                    pushCommand(cmd);
                     lastPoint = { x: data.x2 ?? prim.x2, y: data.y2 ?? prim.y2 };
                 }
             }
         }
 
         if (this.includeZMovements && commands.length > 0) {
-            commands.push({
-                index: commands.length,
+            pushCommand({
+                index: 0,
                 type: 'Z_up',
                 command: 'Z_UP',
                 primitive: null
