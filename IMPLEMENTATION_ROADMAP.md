@@ -1088,6 +1088,9 @@ fitToContent(bounds) {
 
 ### 9.4 Tool Library
 
+- [x] **Tool: Chamfer**: Create bevelled corners between two lines.
+- [x] **Tool: Trim/Extend**: Trim or extend lines to a boundary.
+- [x] **Tool: Array**: Create copies of objects in a rectangular grid.
 - [ ] Tool database (add/edit/delete tools)
 - [ ] Tool types: End mill, Ball nose, Drill, V-bit
 - [ ] Tool diameter

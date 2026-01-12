@@ -206,7 +206,8 @@ export class InputHandler {
       const dx = e.clientX - this.lastMousePos.x;
       const dy = e.clientY - this.lastMousePos.y;
       this.lastMousePos.set(e.clientX, e.clientY);
-      this.app.renderer.pan(dx, dy);
+      // Invert dy to fix reversed pan direction
+      this.app.renderer.pan(dx, -dy);
       this.app.ui.updateZoomDisplay();
       this.requestRender();
       return;
@@ -270,7 +271,7 @@ export class InputHandler {
 
     // Update tool preview if tool is active
     if (this.app.currentTool) {
-      this.app.currentTool.onMouseMove(snappedPos);
+      this.app.currentTool.onMouseMove(snappedPos, this.pendingMouseEvent);
     }
 
     // Always render to show snap indicators and preview

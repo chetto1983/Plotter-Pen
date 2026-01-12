@@ -30,12 +30,26 @@ export class TrimTool extends Tool {
     onMouseMove(point, event) {
         // Toggle mode with Shift
         if (this.step === 'SELECT_OBJECT') {
-            const newMode = event.shiftKey ? 'EXTEND' : 'TRIM';
+            const newMode = event && event.shiftKey ? 'EXTEND' : 'TRIM';
             if (this.mode !== newMode) {
                 this.mode = newMode;
                 this.manager.app.ui.updateStatus(this.getHint());
             }
         }
+
+        // Highlight primitive under cursor
+        const prim = this.findPrimitiveAt(point);
+        if (prim) {
+            // Optional: Filter highlighting based on step
+            if (this.step === 'SELECT_CUTTING_EDGE' && prim.type !== 'line') {
+                this.manager.app.setHoveredPrimitive(null);
+            } else {
+                this.manager.app.setHoveredPrimitive(prim);
+            }
+        } else {
+            this.manager.app.setHoveredPrimitive(null);
+        }
+
         super.onMouseMove(point, event);
     }
 
@@ -162,7 +176,7 @@ export class TrimTool extends Tool {
             target.y2 = intersection.y;
         }
 
-        this.manager.app.stateManager.pushState();
+        this.manager.app.state.pushState();
         if (target.getRenderData) target.getRenderData(true);
         this.manager.app.renderer.invalidateCache();
         this.manager.app.render();

@@ -345,7 +345,7 @@ body.cad-app {
   color: var(--fg);
 }
 
-.cad-icon-btn svg {}
+
 
 .cad-tool-btn svg {
   width: 20px;
@@ -409,7 +409,12 @@ body.cad-app {
   overflow-y: hidden;
   position: relative;
   z-index: 1000;
-  scrollbar-width: thin;
+
+
+  @supports (scrollbar-width: thin) {
+    scrollbar-width: thin;
+  }
+
   /* Firefox */
 }
 
@@ -493,6 +498,11 @@ body.cad-app {
   border-color: var(--accent);
   color: #fff;
   box-shadow: 0 0 8px rgba(82, 168, 255, 0.25);
+}
+
+label.cad-tool-btn {
+  margin: 0;
+  cursor: pointer;
 }
 
 /* Action Buttons */
@@ -2924,6 +2934,11 @@ body.config-shell .config-status.error {
   color: var(--accent);
 }
 
+.file-open-label {
+  margin: 0;
+  cursor: pointer;
+}
+
 /* Small Action Buttons (Zoom etc) */
 .cad-action-btn {
   width: 28px;
@@ -2942,8 +2957,55 @@ body.config-shell .config-status.error {
 }
 
 /* Vertical Separator for mix of sizes */
-.cad-toolbar-separator,
-.cad-toolbar-divider {
+
+
+/* ============================================
+   STATUS BAR
+   ============================================ */
+.cad-statusbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 12px;
+  background: var(--bg-darker);
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--muted);
+  height: 28px;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.cad-status-left,
+.cad-status-center,
+.cad-status-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cad-status-center {
+  flex: 1;
+  justify-content: center;
+  color: var(--fg);
+}
+
+.cad-status-divider {
+  color: var(--border-light);
+}
+
+.cad-status-tool {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.cad-status-coords {
+  font-family: monospace;
+  color: var(--fg);
+  display: flex;
+  gap: 8px;
+}
+
+#fileInput {
   display: none;
-  /* Flex gap handles spacing usually, or use distinct border */
 }
