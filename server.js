@@ -7,6 +7,7 @@ import { dxfParseHandler } from "./routes/dxf-parser.js";
 import { smartImportRouter } from "./routes/import-dxf.js";
 import { persistenceRouter } from "./routes/persistence.js";
 import { exportDxfRouter } from "./routes/export-dxf.js";
+import { camRouter } from "./routes/cam.js";
 
 import { findAvailablePort, openBrowser, coalesce, toInt } from "./server/utils/system.js";
 import {
@@ -122,6 +123,7 @@ async function start() {
   app.use("/api", smartImportRouter);
   app.use("/api", persistenceRouter);
   app.use("/api", exportDxfRouter);
+  app.use("/api", camRouter);
 
   // ========== SERVER START ==========
   const port = await findAvailablePort(DEFAULT_PORT);

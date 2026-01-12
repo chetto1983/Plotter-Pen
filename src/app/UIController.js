@@ -145,6 +145,18 @@ export class UIController {
   setupActionButtons() {
     document.getElementById('btnSave')?.addEventListener('click', () => this.app.fileManager.saveToFile());
     document.getElementById('btnLoad')?.addEventListener('click', () => this.app.fileManager.loadFromFile());
+
+    // Bind hidden file input for open
+    const fileInput = document.getElementById('fileInput');
+    if (fileInput) {
+      fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          this.app.fileManager.processFile(file);
+        }
+        fileInput.value = '';
+      });
+    }
     document.getElementById('btnExportDXF')?.addEventListener('click', () => this.app.fileManager.exportDXF());
     document.getElementById('btnUndo')?.addEventListener('click', () => this.app.state.undo());
     document.getElementById('btnRedo')?.addEventListener('click', () => this.app.state.redo());

@@ -715,6 +715,18 @@
 
           <!-- SUBTAB: G-CODE -->
           <div id="cam-subtab-code" class="cam-subtab no-pad" style="display:none;">
+            <div class="cad-gcode-toolbar">
+              <div class="cad-gcode-actions">
+                <button type="button" class="cad-gcode-btn" id="btnGCodeEdit">Modifica</button>
+                <button type="button" class="cad-gcode-btn" id="btnGCodeApply" disabled>Applica</button>
+                <button type="button" class="cad-gcode-btn" id="btnGCodeRevert" disabled>Ripristina</button>
+              </div>
+              <span class="cad-gcode-status" id="gcodeStatus">G-Code: nessun file</span>
+            </div>
+            <div class="cad-gcode-editor-wrap" id="gcodeEditorWrap" hidden>
+              <textarea id="gcodeEditor" class="cad-gcode-editor" spellcheck="false"
+                placeholder="G-Code non ancora generato"></textarea>
+            </div>
             <div class="cad-output-grid" id="gcodeOutputList" style="border:none; border-radius:0;">
               <div class="cad-output-empty">G-Code non ancora generato</div>
             </div>

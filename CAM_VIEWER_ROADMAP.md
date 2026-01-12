@@ -1,84 +1,82 @@
 # CAM Viewer Roadmap (Cynic Edition)
 
 ## Context
-You want a drop-in 3D G-code viewer, Three.js is acceptable, and visible branding is acceptable.
-Reality check: there is no true drop-in viewer for your stack or for pen-plotter semantics. You will still do integration work.
+We already integrated Polar3D with a backend worker that generates and parses G-code.
+Reality check: the CAM path still polygonizes arcs, the UI is sloppy, and PLC logic is not reused where it should be.
 
-## Decision (for now)
-Use `@polar3d/gcode-viewer` because it is the only actively maintained, feature-complete viewer that is close to "component-like".
-Hard constraint: it requires visible "Powered by Polar3D" branding and a custom license. You already said this is OK.
+## Decision (current)
+- Keep `@polar3d/gcode-viewer` with branding.
+- G-code is the single source of truth for CAM output.
+- Heavy parsing and generation stays in the backend worker.
+- Reuse PLC movement logic as a post-processor for G-code.
 
 ## Non-goals
 - Rebuilding a 3D viewer from scratch.
-- Porting a full app like cncjs or gcoder into this codebase.
-- Pretending a 3D printer viewer perfectly fits a CNC/plotter toolpath model.
+- Shipping a full cncjs clone inside this app.
+- Trusting the frontend to chew on huge toolpaths.
 
-## Cynic risk register (read this twice)
-- Licensing is not a checkbox. The library enforces branding. If legal changes their mind later, this becomes debt.
-- Your G-code is not 3D printing G-code. Expect mismatches (metadata, extrusion semantics, layer logic).
-- "Drop-in" is marketing, not engineering. You still need wrapper code, resize logic, and UX decisions.
-- Three.js increases payload size and complexity. This is fine only if you accept the cost.
-- The viewer is fast until you throw a large file at it. Then you pay in memory and UI jank.
+## Cynic risk register (read twice)
+- Licensing is not a checkbox. Branding is required and can become debt.
+- "3D printer" G-code assumptions will leak into CNC semantics.
+- Multiple sources of truth = silent bugs. Only G-code survives.
+- Editable G-code means users can break things. We must validate and fail loudly.
+- Performance falls apart on large files unless we keep work in the worker.
 
 ## Roadmap
 
-### Phase 0: Legal and UX gate
+### Phase 0: Baseline sanity (done)
 Deliverables:
-- Confirm license acceptance in writing (visible branding stays).
-- Decide branding location (CAM preview corner, footer, or ribbon).
+- Polar3D viewer adapter wired into CAM preview.
+- Backend worker for G-code generate + parse.
+- CAMManager wired to backend for generate + preview.
 Exit criteria:
-- Brand placement approved by product/legal.
+- Preview renders without console errors.
+- No blocking parsing on the UI thread.
 
-### Phase 1: POC integration (vertical slice)
+### Phase 1: G-code becomes first-class
 Deliverables:
-- Add Three.js and `@polar3d/gcode-viewer` to `package.json`.
-- Add a thin adapter module, e.g. `src/cam/Polar3DViewerAdapter.js`.
-- Initialize the viewer inside the CAM Preview panel using the existing `camPreviewCanvas` container or a new container element.
-- Load and render a small G-code sample from CAMManager.
+- G-code editor in the CAM panel (edit, apply, revert).
+- Dirty state with validation feedback (errors are visible, not hidden).
+- Preview uses the edited G-code, not the stale original.
 Exit criteria:
-- Viewer renders and re-renders on G-code updates without console errors.
-- Branding is visible and not hidden by CSS.
+- User can safely modify output and see the updated preview.
+- Invalid edits are rejected with actionable errors.
 
-### Phase 2: Replace current preview path
+### Phase 2: PLC post-processor
 Deliverables:
-- Replace `SimpleGCodeViewer` usage in `src/cam/CAMManager.js`.
-- Use a ResizeObserver to reflow the viewer when the preview sub-tab becomes visible.
-- Ensure `G90` (absolute) and `G21` (mm) are present in generated G-code, or explicitly configure the viewer if it assumes defaults.
+- G0/G1/G2/G3 mapped to PLC primitives using existing PLC movement logic.
+- Backend endpoint for "post-process" output (G-code -> PLC sequence).
+- Single parsing pipeline that feeds both preview and PLC.
 Exit criteria:
-- Preview works for profile and pocket operations.
-- Preview updates correctly after switching tabs.
+- CAM output and PLC output derive from the same G-code.
+- No duplicate geometric logic across CAM/PLC paths.
 
-### Phase 3: UI and UX hardening
+### Phase 3: UI and 3D polish
 Deliverables:
-- Add "Performance" toggle for heavy files (reduce quality, hide travel moves).
-- Progress indicator while parsing.
-- Guard against rendering when the CAM tab is hidden (avoid wasted work).
+- Fix missing CAM CSS variables and clean the panel layout.
+- Resize-friendly preview panel (no fixed 280px jail).
+- Orbit/pan controls and predictable fit-to-view behavior.
+- Arc preview fidelity matches the G2/G3 intent.
 Exit criteria:
-- No visible UI stutter on typical files.
-- User can understand when the viewer is loading vs. broken.
+- CAM UI looks intentional, not accidental.
+- 3D preview is usable on both laptop and ultrawide layouts.
 
-### Phase 4: Validation and docs
+### Phase 4: Quality and regression hardening
 Deliverables:
-- Add G-code fixtures for regression testing (simple line, arc, pocket, mixed).
-- Document known limitations (e.g., extrusion metadata ignored, layer logic adapted).
-- Update README to note branding and licensing.
+- G-code fixtures (line, arc, mixed) for regression tests.
+- Performance guardrails (limits, throttling, and worker timeouts).
+- README updates for branding, licensing, and editability.
 Exit criteria:
-- Reproducible preview output for fixed samples.
-- Docs include the licensing constraint and branding requirement.
+- Repeatable results across fixtures.
+- Known limitations documented, not guessed.
 
 ## Integration notes (boring but real)
-- Prefer lazy-loading the viewer module only when CAM tab is opened.
-- The viewer expects a container, not a canvas. Plan to replace the canvas or wrap it.
+- The viewer expects a container element, not a canvas.
 - Keep the adapter API stable: `init(container)`, `setGCode(text)`, `resize()`, `dispose()`.
-- Do not block the UI thread on large parsing jobs; consider a worker later.
-
-## Alternatives (why not)
-- cncjs: full app, heavy UI, not a component. Extracting a viewer is a project.
-- aligator/gcode-viewer: MIT but embeds three.js and is pre-1.0 with no guarantees.
-- react-gcode-viewer: React-only and stale. Not worth bending your stack.
-- gcoder: good UX ideas, but not a reusable library.
+- Treat the worker as the only heavy computation path.
+- Any G-code edit must re-parse in the worker and refresh the preview.
 
 ## Open questions
-- Do we need layer slicing controls or just a static preview?
-- Do we need travel moves visible for debugging?
-- Is the branding acceptable in all distributions, including customer deployments?
+- Do we allow user macros or just raw G-code edits?
+- How strict should validation be before allowing "Apply"?
+- Is PLC post-processing optional per job, or a global default?

@@ -24,19 +24,23 @@ export function generateProfile(op, tool, _machine) {
     if (!polygon || polygon.length < 2) return [];
 
     let profilePath2D = [];
+    const isClosed = op.closed !== false;
 
     // Calculate Offset
     // side: 'inside', 'outside', 'on'
     let offset = 0;
-    if (op.side === 'inside') offset = -toolRadius;
-    else if (op.side === 'outside') offset = toolRadius;
-    else offset = 0;
+    if (isClosed) {
+        if (op.side === 'inside') offset = -toolRadius;
+        else if (op.side === 'outside') offset = toolRadius;
+    }
+
+    if (!isClosed && op.arc && Math.abs(offset) <= 0.001) {
+        return applyDepthToArc(op.arc, startZ, targetZ, stepDown);
+    }
 
     if (Math.abs(offset) > 0.001) {
         // Use Clipper
         // Need to know if closed or open
-        const isClosed = op.closed !== false;
-
         // Note: Outside/Inside direction depends on polygon winding (CW vs CCW)
         // Clipper assumes specific winding. We might need to enforce it.
         // For now, trusting user/Clipper default behavior.
@@ -56,6 +60,24 @@ export function generateProfile(op, tool, _machine) {
     }
 
     // Generate Z-levels
-    const isClosed = op.closed !== false;
     return applyDepthLayers(profilePath2D, startZ, targetZ, stepDown, isClosed);
+}
+
+function applyDepthToArc(arcData, startZ, targetZ, stepDown) {
+    const layers = [];
+    let currentZ = startZ;
+
+    if (stepDown <= 0) stepDown = 1.0;
+
+    while (currentZ > targetZ) {
+        currentZ -= stepDown;
+        if (currentZ < targetZ) currentZ = targetZ;
+
+        layers.push({
+            arc: { ...arcData },
+            z: currentZ
+        });
+    }
+
+    return layers;
 }

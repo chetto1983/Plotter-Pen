@@ -635,7 +635,7 @@ label.cad-tool-btn {
 
 .cad-main {
   display: grid;
-  grid-template-columns: 260px 1fr 280px;
+  grid-template-columns: 260px minmax(0, 1fr) clamp(280px, 32vw, 420px);
   gap: 0;
   height: 100%;
   min-height: 0;
@@ -890,6 +890,87 @@ label.cad-tool-btn {
   overflow: hidden;
 }
 
+.cad-gcode-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(15, 21, 33, 0.7);
+  border-bottom: 1px solid var(--border);
+}
+
+.cad-gcode-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cad-gcode-btn {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: rgba(15, 21, 33, 0.8);
+  color: var(--fg);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cad-gcode-btn:hover {
+  border-color: var(--accent);
+  background: rgba(82, 168, 255, 0.1);
+  color: var(--fg);
+}
+
+.cad-gcode-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cad-gcode-status {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.cad-gcode-editor-wrap {
+  padding: 8px;
+  background: rgba(11, 14, 22, 0.6);
+  border-bottom: 1px solid var(--border);
+}
+
+.cad-gcode-editor {
+  width: 100%;
+  min-height: 200px;
+  resize: vertical;
+  padding: 10px;
+  background: rgba(11, 14, 22, 0.75);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--fg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.cad-gcode-editor:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(82, 168, 255, 0.15);
+}
+
+#cam-subtab-code {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+#cam-subtab-code .cad-output-grid {
+  flex: 1;
+  min-height: 0;
+}
+
 .cad-output-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -1135,23 +1216,116 @@ label.cad-tool-btn {
 /* Modal Tabs and Forms */
 .cad-tabs {
   display: flex;
-  border-bottom: 1px solid var(--border-color);
-  margin-bottom: 15px;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(11, 14, 22, 0.6);
+  margin-bottom: 12px;
+  padding: 6px 6px 0;
 }
 
 .cad-tab-btn {
   background: none;
   border: none;
-  color: var(--text-muted);
-  padding: 8px 16px;
+  color: var(--muted);
+  padding: 8px 14px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 12px;
+  font-weight: 600;
   border-bottom: 2px solid transparent;
+  border-radius: 6px 6px 0 0;
+  transition: all 0.15s ease;
+}
+
+.cad-tab-btn:hover {
+  color: var(--fg);
+  background: rgba(82, 168, 255, 0.1);
 }
 
 .cad-tab-btn.active {
-  color: var(--text-primary);
-  border-bottom-color: var(--accent-color);
+  color: var(--fg);
+  border-bottom-color: var(--accent);
+  background: rgba(82, 168, 255, 0.08);
+}
+
+.cad-cam-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.cam-subtab {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: 10px;
+  gap: 10px;
+}
+
+.cam-subtab.no-pad {
+  padding: 0;
+}
+
+.cad-cam-operations {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.cad-cam-ops-header {
+  margin: 0;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--muted);
+}
+
+.cad-cam-ops-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+}
+
+.cad-cam-ops-empty {
+  padding: 12px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.cad-cam-preview-container {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background: radial-gradient(circle at top, rgba(24, 32, 50, 0.8), rgba(8, 12, 20, 0.95));
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin: 10px;
+}
+
+.cad-cam-preview-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.cad-cam-preview-label {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  font-size: 10px;
+  letter-spacing: 0.6px;
+  color: var(--muted);
+  background: rgba(8, 12, 20, 0.7);
+  padding: 4px 8px;
+  border-radius: 6px;
 }
 
 .cad-form-group {

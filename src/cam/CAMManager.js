@@ -4,7 +4,6 @@
  */
 import { MachineConfig } from './MachineConfig.js';
 import { ToolLibrary } from './ToolLibrary.js';
-import { ToolpathGenerator } from './ToolpathGenerator.js';
 import { getModalManager } from '../ui/ModalManager.js';
 
 export class CAMManager {
@@ -13,13 +12,19 @@ export class CAMManager {
         this.app = app; // Reference to main application
         this.machine = new MachineConfig();
         this.toolLibrary = new ToolLibrary();
-        this.generator = new ToolpathGenerator(this.machine, this.toolLibrary);
 
         this.operations = [];
         this.jobSettings = {
             safeZ: 5,
             startZ: 0
         };
+        this.gcode = '';
+        this.gcodeSource = '';
+        this.gcodeDirty = false;
+        this.gcodeEditing = false;
+        this.previewData = null;
+        this.parseRequestId = 0;
+        this.plcRequestId = 0;
 
         // Initialize Viewer
         this.viewer = null;
@@ -34,16 +39,20 @@ export class CAMManager {
 
     initViewer() {
         const canvas = document.getElementById('camPreviewCanvas');
-        if (canvas) {
-            // Adjust canvas resolution for HiDPI
-            const rect = canvas.getBoundingClientRect();
-            canvas.width = rect.width * window.devicePixelRatio;
-            canvas.height = rect.height * window.devicePixelRatio;
-
-            import('./SimpleGCodeViewer.js').then(module => {
-                this.viewer = new module.SimpleGCodeViewer(canvas);
-            });
+        if (!canvas || this.viewer) {
+            return;
         }
+
+        import('./Polar3DViewerAdapter.js')
+            .then(module => {
+                this.viewer = new module.Polar3DViewerAdapter(canvas);
+                if (this.previewData) {
+                    this.viewer.setParsedData(this.previewData);
+                }
+            })
+            .catch((error) => {
+                console.error('CAMManager: Failed to load Polar3D viewer', error);
+            });
     }
 
     /**
@@ -86,8 +95,10 @@ export class CAMManager {
                 });
             } else if (prim.type === 'arc') {
                 console.log('CAMManager: Processing ARC primitive', prim);
+                const arcData = this.serializeArc(prim);
                 pointsList.push({
                     points: this.arcToPolygon(prim),
+                    arc: arcData,
                     closed: false
                 });
             } else {
@@ -122,6 +133,7 @@ export class CAMManager {
                 type: type,
                 toolId: '1', // Default to 3mm Endmill
                 points: item.points, // Data for the strategy
+                arc: item.arc,
                 closed: item.closed, // NEW: Track if it's closed
                 // Default params
                 startZ: this.jobSettings.startZ,
@@ -148,30 +160,6 @@ export class CAMManager {
         return points;
     }
 
-    handleWorkerMessage(e) {
-        const { status, gcode, message } = e.data;
-        const btn = document.getElementById('btnCamGenerate');
-        if (btn) btn.disabled = false;
-
-        if (status === 'success') {
-            console.log('CAMManager: Worker returned success');
-            this.gcode = gcode;
-            this.updatePreview();
-
-            // Populate List
-            this.renderGCodeList(this.gcode);
-
-            this.app.ui.updateStatus(`G-Code generato: ${this.gcode.split('\n').length} linee`);
-        } else {
-            console.error('CAMManager: Worker returned error', message);
-            getModalManager().alert({
-                title: 'Errore Generazione (Worker)',
-                message: 'Errore: ' + message
-            });
-            this.app.ui.updateStatus('Errore Generazione');
-        }
-    }
-
     arcToPolygon(arc, segments = 32) {
         // arc properties: radius, cx, cy, startAngle, sweep
         const points = [];
@@ -193,23 +181,267 @@ export class CAMManager {
         return points;
     }
 
+    serializeArc(arc) {
+        if (!arc) {
+            return null;
+        }
+
+        return {
+            x1: arc.x1,
+            y1: arc.y1,
+            x2: arc.x2,
+            y2: arc.y2,
+            cx: arc.cx,
+            cy: arc.cy,
+            radius: arc.radius,
+            clockwise: arc.isClockwise === true
+        };
+    }
+
     removeOperation(id) {
         this.operations = this.operations.filter(op => op.id !== id);
     }
 
-    generateGCode() {
-        if (this.operations.length === 0) return '';
+    async generateGCode() {
+        if (this.operations.length === 0) {
+            return '';
+        }
 
         const job = {
             operations: this.operations
         };
 
-        try {
-            return this.generator.generateJob(job);
-        } catch (e) {
-            console.error('G-Code Generation failed:', e);
-            throw e;
+        const tools = this.toolLibrary?.getAllTools?.() ?? [];
+        const payload = {
+            job,
+            settings: this.jobSettings,
+            tools
+        };
+
+        const response = await fetch('/api/cam/generate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || result?.status !== 'ok') {
+            throw new Error(result?.message ?? 'Errore generazione G-Code.');
         }
+
+        return result?.gcode ?? '';
+    }
+
+    async parseGCodePreview(gcodeText) {
+        const response = await fetch('/api/cam/parse', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ gcode: gcodeText })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || result?.status !== 'ok') {
+            throw new Error(result?.message ?? 'Errore parsing G-Code.');
+        }
+
+        return result;
+    }
+
+    getPLCOptions() {
+        const options = {};
+        const workInput = document.getElementById('simWorkSpeed');
+        const rapidInput = document.getElementById('simRapidSpeed');
+
+        const defaultSpeed = workInput ? parseFloat(workInput.value) : NaN;
+        const rapidSpeed = rapidInput ? parseFloat(rapidInput.value) : NaN;
+
+        if (Number.isFinite(defaultSpeed)) {
+            options.defaultSpeed = defaultSpeed;
+        }
+
+        if (Number.isFinite(rapidSpeed)) {
+            options.rapidSpeed = rapidSpeed;
+        }
+
+        return options;
+    }
+
+    async postProcessGCode(gcodeText) {
+        const response = await fetch('/api/cam/postprocess', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                gcode: gcodeText,
+                options: this.getPLCOptions()
+            })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || result?.status !== 'ok') {
+            throw new Error(result?.message ?? 'Errore post-process PLC.');
+        }
+
+        return result;
+    }
+
+    applyPLCOutput(commands) {
+        const plcCommands = Array.isArray(commands) ? commands : [];
+        this.app.plcCommands = plcCommands;
+        this.app.plcOutput = plcCommands.map(cmd => cmd.command).filter(Boolean);
+
+        const displayCommands = plcCommands.length > 2000
+            ? plcCommands.slice(0, 2000).concat([{ command: `... (${plcCommands.length - 2000} more commands)` }])
+            : plcCommands;
+
+        this.app.ui.displayPLCOutput(displayCommands, this.app);
+    }
+
+    async updatePLCFromServer() {
+        if (!this.gcode) {
+            return;
+        }
+
+        const requestId = ++this.plcRequestId;
+        this.app.ui.updateStatus('Post-process PLC in corso...');
+
+        try {
+            const result = await this.postProcessGCode(this.gcode);
+            if (requestId !== this.plcRequestId) {
+                return;
+            }
+
+            this.applyPLCOutput(result?.commands);
+            this.app.ui.updateStatus(`PLC aggiornato: ${this.app.plcOutput.length} comandi`);
+        } catch (error) {
+            console.error('CAMManager: PLC postprocess failed', error);
+            this.app.ui.updateStatus('Errore post-process PLC');
+        }
+    }
+
+    setGCode(gcode, { source = false } = {}) {
+        this.gcode = gcode ?? '';
+        if (source) {
+            this.gcodeSource = this.gcode;
+        }
+
+        this.renderGCodeList(this.gcode);
+        this.updateGCodeEditor({ reset: true });
+    }
+
+    updateGCodeEditor({ reset = false } = {}) {
+        const editor = document.getElementById('gcodeEditor');
+        const status = document.getElementById('gcodeStatus');
+        const applyBtn = document.getElementById('btnGCodeApply');
+        const revertBtn = document.getElementById('btnGCodeRevert');
+
+        if (editor && reset) {
+            editor.value = this.gcode || '';
+        }
+
+        const editorValue = editor ? editor.value : (this.gcode || '');
+        const appliedValue = this.gcode || '';
+        const sourceValue = this.gcodeSource || '';
+        const hasContent = editorValue.trim().length > 0;
+        const isDirty = hasContent && editorValue !== appliedValue;
+        const isRevertable = sourceValue && editorValue !== sourceValue;
+
+        if (applyBtn) {
+            applyBtn.disabled = !isDirty;
+        }
+
+        if (revertBtn) {
+            revertBtn.disabled = !isRevertable;
+        }
+
+        this.gcodeDirty = isDirty;
+
+        if (status) {
+            if (!appliedValue && !hasContent) {
+                status.textContent = 'G-Code: nessun file';
+            } else {
+                const lines = editorValue.split('\n').filter(line => line.trim().length > 0).length;
+                status.textContent = `G-Code: ${lines} linee${this.gcodeDirty ? ' (modificato)' : ''}`;
+            }
+        }
+    }
+
+    toggleGCodeEditor() {
+        const editorWrap = document.getElementById('gcodeEditorWrap');
+        const outputList = document.getElementById('gcodeOutputList');
+        const toggleBtn = document.getElementById('btnGCodeEdit');
+        const editor = document.getElementById('gcodeEditor');
+
+        if (!editorWrap || !outputList || !toggleBtn) {
+            return;
+        }
+
+        this.gcodeEditing = !this.gcodeEditing;
+
+        if (this.gcodeEditing) {
+            editorWrap.hidden = false;
+            outputList.style.display = 'none';
+            toggleBtn.textContent = 'Visualizza';
+            if (editor) {
+                editor.value = this.gcode || '';
+                editor.focus();
+            }
+        } else {
+            editorWrap.hidden = true;
+            outputList.style.display = '';
+            toggleBtn.textContent = 'Modifica';
+        }
+
+        this.updateGCodeEditor();
+    }
+
+    async applyGCodeEdits() {
+        const editor = document.getElementById('gcodeEditor');
+        if (!editor) {
+            return;
+        }
+
+        const updated = editor.value;
+        if (!updated.trim()) {
+            getModalManager().alert({
+                title: 'G-Code vuoto',
+                message: 'Inserisci un G-Code valido prima di applicare.'
+            });
+            return;
+        }
+
+        this.gcode = updated;
+        this.renderGCodeList(this.gcode);
+        this.updateGCodeEditor();
+
+        await this.updatePreviewFromServer();
+        await this.updatePLCFromServer();
+    }
+
+    async revertGCodeEdits() {
+        if (!this.gcodeSource) {
+            return;
+        }
+
+        const editor = document.getElementById('gcodeEditor');
+        this.gcode = this.gcodeSource;
+
+        if (editor) {
+            editor.value = this.gcodeSource;
+        }
+
+        this.renderGCodeList(this.gcode);
+        this.updateGCodeEditor();
+        await this.updatePreviewFromServer();
+        await this.updatePLCFromServer();
     }
 
     getOperations() {
@@ -249,76 +481,8 @@ export class CAMManager {
 
             // --- GENERATION ---
             if (target.closest('#btnCamGenerate')) {
-                console.log('CAMManager: Generate button clicked (Async Worker)');
-                this.app.ui.updateStatus('Generazione G-Code in corso...');
-
-                // Disable button to prevent double click
                 const btn = target.closest('#btnCamGenerate');
-                btn.disabled = true;
-
-                // Prepare Data for Worker
-                // Convert ToolLibrary to plain map for transfer because Class methods don't transfer
-                const toolsData = {};
-                // Assuming ToolLibrary has a list of tools. 
-                // Check ToolLibrary.js structure. Step 671 doesn't show it.
-                // Assuming simple object is safer. 
-                // But ToolpathGenerator expects `toolLibrary.getTool(id)`.
-                // In worker I mocked getTool.
-                // I need to send the DATA.
-                if (this.toolLibrary && this.toolLibrary.tools) {
-                    this.toolLibrary.tools.forEach(t => toolsData[t.id] = t);
-                }
-
-                const job = {
-                    operations: this.operations
-                };
-
-                // Instantiate Worker if not exists (lazy load)
-                // Instantiate Worker if not exists (lazy load)
-                if (!this.worker) {
-                    this.workerReady = false;
-                    this.pendingMessage = null;
-
-                    // Use Classic worker loader (which loads modules dynamically)
-                    this.worker = new Worker('./src/cam/cam.worker.js');
-
-                    this.worker.onmessage = (e) => {
-                        if (e.data.status === 'ready') {
-                            console.log('CAMManager: Worker is ready.');
-                            this.workerReady = true;
-                            if (this.pendingMessage) {
-                                console.log('CAMManager: Sending pending message to worker...');
-                                this.worker.postMessage(this.pendingMessage);
-                                this.pendingMessage = null;
-                            }
-                            return;
-                        }
-                        this.handleWorkerMessage(e);
-                    };
-
-                    this.worker.onerror = (e) => {
-                        console.error('WORKER ERROR:', e);
-                        this.app.ui.updateStatus('Errore Worker!');
-                        const btn = document.getElementById('btnCamGenerate');
-                        if (btn) btn.disabled = false;
-                    };
-                }
-
-                const message = {
-                    command: 'generate',
-                    data: {
-                        job: job,
-                        settings: this.jobSettings,
-                        toolsData: toolsData
-                    }
-                };
-
-                if (this.workerReady) {
-                    this.worker.postMessage(message);
-                } else {
-                    console.log('CAMManager: Worker not ready, queueing message...');
-                    this.pendingMessage = message;
-                }
+                this.handleGenerateClick(btn);
                 return;
             }
 
@@ -336,7 +500,75 @@ export class CAMManager {
                 }
                 return;
             }
+
+            if (target.closest('#btnGCodeEdit')) {
+                this.toggleGCodeEditor();
+                return;
+            }
+
+            if (target.closest('#btnGCodeApply')) {
+                this.applyGCodeEdits();
+                return;
+            }
+
+            if (target.closest('#btnGCodeRevert')) {
+                this.revertGCodeEdits();
+                return;
+            }
+
+            if (target.closest('.cad-tab-btn[data-subtab="preview"]')) {
+                if (this.viewer && typeof this.viewer.resize === 'function') {
+                    setTimeout(() => this.viewer.resize(), 0);
+                }
+                return;
+            }
         });
+
+        document.addEventListener('input', (event) => {
+            if (event.target && event.target.id === 'gcodeEditor') {
+                this.updateGCodeEditor();
+            }
+        });
+    }
+
+    async handleGenerateClick(button) {
+        if (this.operations.length === 0) {
+            getModalManager().alert({
+                title: 'Attenzione',
+                message: 'Aggiungi almeno una operazione CAM prima di generare.'
+            });
+            return;
+        }
+
+        if (button) {
+            button.disabled = true;
+        }
+
+        this.app.ui.updateStatus('Generazione G-Code in corso...');
+
+        try {
+            const gcode = await this.generateGCode();
+            if (!gcode) {
+                throw new Error('G-Code vuoto.');
+            }
+
+            this.setGCode(gcode, { source: true });
+            this.app.ui.updateStatus(`G-Code generato: ${this.gcode.split('\n').length} linee`);
+
+            await this.updatePreviewFromServer();
+            await this.updatePLCFromServer();
+        } catch (error) {
+            console.error('CAMManager: G-Code generation failed', error);
+            getModalManager().alert({
+                title: 'Errore Generazione',
+                message: error?.message ?? 'Errore durante la generazione.'
+            });
+            this.app.ui.updateStatus('Errore Generazione');
+        } finally {
+            if (button) {
+                button.disabled = false;
+            }
+        }
     }
 
     renderOperationsList() {
@@ -376,6 +608,11 @@ export class CAMManager {
         if (!list) return;
 
         list.innerHTML = '';
+        if (!gcode || !gcode.trim()) {
+            list.innerHTML = '<div class="cad-output-empty">G-Code non ancora generato</div>';
+            return;
+        }
+
         const lines = gcode.split('\n');
 
         lines.forEach((line) => {
@@ -421,9 +658,36 @@ export class CAMManager {
         list.scrollTop = 0;
     }
 
-    updatePreview() {
-        if (this.viewer && this.gcode) {
-            this.viewer.setGCode(this.gcode);
+    async updatePreviewFromServer() {
+        if (!this.gcode) {
+            return;
+        }
+
+        const requestId = ++this.parseRequestId;
+        this.app.ui.updateStatus('Analisi preview in corso...');
+
+        try {
+            const parsed = await this.parseGCodePreview(this.gcode);
+            if (requestId !== this.parseRequestId) {
+                return;
+            }
+
+            this.previewData = parsed;
+            this.updatePreview(parsed);
+            this.app.ui.updateStatus('Preview aggiornata');
+        } catch (error) {
+            console.error('CAMManager: Preview parse failed', error);
+            getModalManager().alert({
+                title: 'Errore Preview',
+                message: error?.message ?? 'Errore durante il parsing.'
+            });
+            this.app.ui.updateStatus('Errore Preview');
+        }
+    }
+
+    updatePreview(parsed = this.previewData) {
+        if (this.viewer && parsed) {
+            this.viewer.setParsedData(parsed);
         }
     }
 

@@ -56,8 +56,6 @@ export class FileManager {
    */
   async loadFromFile() {
     try {
-      let file;
-
       if (window.showOpenFilePicker) {
         const [handle] = await window.showOpenFilePicker({
           types: [{
@@ -77,14 +75,29 @@ export class FileManager {
         });
 
         this.fileHandle = handle;
-        file = await handle.getFile();
+        const file = await handle.getFile();
+        await this.processFile(file);
       } else {
-        file = await pickFileLegacy(".json,.dxf");
+        const file = await pickFileLegacy(".json,.dxf");
         this.fileHandle = null;
+        if (file) await this.processFile(file);
       }
+    } catch (err) {
+      if (err.name !== "AbortError") {
+        console.error("Load failed:", err);
+        this.app.ui.updateStatus("Errore durante il caricamento");
+      }
+    }
+  }
 
-      if (!file) return;
+  /**
+   * Process a selected file (JSON or DXF)
+   * @param {File} file 
+   */
+  async processFile(file) {
+    if (!file) return;
 
+    try {
       const fileName = file.name.toLowerCase();
       const content = await file.text();
 
@@ -94,10 +107,9 @@ export class FileManager {
         await this.loadFromJSON(file, content);
       }
     } catch (err) {
-      if (err.name !== "AbortError") {
-        console.error("Load failed:", err);
-        this.app.ui.updateStatus("Errore durante il caricamento");
-      }
+      console.error("File processing failed:", err);
+      this.app.ui.updateStatus(`Errore elaborazione file: ${err.message}`);
+      throw err;
     }
   }
 

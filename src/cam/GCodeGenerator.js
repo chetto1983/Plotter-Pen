@@ -5,7 +5,7 @@
 export class GCodeGenerator {
     constructor() {
         this.lines = [];
-        this.precision = 3;
+        this.precision = 4;
         this.settings = {
             units: 'mm', // 'mm' or 'inch'
             absolute: true
@@ -103,27 +103,23 @@ export class GCodeGenerator {
      * Rapid Move (G0)
      */
     addRapid(x = null, y = null, z = null) {
-        let cmd = '';
+        let cmd = 'G0';
         let changed = false;
 
-        // Force G0 if mode changed
-        if (this.lastMode !== 'G0') {
-            cmd += 'G0';
-            this.lastMode = 'G0';
-            changed = true;
-        }
+        // Update state but always output G0 for robustness
+        this.lastMode = 'G0';
 
-        if (x !== null && Math.abs(x - this.lastX) > 0.0001) {
+        if (x !== null && (this.lastX === null || Math.abs(x - this.lastX) > 0.0001)) {
             cmd += ` X${x.toFixed(this.precision)}`;
             this.lastX = x;
             changed = true;
         }
-        if (y !== null && Math.abs(y - this.lastY) > 0.0001) {
+        if (y !== null && (this.lastY === null || Math.abs(y - this.lastY) > 0.0001)) {
             cmd += ` Y${y.toFixed(this.precision)}`;
             this.lastY = y;
             changed = true;
         }
-        if (z !== null && Math.abs(z - this.lastZ) > 0.0001) {
+        if (z !== null && (this.lastZ === null || Math.abs(z - this.lastZ) > 0.0001)) {
             cmd += ` Z${z.toFixed(this.precision)}`;
             this.lastZ = z;
             changed = true;
@@ -138,27 +134,22 @@ export class GCodeGenerator {
      * Linear Move (G1)
      */
     addLinear(x = null, y = null, z = null, feed = null) {
-        let cmd = '';
+        let cmd = 'G1';
         let changed = false;
 
-        // Force G1 if mode changed
-        if (this.lastMode !== 'G1') {
-            cmd += 'G1';
-            this.lastMode = 'G1';
-            changed = true;
-        }
+        this.lastMode = 'G1';
 
-        if (x !== null && Math.abs(x - this.lastX) > 0.0001) {
+        if (x !== null && (this.lastX === null || Math.abs(x - this.lastX) > 0.0001)) {
             cmd += ` X${x.toFixed(this.precision)}`;
             this.lastX = x;
             changed = true;
         }
-        if (y !== null && Math.abs(y - this.lastY) > 0.0001) {
+        if (y !== null && (this.lastY === null || Math.abs(y - this.lastY) > 0.0001)) {
             cmd += ` Y${y.toFixed(this.precision)}`;
             this.lastY = y;
             changed = true;
         }
-        if (z !== null && Math.abs(z - this.lastZ) > 0.0001) {
+        if (z !== null && (this.lastZ === null || Math.abs(z - this.lastZ) > 0.0001)) {
             cmd += ` Z${z.toFixed(this.precision)}`;
             this.lastZ = z;
             changed = true;
@@ -197,6 +188,8 @@ export class GCodeGenerator {
 
         this.lines.push(cmd);
     }
+
+
 
     /**
      * Dwell (G4)
