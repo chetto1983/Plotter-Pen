@@ -4,16 +4,34 @@
  */
 import { ClipperWrapper } from '../ClipperWrapper.js';
 import { applyDepthLayers } from '../StrategyUtils.js';
+import { LIMITS, TOLERANCE } from '../constants.js';
+
+const polygonArea = (points) => {
+    let area = 0;
+    const count = points.length;
+    for (let i = 0; i < count; i++) {
+        const j = (i + 1) % count;
+        area += points[i].x * points[j].y - points[j].x * points[i].y;
+    }
+    return area / 2;
+};
+
+const totalArea = (paths) => {
+    if (!Array.isArray(paths)) return 0;
+    return paths.reduce((sum, path) => {
+        if (!Array.isArray(path) || path.length < 3) return sum;
+        return sum + Math.abs(polygonArea(path));
+    }, 0);
+};
 
 /**
  * Generate pocketing toolpaths
  * @param {Object} op - Operation parameters
  * @param {Object} tool - Tool definition
  * @param {Object} machine - Machine configuration
- * @returns {Array<Array<{x,y,z}>>} Array of 3D paths
+ * @returns {Promise<Array<Array<{x,y,z}>>>} Array of 3D paths
  */
-export function generatePocket(op, tool, _machine) {
-
+export async function generatePocket(op, tool, _machine) {
     const toolRadius = tool.diameter / 2;
     const stepOver = (op.stepOver || tool.defaults.stepOver || 40) / 100 * tool.diameter;
     const stepDown = op.stepDown || tool.defaults.stepDown;
@@ -33,25 +51,28 @@ export function generatePocket(op, tool, _machine) {
 
     // 2. Generate generic XY offset paths (2D)
     // Initial offset to account for tool radius (keep tool inside)
-    let currentPoly = ClipperWrapper.offsetPolygon(polygon, -toolRadius, 'Round');
+    let currentPoly = await ClipperWrapper.offsetPolygon(polygon, -toolRadius, 'Round');
     let holePolys = [];
 
     if (holes.length > 0) {
         for (const hole of holes) {
-            const offsets = ClipperWrapper.offsetPolygon(hole, toolRadius, 'Round');
+            const offsets = await ClipperWrapper.offsetPolygon(hole, toolRadius, 'Round');
             holePolys.push(...offsets);
         }
     }
 
     // Spiral/Offset inward
     const pocketPaths2D = [];
-    let guard = 0;
+    let iterations = 0;
+    let lastArea = totalArea(currentPoly);
+    const maxIterations = LIMITS.POCKETING_ITERATIONS;
+    const areaEpsilon = TOLERANCE.AREA_EPSILON;
 
     // While we still have geometry
     while (currentPoly && currentPoly.length > 0) {
         let layerPolys = currentPoly;
         if (holePolys.length > 0) {
-            layerPolys = ClipperWrapper.difference(currentPoly, holePolys);
+            layerPolys = await ClipperWrapper.difference(currentPoly, holePolys);
         }
 
         if (!layerPolys || layerPolys.length === 0) break;
@@ -60,14 +81,29 @@ export function generatePocket(op, tool, _machine) {
         // Offset further in by stepOver
         // Note: ClipperWrapper returns Array<Array<{x,y}>>
         // We need to offset ALL polygons in the current "layer"
-        currentPoly = ClipperWrapper.offsetPaths(currentPoly, -stepOver, 'Round');
-        if (holePolys.length > 0) {
-            holePolys = ClipperWrapper.offsetPaths(holePolys, stepOver, 'Round');
+        const nextPoly = await ClipperWrapper.offsetPaths(currentPoly, -stepOver, 'Round');
+        const nextArea = totalArea(nextPoly);
+        const minArea = Math.max(areaEpsilon, lastArea * areaEpsilon);
+
+        if (!Number.isFinite(nextArea) || nextArea <= minArea) {
+            break;
         }
 
-        guard += 1;
-        if (guard > 5000) {
-            console.warn('Pocket strategy aborted: excessive iterations.');
+        if (nextArea >= lastArea - minArea) {
+            console.warn('Pocket strategy aborted: no offset progress.');
+            break;
+        }
+
+        currentPoly = nextPoly;
+        lastArea = nextArea;
+
+        if (holePolys.length > 0) {
+            holePolys = await ClipperWrapper.offsetPaths(holePolys, stepOver, 'Round');
+        }
+
+        iterations++;
+        if (iterations >= maxIterations) {
+            console.warn(`Pocket strategy aborted: reached ${maxIterations} iterations limit.`);
             break;
         }
     }

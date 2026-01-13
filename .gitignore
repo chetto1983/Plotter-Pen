@@ -32,6 +32,8 @@ Desktop.ini
 *.tmp
 *.temp
 .cache/
+*CLAUDE*
+*database*
 
 # Deprecated code (can be deleted later)
 src/_deprecated/
@@ -40,3 +42,4 @@ src/_deprecated/
 /Example/*
 .claude/settings.local.json
 database.*
+

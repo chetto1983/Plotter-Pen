@@ -7,6 +7,7 @@ export class MachineConfig {
         this.name = 'Generic CNC';
         this.type = 'milling'; // milling, laser, plotter
         this.units = 'mm';
+        this.safeZ = 5;
 
         this.limits = {
             x: 300,
@@ -31,9 +32,13 @@ export class MachineConfig {
         if (settings.name) this.name = settings.name;
         if (settings.type) this.type = settings.type;
         if (settings.units) this.units = settings.units;
+        if (Number.isFinite(settings.safeZ)) this.safeZ = settings.safeZ;
 
         if (settings.limits) {
             Object.assign(this.limits, settings.limits);
+            if (Number.isFinite(settings.limits.safeZ)) {
+                this.safeZ = settings.limits.safeZ;
+            }
         }
 
         if (settings.gcode) {
@@ -42,7 +47,7 @@ export class MachineConfig {
     }
 
     getSafetyHeight() {
-        return 5.0; // mm
+        return Number.isFinite(this.safeZ) ? this.safeZ : 5.0;
     }
 
     getHomePosition() {

@@ -16,8 +16,12 @@ export class CAMManager {
 
         this.operations = [];
         this.jobSettings = {
-            safeZ: 5,
-            startZ: 0
+            safeZ: this.machine.getSafetyHeight?.() ?? 5,
+            startZ: 0,
+            units: this.machine.units,
+            gcode: {
+                precision: this.machine.gcode?.precision ?? 3
+            }
         };
         this.gcode = '';
         this.gcodeSource = '';
@@ -105,7 +109,7 @@ export class CAMManager {
                     closed: true,
                     sourceType: group.sourceType,
                     sourceCount: group.sourceCount,
-                    disableArcFit: group.sourceType === 'composite',
+                    disableArcFit: false,
                     side: 'outside'
                 });
 
@@ -116,7 +120,7 @@ export class CAMManager {
                             closed: true,
                             sourceType: hole.sourceType,
                             sourceCount: hole.sourceCount,
-                            disableArcFit: hole.sourceType === 'composite',
+                            disableArcFit: false,
                             side: 'inside'
                         });
                     });
@@ -537,6 +541,15 @@ export class CAMManager {
                 return;
             }
 
+            if (target.closest('#btnCamSettings')) {
+                this.openCamSettings();
+                return;
+            }
+
+            if (target.closest('#btnCamSettingsCancel') || target.closest('#btnCloseCamSettings')) {
+                this.closeCamSettings();
+                return;
+            }
 
             // --- OUTPUT ---
             if (target.closest('#btnCamDownload')) {
@@ -580,6 +593,25 @@ export class CAMManager {
                 this.updateGCodeEditor();
             }
         });
+
+        const camSettingsForm = document.getElementById('camSettingsForm');
+        if (camSettingsForm && !camSettingsForm.dataset.bound) {
+            camSettingsForm.dataset.bound = 'true';
+            camSettingsForm.addEventListener('submit', (event) => {
+                event.preventDefault();
+                this.applyCamSettings();
+            });
+        }
+
+        const camSettingsModal = document.getElementById('camSettingsModal');
+        if (camSettingsModal && !camSettingsModal.dataset.bound) {
+            camSettingsModal.dataset.bound = 'true';
+            camSettingsModal.addEventListener('click', (event) => {
+                if (event.target === camSettingsModal) {
+                    this.closeCamSettings();
+                }
+            });
+        }
     }
 
     async handleGenerateClick(button) {
@@ -620,6 +652,99 @@ export class CAMManager {
                 button.disabled = false;
             }
         }
+    }
+
+    getCamSettingsElements() {
+        return {
+            modal: document.getElementById('camSettingsModal'),
+            safeZInput: document.getElementById('camSafeZ'),
+            startZInput: document.getElementById('camStartZ'),
+            unitsSelect: document.getElementById('camUnits'),
+            precisionInput: document.getElementById('camPrecision')
+        };
+    }
+
+    openCamSettings() {
+        const { modal, safeZInput, startZInput, unitsSelect, precisionInput } = this.getCamSettingsElements();
+        if (!modal) {
+            console.warn('CAMManager: CAM settings modal not found.');
+            return;
+        }
+
+        if (safeZInput) {
+            const value = Number.isFinite(this.jobSettings.safeZ)
+                ? this.jobSettings.safeZ
+                : this.machine.getSafetyHeight?.() ?? 5;
+            safeZInput.value = value;
+        }
+
+        if (startZInput) {
+            startZInput.value = Number.isFinite(this.jobSettings.startZ) ? this.jobSettings.startZ : 0;
+        }
+
+        if (unitsSelect) {
+            unitsSelect.value = this.jobSettings.units ?? this.machine.units ?? 'mm';
+        }
+
+        if (precisionInput) {
+            const precision = this.jobSettings.gcode?.precision ?? this.machine.gcode?.precision ?? 3;
+            precisionInput.value = Number.isFinite(precision) ? precision : 3;
+        }
+
+        modal.classList.add('open');
+    }
+
+    closeCamSettings() {
+        const { modal } = this.getCamSettingsElements();
+        modal?.classList.remove('open');
+    }
+
+    applyCamSettings() {
+        const { modal, safeZInput, startZInput, unitsSelect, precisionInput } = this.getCamSettingsElements();
+        if (!modal) {
+            return;
+        }
+
+        const nextSafeZ = safeZInput ? parseFloat(safeZInput.value) : NaN;
+        const nextStartZ = startZInput ? parseFloat(startZInput.value) : NaN;
+        const nextUnits = unitsSelect ? unitsSelect.value : null;
+        const nextPrecision = precisionInput ? parseInt(precisionInput.value, 10) : NaN;
+        const previousStartZ = this.jobSettings.startZ;
+
+        if (Number.isFinite(nextSafeZ)) {
+            this.jobSettings.safeZ = nextSafeZ;
+        }
+
+        if (Number.isFinite(nextStartZ)) {
+            this.jobSettings.startZ = nextStartZ;
+            if (Number.isFinite(previousStartZ)) {
+                this.operations.forEach(op => {
+                    if (op && typeof op.startZ === 'number' && Math.abs(op.startZ - previousStartZ) < 1e-6) {
+                        op.startZ = nextStartZ;
+                    }
+                });
+            }
+        }
+
+        if (nextUnits) {
+            this.jobSettings.units = nextUnits;
+        }
+
+        if (Number.isFinite(nextPrecision)) {
+            this.jobSettings.gcode = {
+                ...(this.jobSettings.gcode || {}),
+                precision: nextPrecision
+            };
+        }
+
+        this.machine.update({
+            safeZ: this.jobSettings.safeZ,
+            units: this.jobSettings.units,
+            gcode: this.jobSettings.gcode
+        });
+
+        this.closeCamSettings();
+        this.app.ui.updateStatus('Impostazioni CAM aggiornate.');
     }
 
     renderOperationsList() {

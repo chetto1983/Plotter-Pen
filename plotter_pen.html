@@ -872,6 +872,53 @@
       });
     });
   </script>
+  <!-- CAM Settings Modal -->
+  <div class="cad-modal-overlay" id="camSettingsModal">
+    <div class="cad-modal cad-modal-config">
+      <div class="cad-modal-header">
+        <h2 class="cad-modal-title">Impostazioni CAM</h2>
+        <button type="button" class="cad-modal-close" id="btnCloseCamSettings">&times;</button>
+      </div>
+      <div class="cad-modal-body">
+        <form id="camSettingsForm" novalidate class="cad-modal-form">
+          <div class="cad-modal-cols-2">
+            <div class="cad-input-row cad-col-full">
+              <label for="camSafeZ">Safe Z (mm)</label>
+              <input type="number" id="camSafeZ" name="camSafeZ" step="0.1" class="cad-modal-input" />
+            </div>
+            <div class="cad-input-row cad-col-full">
+              <label for="camStartZ">Start Z (mm)</label>
+              <input type="number" id="camStartZ" name="camStartZ" step="0.1" class="cad-modal-input" />
+            </div>
+          </div>
+
+          <div class="cad-modal-cols-2">
+            <div class="cad-input-row cad-col-full">
+              <label for="camUnits">Unità</label>
+              <select id="camUnits" name="camUnits" class="cad-modal-select">
+                <option value="mm">mm</option>
+                <option value="in">in</option>
+              </select>
+            </div>
+            <div class="cad-input-row cad-col-full">
+              <label for="camPrecision">Precisione</label>
+              <input type="number" id="camPrecision" name="camPrecision" min="0" max="6" step="1"
+                class="cad-modal-input" />
+            </div>
+          </div>
+
+          <div class="cad-modal-actions-right">
+            <button type="button" class="cad-primary-btn cad-btn-outline" id="btnCamSettingsCancel">
+              Annulla
+            </button>
+            <button type="submit" class="cad-primary-btn" id="btnCamSettingsApply">
+              Applica
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
   <!-- PLC Config Modal -->
   <div class="cad-modal-overlay" id="plcConfigModal">
     <div class="cad-modal cad-modal-config">

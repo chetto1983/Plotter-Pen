@@ -10,10 +10,9 @@ import { applyDepthLayers } from '../StrategyUtils.js';
  * @param {Object} op - Operation parameters
  * @param {Object} tool - Tool definition
  * @param {Object} machine - Machine configuration
- * @returns {Array<Array<{x,y,z}>>} Array of 3D paths
+ * @returns {Promise<Array<Array<{x,y,z}>>>} Array of 3D paths
  */
-export function generateProfile(op, tool, _machine) {
-
+export async function generateProfile(op, tool, _machine) {
     const toolRadius = tool.diameter / 2;
     const stepDown = op.stepDown || tool.defaults.stepDown;
 
@@ -46,12 +45,12 @@ export function generateProfile(op, tool, _machine) {
         // For now, trusting user/Clipper default behavior.
 
         if (isClosed) {
-            const offsets = ClipperWrapper.offsetPolygon(polygon, offset, 'Round');
-            // Assuming the largest resulting poly is the main one? 
+            const offsets = await ClipperWrapper.offsetPolygon(polygon, offset, 'Round');
+            // Assuming the largest resulting poly is the main one?
             // Or just take all (could be islands split)
             offsets.forEach(p => profilePath2D.push(p));
         } else {
-            const offsets = ClipperWrapper.offsetPolyline(polygon, offset, 'Round', 'Round');
+            const offsets = await ClipperWrapper.offsetPolyline(polygon, offset, 'Round', 'Round');
             offsets.forEach(p => profilePath2D.push(p));
         }
     } else {
@@ -66,11 +65,12 @@ export function generateProfile(op, tool, _machine) {
 function applyDepthToArc(arcData, startZ, targetZ, stepDown) {
     const layers = [];
     let currentZ = startZ;
+    let step = stepDown;
 
-    if (stepDown <= 0) stepDown = 1.0;
+    if (step <= 0) step = 1.0;
 
     while (currentZ > targetZ) {
-        currentZ -= stepDown;
+        currentZ -= step;
         if (currentZ < targetZ) currentZ = targetZ;
 
         layers.push({

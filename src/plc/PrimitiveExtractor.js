@@ -13,7 +13,10 @@ export const EXTRACTION_CONFIG = {
     epsLine: 0.35,
     epsArc: 0.9,
     arcFitWindow: 5,
-    simplifyTolerance: 0.1
+    simplifyTolerance: 0.1,
+    minArcSweep: 0,
+    minArcSagittaRatio: 0.0001,
+    maxArcFitPoints: 2000
 };
 
 /**
@@ -147,9 +150,10 @@ export class PrimitiveExtractor {
         const primitives = [];
         let id = startId;
         let i = 0;
+        const allowArcFit = points.length <= this.config.maxArcFitPoints;
 
         while (i < points.length - 1) {
-            if (i + this.config.arcFitWindow <= points.length) {
+            if (allowArcFit && i + this.config.arcFitWindow <= points.length) {
                 const arcResult = this.tryFitArc(points, i);
 
                 if (arcResult && arcResult.rms < this.config.epsArc) {
@@ -240,6 +244,21 @@ export class PrimitiveExtractor {
         const arc = ArcBuilder.fromThreePoints(start, mid, end);
 
         if (!arc) return null;
+
+        const chord = Math.hypot(end.x - start.x, end.y - start.y);
+        if (!Number.isFinite(chord) || chord < this.config.minPrimitiveLength) {
+            return null;
+        }
+
+        if (Math.abs(arc.sweep) < this.config.minArcSweep) {
+            return null;
+        }
+
+        const sagitta = Math.abs(ArcBuilder.signedDistanceToChord(start, end, arc.midpoint));
+        const sagittaRatio = chord > 0 ? sagitta / chord : 0;
+        if (sagittaRatio < this.config.minArcSagittaRatio) {
+            return null;
+        }
 
         const rms = this.calculateArcRMS(arc, points, startIndex, startIndex + windowSize);
 

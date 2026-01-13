@@ -301,12 +301,20 @@ export function parseGCodeToPrimitives(gcodeText, options = {}) {
                     if (center) {
                         cx = center.cx;
                         cy = center.cy;
+                    } else {
+                        const dist = Math.hypot(targetX - startX, targetY - startY);
+                        console.warn(
+                            `Invalid R-mode arc: R=${values.r} too small for distance ${dist.toFixed(4)}. ` +
+                            `Arc degraded to line. Start=(${startX.toFixed(2)}, ${startY.toFixed(2)}), ` +
+                            `End=(${targetX.toFixed(2)}, ${targetY.toFixed(2)})`
+                        );
                     }
                 }
 
                 if (Number.isFinite(cx) && Number.isFinite(cy)) {
                     primitives.push(buildArc(startX, startY, targetX, targetY, cx, cy, clockwise, id++));
                 } else {
+                    // Arc center could not be computed - degrade to line
                     const line = new Line(startX, startY, targetX, targetY, `gline_${id++}`);
                     line.plcData = { type: 1, x1: startX, y1: startY, x2: targetX, y2: targetY };
                     primitives.push(line);

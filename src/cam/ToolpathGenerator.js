@@ -7,6 +7,7 @@ import { MachineConfig } from './MachineConfig.js';
 import { generatePocket } from './strategies/pocketing.js';
 import { generateProfile } from './strategies/profiling.js';
 import { PrimitiveExtractor } from '../plc/PrimitiveExtractor.js';
+import { CAMError } from './CAMError.js';
 
 export class ToolpathGenerator {
     constructor(machineConfig, toolLibrary) {
@@ -19,8 +20,9 @@ export class ToolpathGenerator {
     /**
      * Generate G-Code for a job
      * @param {Object} job - Contains operations and preferences
+     * @returns {Promise<string>} Generated G-code
      */
-    generateJob(job) {
+    async generateJob(job) {
         this.gcode.clear();
         this.gcode.generateHeader();
 
@@ -29,40 +31,41 @@ export class ToolpathGenerator {
         this.gcode.addRapid(null, null, this.machine.getSafetyHeight());
 
         for (const op of job.operations) {
-            this.processOperation(op);
+            await this.processOperation(op);
         }
 
         this.gcode.generateFooter();
         return this.gcode.getCode();
     }
 
-    processOperation(op) {
+    async processOperation(op) {
         this.gcode.addComment(`Operation: ${op.name} (${op.type})`);
 
         const tool = this.tools.getTool(op.toolId);
         if (!tool) {
-            console.error(`Tool ID ${op.toolId} not found`);
-            this.gcode.addComment(`ERROR: Tool ${op.toolId} not found`);
-            return;
+            throw new CAMError(
+                `Tool ID "${op.toolId}" not found in tool library`,
+                { operation: op.name }
+            );
         }
 
         // Tool Change logic (if supported)
         this.gcode.addComment(`Tool: ${tool.name} (D=${tool.diameter})`);
-        // this.gcode.addToolChange(op.toolId); 
+        // this.gcode.addToolChange(op.toolId);
 
         // Set Spindle
         this.gcode.setSpindle(true, op.spindleSpeed || tool.defaults.spindleRPM);
 
         let paths = [];
 
-        // Delegate to specific strategy
+        // Delegate to specific strategy (async for Clipper2 WASM)
         switch (op.type) {
             case 'pocket':
-                paths = generatePocket(op, tool, this.machine);
+                paths = await generatePocket(op, tool, this.machine);
                 break;
             case 'profile':
             case 'contour':
-                paths = generateProfile(op, tool, this.machine);
+                paths = await generateProfile(op, tool, this.machine);
                 break;
             default:
                 this.gcode.addComment(`Unknown operation type: ${op.type}`);
@@ -83,6 +86,9 @@ export class ToolpathGenerator {
 
     pathsToGCode(paths, feedXY, feedZ, options = {}) {
         const allowArcFit = options.allowArcFit !== false;
+        const maxFitPoints = Number.isFinite(this.primitiveExtractor?.config?.maxArcFitPoints)
+            ? this.primitiveExtractor.config.maxArcFitPoints
+            : Infinity;
         for (const path of paths) {
             if (path && !Array.isArray(path) && path.arc) {
                 this.emitArcPath(path.arc, path.z, feedXY, feedZ);
@@ -93,7 +99,7 @@ export class ToolpathGenerator {
             if (!path || path.length === 0) continue;
 
             const pathZ = this.getFlatPathZ(path);
-            const primitives = allowArcFit && pathZ !== null
+            const primitives = allowArcFit && pathZ !== null && path.length <= maxFitPoints
                 ? this.extractPrimitives(path)
                 : [];
 
