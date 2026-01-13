@@ -4,7 +4,7 @@ import { defineConfig } from "eslint/config";
 
 export default defineConfig([
   {
-    ignores: ["src/lib/**", "node_modules/**"]
+    ignores: ["src/lib/**", "node_modules/**", "Example/**"]
   },
   {
     files: ["**/*.{js,mjs,cjs}"],

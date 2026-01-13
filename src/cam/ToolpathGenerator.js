@@ -69,13 +69,20 @@ export class ToolpathGenerator {
         }
 
         // Convert paths to G-Code movements
-        this.pathsToGCode(paths, op.feedRate || tool.defaults.feedXY, op.plungeRate || tool.defaults.feedZ);
+        const allowArcFit = op.type !== 'pocket' && op.disableArcFit !== true;
+        this.pathsToGCode(
+            paths,
+            op.feedRate || tool.defaults.feedXY,
+            op.plungeRate || tool.defaults.feedZ,
+            { allowArcFit }
+        );
 
         // Retract after operation
         this.gcode.addRapid(null, null, this.machine.getSafetyHeight());
     }
 
-    pathsToGCode(paths, feedXY, feedZ) {
+    pathsToGCode(paths, feedXY, feedZ, options = {}) {
+        const allowArcFit = options.allowArcFit !== false;
         for (const path of paths) {
             if (path && !Array.isArray(path) && path.arc) {
                 this.emitArcPath(path.arc, path.z, feedXY, feedZ);
@@ -86,7 +93,9 @@ export class ToolpathGenerator {
             if (!path || path.length === 0) continue;
 
             const pathZ = this.getFlatPathZ(path);
-            const primitives = pathZ !== null ? this.extractPrimitives(path) : [];
+            const primitives = allowArcFit && pathZ !== null
+                ? this.extractPrimitives(path)
+                : [];
 
             if (primitives.length > 0 && pathZ !== null) {
                 this.emitPrimitives(primitives, pathZ, feedXY, feedZ);
@@ -255,14 +264,6 @@ export class ToolpathGenerator {
         const points = path.map(pt => ({ x: pt.x, y: pt.y }));
         if (points.length < 2) {
             return [];
-        }
-
-        const last = points[points.length - 1];
-        const first = points[0];
-        const dx = last.x - first.x;
-        const dy = last.y - first.y;
-        if (Math.hypot(dx, dy) < 1e-4) {
-            points.pop();
         }
 
         return this.primitiveExtractor.detectPrimitives(points, 0);

@@ -5,12 +5,13 @@
 import { applyDrawingData, buildDrawingData } from "./file/drawingData.js";
 import { downloadLegacy, pickFileLegacy } from "./file/fileHelpers.js";
 
-import { Line, Arc, Circle } from "../geometry/primitives.js";
+import { createPrimitiveFromJSON } from "../geometry/primitives.js";
 
 export class FileManager {
   constructor(app) {
     this.app = app;
     this.fileHandle = null;
+    this.importRequestId = 0;
   }
 
   /**
@@ -129,6 +130,7 @@ export class FileManager {
   }
 
   async loadFromDXF(file, contentOverride = null) {
+    const requestId = ++this.importRequestId;
     this.app.ui.updateStatus(`Caricamento DXF ${file.name}...`);
     const content = contentOverride ?? await file.text();
 
@@ -150,11 +152,17 @@ export class FileManager {
 
       this.app.ui.updateStatus('Download risultati...');
       const result = await response.json();
+      if (requestId !== this.importRequestId) {
+        return;
+      }
 
       this.app.ui.updateStatus(`Ricevute ${result.primitives.length} primitive. Ricostruzione oggetti...`);
 
       // Rehydrate instances for Rendering (Chunked)
       const primitives = await this.createPrimitivesFromDataAsync(result.primitives);
+      if (requestId !== this.importRequestId) {
+        return;
+      }
 
       if (!primitives || primitives.length === 0) {
         this.app.ui.updateStatus("DXF senza entità importabili");
@@ -212,19 +220,15 @@ export class FileManager {
     const primitives = [];
     const CHUNK_SIZE = 500;
     const total = data.length;
+    const supportedTypes = new Set(['line', 'arc', 'circle', 'rectangle', 'polygon', 'polyline']);
 
     for (let i = 0; i < total; i += CHUNK_SIZE) {
       const end = Math.min(i + CHUNK_SIZE, total);
 
       for (let j = i; j < end; j++) {
         const d = data[j];
-        if (d.type === 'line') {
-          primitives.push(new Line(d.x1, d.y1, d.x2, d.y2));
-        } else if (d.type === 'arc') {
-          // Arc.toJSON returns ax, ay, bx, by (start/end points)
-          primitives.push(new Arc(d.ax ?? d.x1, d.ay ?? d.y1, d.bx ?? d.x2, d.by ?? d.y2, d.cx, d.cy, d.throughPoint));
-        } else if (d.type === 'circle') {
-          primitives.push(new Circle(d.cx, d.cy, d.radius));
+        if (d && supportedTypes.has(d.type)) {
+          primitives.push(createPrimitiveFromJSON(d));
         }
       }
 

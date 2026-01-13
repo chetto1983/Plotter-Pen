@@ -26,31 +26,50 @@ export function generatePocket(op, tool, _machine) {
     // In a real app, we'd need to extract points from the Primitive ID stored in op.
     // For now, let's assume op.points is passed or we resolve it here.
     const polygon = op.points;
+    const holes = Array.isArray(op.holes) ? op.holes : [];
 
     if (!polygon || polygon.length < 3) return [];
+    if (stepOver <= 0) return [];
 
     // 2. Generate generic XY offset paths (2D)
     // Initial offset to account for tool radius (keep tool inside)
     let currentPoly = ClipperWrapper.offsetPolygon(polygon, -toolRadius, 'Round');
+    let holePolys = [];
+
+    if (holes.length > 0) {
+        for (const hole of holes) {
+            const offsets = ClipperWrapper.offsetPolygon(hole, toolRadius, 'Round');
+            holePolys.push(...offsets);
+        }
+    }
 
     // Spiral/Offset inward
     const pocketPaths2D = [];
+    let guard = 0;
 
     // While we still have geometry
     while (currentPoly && currentPoly.length > 0) {
-        // Clipper offset returns array of paths (islands etc), we flatten for simple pocketing
-        // In complex pockets, we might need to handle islands properly.
-        currentPoly.forEach(p => pocketPaths2D.push(p));
+        let layerPolys = currentPoly;
+        if (holePolys.length > 0) {
+            layerPolys = ClipperWrapper.difference(currentPoly, holePolys);
+        }
+
+        if (!layerPolys || layerPolys.length === 0) break;
+        layerPolys.forEach(p => pocketPaths2D.push(p));
 
         // Offset further in by stepOver
         // Note: ClipperWrapper returns Array<Array<{x,y}>>
         // We need to offset ALL polygons in the current "layer"
-        let nextPolys = [];
-        for (const poly of currentPoly) {
-            const offsets = ClipperWrapper.offsetPolygon(poly, -stepOver, 'Round');
-            nextPolys.push(...offsets);
+        currentPoly = ClipperWrapper.offsetPaths(currentPoly, -stepOver, 'Round');
+        if (holePolys.length > 0) {
+            holePolys = ClipperWrapper.offsetPaths(holePolys, stepOver, 'Round');
         }
-        currentPoly = nextPolys;
+
+        guard += 1;
+        if (guard > 5000) {
+            console.warn('Pocket strategy aborted: excessive iterations.');
+            break;
+        }
     }
 
     // 3. Generate 3D paths for each Z-level

@@ -71,6 +71,63 @@ export class ClipperWrapper {
         return this.solutionToPoints(solution);
     }
 
+    static offsetPaths(paths, delta, joinType = 'Round') {
+        if (!this.lib) {
+            console.error('ClipperLib not loaded');
+            return [];
+        }
+        if (!Array.isArray(paths) || paths.length === 0) {
+            return [];
+        }
+
+        const scale = this.scale;
+        const clipperPaths = paths.map(path => this.toClipperPath(path, scale)).filter(Boolean);
+        if (clipperPaths.length === 0) {
+            return [];
+        }
+
+        const offsetter = new this.lib.ClipperOffset();
+        const jt = this.getJoinType(joinType);
+        offsetter.AddPaths(clipperPaths, jt, this.lib.EndType.etClosedPolygon);
+
+        const solution = new this.lib.Paths();
+        offsetter.Execute(solution, delta * scale);
+
+        return this.solutionToPoints(solution);
+    }
+
+    static difference(subjectPaths, clipPaths) {
+        if (!this.lib) {
+            console.error('ClipperLib not loaded');
+            return [];
+        }
+        if (!Array.isArray(subjectPaths) || subjectPaths.length === 0) {
+            return [];
+        }
+
+        const scale = this.scale;
+        const subject = subjectPaths.map(path => this.toClipperPath(path, scale)).filter(Boolean);
+        const clip = Array.isArray(clipPaths)
+            ? clipPaths.map(path => this.toClipperPath(path, scale)).filter(Boolean)
+            : [];
+
+        const clipper = new this.lib.Clipper();
+        clipper.AddPaths(subject, this.lib.PolyType.ptSubject, true);
+        if (clip.length > 0) {
+            clipper.AddPaths(clip, this.lib.PolyType.ptClip, true);
+        }
+
+        const solution = new this.lib.Paths();
+        clipper.Execute(
+            this.lib.ClipType.ctDifference,
+            solution,
+            this.lib.PolyFillType.pftNonZero,
+            this.lib.PolyFillType.pftNonZero
+        );
+
+        return this.solutionToPoints(solution);
+    }
+
     static getJoinType(type) {
         switch (type.toLowerCase()) {
             case 'square': return this.lib.JoinType.jtSquare;
@@ -85,6 +142,16 @@ export class ClipperWrapper {
             case 'butt': return this.lib.EndType.etOpenButt;
             default: return this.lib.EndType.etOpenRound;
         }
+    }
+
+    static toClipperPath(points, scale) {
+        if (!Array.isArray(points) || points.length < 2) {
+            return null;
+        }
+        return points.map(p => ({
+            X: Math.round(p.x * scale),
+            Y: Math.round(p.y * scale)
+        }));
     }
 
     static solutionToPoints(solution) {

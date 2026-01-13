@@ -5,6 +5,7 @@
 import { MachineConfig } from './MachineConfig.js';
 import { ToolLibrary } from './ToolLibrary.js';
 import { getModalManager } from '../ui/ModalManager.js';
+import { buildSelectionPaths, groupLoopsByContainment } from './selectionUtils.js';
 
 export class CAMManager {
     constructor(app) {
@@ -67,55 +68,93 @@ export class CAMManager {
             return null;
         }
 
+        const selectionList = Array.from(selection);
+        const {
+            loops,
+            openPaths,
+            unsupportedTypes,
+            unsupportedCount
+        } = buildSelectionPaths(selectionList);
         const pointsList = [];
-        let unsupportedCount = 0;
-        let unsupportedTypes = new Set();
+        const warnings = [];
 
-        for (const prim of selection) {
-            console.log('Processing primitive:', prim.type, prim);
-            if (prim.type === 'polygon' || prim.type === 'polyline') {
-                if (prim.points) pointsList.push({ points: prim.points, closed: prim.type === 'polygon' });
-            } else if (prim.type === 'rectangle') {
+        if (type === 'pocket') {
+            const groups = groupLoopsByContainment(loops);
+            groups.forEach(group => {
+                const holePoints = Array.isArray(group.holes)
+                    ? group.holes.map(hole => hole.points).filter(Boolean)
+                    : [];
                 pointsList.push({
-                    points: [
-                        { x: prim.x, y: prim.y },
-                        { x: prim.x + prim.width, y: prim.y },
-                        { x: prim.x + prim.width, y: prim.y + prim.height },
-                        { x: prim.x, y: prim.y + prim.height }
-                    ],
-                    closed: true
+                    points: group.outer,
+                    holes: holePoints,
+                    closed: true,
+                    sourceType: group.sourceType,
+                    sourceCount: group.sourceCount,
+                    disableArcFit: true
                 });
-            } else if (prim.type === 'circle') {
-                pointsList.push({ points: this.circleToPolygon(prim), closed: true });
-            } else if (prim.type === 'line') {
-                // Support for single lines (treated as open paths)
-                pointsList.push({
-                    points: [{ x: prim.x1, y: prim.y1 }, { x: prim.x2, y: prim.y2 }],
-                    closed: false
-                });
-            } else if (prim.type === 'arc') {
-                console.log('CAMManager: Processing ARC primitive', prim);
-                const arcData = this.serializeArc(prim);
-                pointsList.push({
-                    points: this.arcToPolygon(prim),
-                    arc: arcData,
-                    closed: false
-                });
-            } else {
-                console.warn('CAMManager: Unsupported primitive type:', prim.type);
-                unsupportedCount++;
-                unsupportedTypes.add(prim.type);
+            });
+
+            if (openPaths.length > 0) {
+                warnings.push(`Ignorate ${openPaths.length} geometrie aperte per la tasca.`);
             }
+        } else {
+            const groups = groupLoopsByContainment(loops);
+            groups.forEach(group => {
+                pointsList.push({
+                    points: group.outer,
+                    closed: true,
+                    sourceType: group.sourceType,
+                    sourceCount: group.sourceCount,
+                    disableArcFit: group.sourceType === 'composite',
+                    side: 'outside'
+                });
+
+                if (Array.isArray(group.holes) && group.holes.length > 0) {
+                    group.holes.forEach(hole => {
+                        pointsList.push({
+                            points: hole.points,
+                            closed: true,
+                            sourceType: hole.sourceType,
+                            sourceCount: hole.sourceCount,
+                            disableArcFit: hole.sourceType === 'composite',
+                            side: 'inside'
+                        });
+                    });
+                }
+            });
+
+            openPaths.forEach(path => {
+                const arcSegment = Array.isArray(path.segments) && path.segments.length === 1 && path.segments[0].sourceType === 'arc'
+                    ? path.segments[0]
+                    : null;
+                const disableArcFit = arcSegment === null;
+
+                pointsList.push({
+                    points: path.points,
+                    arc: arcSegment?.arcData ?? null,
+                    closed: false,
+                    sourceType: 'open',
+                    sourceCount: path.segments?.length ?? 0,
+                    disableArcFit
+                });
+            });
         }
 
         if (pointsList.length === 0) {
             if (unsupportedCount > 0) {
                 const types = Array.from(unsupportedTypes).join(', ');
+                const ignored = types ? `\nIgnorati: ${types}` : '';
                 getModalManager().alert({
                     title: 'Tipo non supportato',
-                    message: `Al momento il CAM supporta: Poligoni, Rettangoli, Cerchi, Linee e Archi.\nIgnorati: ${types}`
+                    message: `Al momento il CAM supporta: Poligoni, Rettangoli, Cerchi, Linee e Archi.${ignored}`
                 });
-                if (unsupportedCount === selection.size) return null; // If EVERYTHING was unsupported, stop.
+                if (unsupportedCount >= selectionList.length) return null; // If EVERYTHING was unsupported, stop.
+            } else if (type === 'pocket' && openPaths.length > 0) {
+                getModalManager().alert({
+                    title: 'Geometria non valida',
+                    message: 'La tasca richiede contorni chiusi. Le geometrie selezionate sono aperte.'
+                });
+                return null;
             } else {
                 getModalManager().alert({
                     title: 'Geometria non valida',
@@ -125,8 +164,18 @@ export class CAMManager {
             }
         }
 
+        if (unsupportedTypes.size > 0) {
+            const types = Array.from(unsupportedTypes).join(', ');
+            warnings.push(`Ignorati: ${types}`);
+        }
+
+        if (warnings.length > 0) {
+            this.app.ui.updateStatus(warnings.join(' '));
+        }
+
         const newOps = [];
         for (const item of pointsList) {
+            const disableArcFit = item.disableArcFit === true;
             const op = {
                 id: Date.now() + Math.random().toString(36).substr(2, 5),
                 name: `${type.charAt(0).toUpperCase() + type.slice(1)} Op`,
@@ -134,12 +183,14 @@ export class CAMManager {
                 toolId: '1', // Default to 3mm Endmill
                 points: item.points, // Data for the strategy
                 arc: item.arc,
+                holes: item.holes,
                 closed: item.closed, // NEW: Track if it's closed
+                disableArcFit,
                 // Default params
                 startZ: this.jobSettings.startZ,
                 targetZ: -1,
                 stepDown: 1,
-                side: type === 'profile' ? 'outside' : undefined
+                side: item.side ?? (type === 'profile' ? 'outside' : undefined)
             };
             this.operations.push(op);
             newOps.push(op);
@@ -614,6 +665,57 @@ export class CAMManager {
         }
 
         const lines = gcode.split('\n');
+        const tokenRegex = /\([^)]+\)|G\d+|M\d+|[XYZIJ][-+]?\d*\.?\d+|F[-+]?\d*\.?\d+|S[-+]?\d*\.?\d+/gi;
+
+        const appendText = (container, text) => {
+            if (text) {
+                container.appendChild(document.createTextNode(text));
+            }
+        };
+
+        const appendSpan = (container, text, style) => {
+            const span = document.createElement('span');
+            span.textContent = text;
+            if (style) Object.assign(span.style, style);
+            container.appendChild(span);
+        };
+
+        const renderHighlightedLine = (line, container) => {
+            let lastIndex = 0;
+            let match;
+            tokenRegex.lastIndex = 0;
+
+            while ((match = tokenRegex.exec(line)) !== null) {
+                const start = match.index;
+                if (start > lastIndex) {
+                    appendText(container, line.slice(lastIndex, start));
+                }
+
+                const token = match[0];
+                const upper = token[0]?.toUpperCase();
+
+                if (token.startsWith('(')) {
+                    appendSpan(container, token, { color: '#6a9955' });
+                } else if (upper === 'G') {
+                    appendSpan(container, token, { color: '#569cd6', fontWeight: 'bold' });
+                } else if (upper === 'M') {
+                    appendSpan(container, token, { color: '#c586c0', fontWeight: 'bold' });
+                } else if (upper && 'XYZIJ'.includes(upper)) {
+                    appendSpan(container, token[0], { color: '#9cdcfe' });
+                    appendSpan(container, token.slice(1), { color: '#b5cea8' });
+                } else if (upper === 'F' || upper === 'S') {
+                    appendSpan(container, token, { color: '#dcdcaa' });
+                } else {
+                    appendText(container, token);
+                }
+
+                lastIndex = start + token.length;
+            }
+
+            if (lastIndex < line.length) {
+                appendText(container, line.slice(lastIndex));
+            }
+        };
 
         lines.forEach((line) => {
             if (!line.trim()) return;
@@ -623,25 +725,11 @@ export class CAMManager {
             div.style.padding = '4px 8px'; // Slightly more compact
             div.style.fontFamily = "'Consolas', monospace";
 
-            // Simple Syntax Highlighting
-            let formattedHtml = line
-                .replace(/\(/g, '<span style="color:#6a9955">(') // Comments
-                .replace(/\)/g, ')</span>');
-
             if (line.startsWith('(')) {
-                // Entire line comment
                 div.style.color = '#6a9955';
-                div.innerHTML = line;
+                div.textContent = line;
             } else {
-                // Commands
-                formattedHtml = formattedHtml
-                    .replace(/(G\d+)/g, '<span style="color:#569cd6; font-weight:bold;">$1</span>')
-                    .replace(/(M\d+)/g, '<span style="color:#c586c0; font-weight:bold;">$1</span>')
-                    .replace(/([XYZIJ])([\d.-]+)/g, '<span style="color:#9cdcfe">$1</span><span style="color:#b5cea8">$2</span>')
-                    .replace(/(F\d+)/g, '<span style="color:#dcdcaa">$1</span>')
-                    .replace(/(S\d+)/g, '<span style="color:#dcdcaa">$1</span>');
-
-                div.innerHTML = formattedHtml;
+                renderHighlightedLine(line, div);
             }
 
             // Click to highlight in preview? (Future feature)

@@ -14,6 +14,7 @@ if (!fs.existsSync(workerPath)) {
 }
 
 const worker = new Worker(workerPath);
+let terminating = false;
 const filePath = path.join(process.cwd(), 'DXF', 'drawing_2026-01-11.dxf');
 const dxfContent = fs.readFileSync(filePath, 'utf8');
 
@@ -30,7 +31,11 @@ worker.on('message', (result) => {
         console.log('Type:', result.type);
         console.log('Message:', result.message);
     }
-    worker.terminate();
+    terminating = true;
+    worker.terminate().catch((err) => {
+        console.error('Worker terminate failed:', err);
+        process.exit(1);
+    });
 });
 
 worker.on('error', (err) => {
@@ -39,5 +44,8 @@ worker.on('error', (err) => {
 });
 
 worker.on('exit', (code) => {
+    if (terminating && code === 1) {
+        return;
+    }
     console.log('Worker exit code:', code);
 });
