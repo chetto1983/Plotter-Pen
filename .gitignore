@@ -35,6 +35,11 @@ Desktop.ini
 *CLAUDE*
 *database*
 
+# Go CAM engine binaries (build with: cd server/cam-engine && .\build.ps1)
+server/cam-engine/*.exe
+server/cam-engine/cam-engine
+server/cam-engine/dist/
+
 # Deprecated code (can be deleted later)
 src/_deprecated/
 
@@ -43,3 +48,12 @@ src/_deprecated/
 .claude/settings.local.json
 database.*
 
+.playwright-mcp/after_genera.png
+.playwright-mcp/anteprima_view.png
+.playwright-mcp/cam_after_fix.png
+.playwright-mcp/cam_tab.png
+.playwright-mcp/cam_test.png
+.playwright-mcp/current_state.png
+.playwright-mcp/gcode_tab.png
+.playwright-mcp/gcode_view.png
+.playwright-mcp/output.nc

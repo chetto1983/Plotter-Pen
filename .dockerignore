@@ -6,3 +6,6 @@ Dockerfile
 .gitignore
 .vscode
 *.log
+DXF
+Example
+*.md

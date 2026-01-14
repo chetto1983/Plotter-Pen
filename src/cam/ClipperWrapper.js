@@ -7,16 +7,31 @@
  */
 
 import { SCALE } from './constants.js';
+import { isMainThread } from 'worker_threads';
 
 let clipper2 = null;
 let initPromise = null;
 let initError = null;
+
+// Track which thread initialized clipper
+let initThreadId = null;
 
 /**
  * Initialize clipper2-wasm module
  * @returns {Promise<Object>} The initialized clipper2 module
  */
 async function initClipper() {
+    // In worker threads, always reinitialize (don't share state with main thread)
+    const currentThread = isMainThread ? 'main' : 'worker';
+
+    if (initThreadId && initThreadId !== currentThread) {
+        // Reset cached state when switching thread contexts
+        clipper2 = null;
+        initPromise = null;
+        initError = null;
+    }
+    initThreadId = currentThread;
+
     if (clipper2) return clipper2;
     if (initError) throw initError;
     if (initPromise) return initPromise;
@@ -26,22 +41,79 @@ async function initClipper() {
         const module = await import('clipper2-wasm');
         const factory = module.default || module;
 
-        initPromise = factory({
-            locateFile: (file) => {
-                // Try multiple paths for WASM file
-                if (typeof window !== 'undefined') {
-                    return `/node_modules/clipper2-wasm/dist/${file}`;
-                }
-                return file;
-            }
-        });
+        const isNode = typeof window === 'undefined' && typeof process !== 'undefined';
 
+        let factoryOptions = {};
+
+        if (isNode) {
+            // Node.js: load WASM binary directly since fetch doesn't work for local files
+            const { createRequire } = await import('node:module');
+            const path = await import('node:path');
+            const fs = await import('node:fs');
+            const require = createRequire(import.meta.url);
+            const clipperPath = require.resolve('clipper2-wasm');
+            const wasmPath = path.join(path.dirname(clipperPath), 'clipper2z.wasm');
+            const wasmBinary = fs.readFileSync(wasmPath);
+            factoryOptions.wasmBinary = wasmBinary;
+        } else {
+            // Browser: use locateFile to find WASM in node_modules (ES module path)
+            factoryOptions.locateFile = (file) => `/node_modules/clipper2-wasm/dist/es/${file}`;
+        }
+
+        initPromise = factory(factoryOptions);
         clipper2 = await initPromise;
         return clipper2;
     } catch (err) {
         initError = new Error(`Failed to initialize clipper2-wasm: ${err.message}`);
         throw initError;
     }
+}
+
+/**
+ * Convert JS points array to clipper2-wasm Path64
+ * @param {Object} lib - clipper2-wasm module
+ * @param {Array<{x,y}>} points - Array of points
+ * @param {number} scale - Scale factor
+ * @returns {Object} Path64 object (must be deleted after use)
+ */
+function pointsToPath64(lib, points, scale) {
+    const flatArray = [];
+    for (const p of points) {
+        flatArray.push(BigInt(Math.round(p.x * scale)));
+        flatArray.push(BigInt(Math.round(p.y * scale)));
+    }
+    return lib.MakePath64(flatArray);
+}
+
+/**
+ * Convert clipper2-wasm Paths64 to JS points array
+ * @param {Object} paths64 - Paths64 object
+ * @param {number} scale - Scale factor
+ * @returns {Array<Array<{x,y}>>} Array of point arrays
+ */
+function paths64ToPoints(paths64, scale) {
+    const result = [];
+    const numPaths = paths64.size();
+
+    for (let i = 0; i < numPaths; i++) {
+        const path = paths64.get(i);
+        const numPoints = path.size();
+        const points = [];
+
+        for (let j = 0; j < numPoints; j++) {
+            const pt = path.get(j);
+            points.push({
+                x: Number(pt.x) / scale,
+                y: Number(pt.y) / scale
+            });
+        }
+
+        if (points.length > 0) {
+            result.push(points);
+        }
+    }
+
+    return result;
 }
 
 export class ClipperWrapper {
@@ -83,25 +155,24 @@ export class ClipperWrapper {
         const jt = this.getJoinType(lib, joinType);
         const et = lib.EndType.Polygon;
 
-        // Create scaled path
-        const scaledPoints = points.map(p => ({
-            x: BigInt(Math.round(p.x * scale)),
-            y: BigInt(Math.round(p.y * scale))
-        }));
+        let path64 = null;
+        let paths64 = null;
+        let result = null;
 
         try {
-            // Use InflatePaths for offsetting
-            const result = lib.InflatePaths64(
-                [scaledPoints],
-                delta * scale,
-                jt,
-                et
-            );
+            path64 = pointsToPath64(lib, points, scale);
+            paths64 = new lib.Paths64();
+            paths64.push_back(path64);
 
-            return this.pathsToPoints(result, scale);
+            result = lib.InflatePaths64(paths64, delta * scale, jt, et);
+            return paths64ToPoints(result, scale);
         } catch (err) {
             console.error('ClipperWrapper.offsetPolygon error:', err);
             return [];
+        } finally {
+            if (path64) path64.delete();
+            if (paths64) paths64.delete();
+            if (result) result.delete();
         }
     }
 
@@ -124,23 +195,24 @@ export class ClipperWrapper {
         const jt = this.getJoinType(lib, joinType);
         const et = this.getEndType(lib, endType);
 
-        const scaledPoints = points.map(p => ({
-            x: BigInt(Math.round(p.x * scale)),
-            y: BigInt(Math.round(p.y * scale))
-        }));
+        let path64 = null;
+        let paths64 = null;
+        let result = null;
 
         try {
-            const result = lib.InflatePaths64(
-                [scaledPoints],
-                delta * scale,
-                jt,
-                et
-            );
+            path64 = pointsToPath64(lib, points, scale);
+            paths64 = new lib.Paths64();
+            paths64.push_back(path64);
 
-            return this.pathsToPoints(result, scale);
+            result = lib.InflatePaths64(paths64, delta * scale, jt, et);
+            return paths64ToPoints(result, scale);
         } catch (err) {
             console.error('ClipperWrapper.offsetPolyline error:', err);
             return [];
+        } finally {
+            if (path64) path64.delete();
+            if (paths64) paths64.delete();
+            if (result) result.delete();
         }
     }
 
@@ -162,29 +234,33 @@ export class ClipperWrapper {
         const jt = this.getJoinType(lib, joinType);
         const et = lib.EndType.Polygon;
 
-        const scaledPaths = paths
-            .filter(path => Array.isArray(path) && path.length >= 3)
-            .map(path => path.map(p => ({
-                x: BigInt(Math.round(p.x * scale)),
-                y: BigInt(Math.round(p.y * scale))
-            })));
-
-        if (scaledPaths.length === 0) {
-            return [];
-        }
+        const path64List = [];
+        let paths64 = null;
+        let result = null;
 
         try {
-            const result = lib.InflatePaths64(
-                scaledPaths,
-                delta * scale,
-                jt,
-                et
-            );
+            paths64 = new lib.Paths64();
 
-            return this.pathsToPoints(result, scale);
+            for (const path of paths) {
+                if (!Array.isArray(path) || path.length < 3) continue;
+                const p64 = pointsToPath64(lib, path, scale);
+                path64List.push(p64);
+                paths64.push_back(p64);
+            }
+
+            if (paths64.size() === 0) {
+                return [];
+            }
+
+            result = lib.InflatePaths64(paths64, delta * scale, jt, et);
+            return paths64ToPoints(result, scale);
         } catch (err) {
             console.error('ClipperWrapper.offsetPaths error:', err);
             return [];
+        } finally {
+            for (const p of path64List) p.delete();
+            if (paths64) paths64.delete();
+            if (result) result.delete();
         }
     }
 
@@ -202,34 +278,43 @@ export class ClipperWrapper {
         }
 
         const scale = this.scale;
-
-        const scaledSubject = subjectPaths
-            .filter(path => Array.isArray(path) && path.length >= 3)
-            .map(path => path.map(p => ({
-                x: BigInt(Math.round(p.x * scale)),
-                y: BigInt(Math.round(p.y * scale))
-            })));
-
-        const scaledClip = Array.isArray(clipPaths)
-            ? clipPaths
-                .filter(path => Array.isArray(path) && path.length >= 3)
-                .map(path => path.map(p => ({
-                    x: BigInt(Math.round(p.x * scale)),
-                    y: BigInt(Math.round(p.y * scale))
-                })))
-            : [];
+        const subjectPath64List = [];
+        const clipPath64List = [];
+        let subjects = null;
+        let clips = null;
+        let result = null;
 
         try {
-            const result = lib.Difference64(
-                scaledSubject,
-                scaledClip,
-                lib.FillRule.NonZero
-            );
+            subjects = new lib.Paths64();
+            clips = new lib.Paths64();
 
-            return this.pathsToPoints(result, scale);
+            for (const path of subjectPaths) {
+                if (!Array.isArray(path) || path.length < 3) continue;
+                const p64 = pointsToPath64(lib, path, scale);
+                subjectPath64List.push(p64);
+                subjects.push_back(p64);
+            }
+
+            if (Array.isArray(clipPaths)) {
+                for (const path of clipPaths) {
+                    if (!Array.isArray(path) || path.length < 3) continue;
+                    const p64 = pointsToPath64(lib, path, scale);
+                    clipPath64List.push(p64);
+                    clips.push_back(p64);
+                }
+            }
+
+            result = lib.Difference64(subjects, clips, lib.FillRule.NonZero);
+            return paths64ToPoints(result, scale);
         } catch (err) {
             console.error('ClipperWrapper.difference error:', err);
             return [];
+        } finally {
+            for (const p of subjectPath64List) p.delete();
+            for (const p of clipPath64List) p.delete();
+            if (subjects) subjects.delete();
+            if (clips) clips.delete();
+            if (result) result.delete();
         }
     }
 
@@ -246,24 +331,29 @@ export class ClipperWrapper {
         }
 
         const scale = this.scale;
-
-        const scaledPaths = paths
-            .filter(path => Array.isArray(path) && path.length >= 3)
-            .map(path => path.map(p => ({
-                x: BigInt(Math.round(p.x * scale)),
-                y: BigInt(Math.round(p.y * scale))
-            })));
+        const path64List = [];
+        let paths64 = null;
+        let result = null;
 
         try {
-            const result = lib.Union64(
-                scaledPaths,
-                lib.FillRule.NonZero
-            );
+            paths64 = new lib.Paths64();
 
-            return this.pathsToPoints(result, scale);
+            for (const path of paths) {
+                if (!Array.isArray(path) || path.length < 3) continue;
+                const p64 = pointsToPath64(lib, path, scale);
+                path64List.push(p64);
+                paths64.push_back(p64);
+            }
+
+            result = lib.Union64(paths64, lib.FillRule.NonZero);
+            return paths64ToPoints(result, scale);
         } catch (err) {
             console.error('ClipperWrapper.union error:', err);
             return [];
+        } finally {
+            for (const p of path64List) p.delete();
+            if (paths64) paths64.delete();
+            if (result) result.delete();
         }
     }
 
@@ -281,34 +371,43 @@ export class ClipperWrapper {
         }
 
         const scale = this.scale;
-
-        const scaledSubject = subjectPaths
-            .filter(path => Array.isArray(path) && path.length >= 3)
-            .map(path => path.map(p => ({
-                x: BigInt(Math.round(p.x * scale)),
-                y: BigInt(Math.round(p.y * scale))
-            })));
-
-        const scaledClip = Array.isArray(clipPaths)
-            ? clipPaths
-                .filter(path => Array.isArray(path) && path.length >= 3)
-                .map(path => path.map(p => ({
-                    x: BigInt(Math.round(p.x * scale)),
-                    y: BigInt(Math.round(p.y * scale))
-                })))
-            : [];
+        const subjectPath64List = [];
+        const clipPath64List = [];
+        let subjects = null;
+        let clips = null;
+        let result = null;
 
         try {
-            const result = lib.Intersect64(
-                scaledSubject,
-                scaledClip,
-                lib.FillRule.NonZero
-            );
+            subjects = new lib.Paths64();
+            clips = new lib.Paths64();
 
-            return this.pathsToPoints(result, scale);
+            for (const path of subjectPaths) {
+                if (!Array.isArray(path) || path.length < 3) continue;
+                const p64 = pointsToPath64(lib, path, scale);
+                subjectPath64List.push(p64);
+                subjects.push_back(p64);
+            }
+
+            if (Array.isArray(clipPaths)) {
+                for (const path of clipPaths) {
+                    if (!Array.isArray(path) || path.length < 3) continue;
+                    const p64 = pointsToPath64(lib, path, scale);
+                    clipPath64List.push(p64);
+                    clips.push_back(p64);
+                }
+            }
+
+            result = lib.Intersect64(subjects, clips, lib.FillRule.NonZero);
+            return paths64ToPoints(result, scale);
         } catch (err) {
             console.error('ClipperWrapper.intersection error:', err);
             return [];
+        } finally {
+            for (const p of subjectPath64List) p.delete();
+            for (const p of clipPath64List) p.delete();
+            if (subjects) subjects.delete();
+            if (clips) clips.delete();
+            if (result) result.delete();
         }
     }
 
@@ -333,20 +432,5 @@ export class ClipperWrapper {
             case 'joined': return lib.EndType.Joined;
             default: return lib.EndType.Round;
         }
-    }
-
-    /**
-     * Convert clipper2 paths to simple point arrays
-     */
-    static pathsToPoints(paths, scale) {
-        if (!paths || !Array.isArray(paths)) return [];
-
-        return paths.map(path => {
-            if (!path || !Array.isArray(path)) return [];
-            return path.map(pt => ({
-                x: Number(pt.x) / scale,
-                y: Number(pt.y) / scale
-            }));
-        }).filter(path => path.length > 0);
     }
 }

@@ -188,14 +188,4 @@ export class GCodeGenerator {
 
         this.lines.push(cmd);
     }
-
-
-
-    /**
-     * Dwell (G4)
-     * @param {number} seconds 
-     */
-    addDwell(seconds) {
-        this.lines.push(`G04 P${seconds.toFixed(3)}`);
-    }
 }

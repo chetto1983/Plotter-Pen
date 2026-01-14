@@ -1,5 +1,4 @@
 import { parentPort } from 'worker_threads';
-import { createRequire } from 'node:module';
 import { GCodeParser } from '@polar3d/gcode-viewer';
 
 import { ToolpathGenerator } from '../../src/cam/ToolpathGenerator.js';
@@ -7,23 +6,7 @@ import { MachineConfig } from '../../src/cam/MachineConfig.js';
 import { ToolLibrary } from '../../src/cam/ToolLibrary.js';
 import { generatePLCFromGCode } from '../../src/cam/GCodePostProcessor.js';
 import { linearizeGCode } from '../../src/cam/linearizeGCode.js';
-
-if (!globalThis.self) {
-    globalThis.self = globalThis;
-}
-
-const require = createRequire(import.meta.url);
-const clipperModule = require('../../src/lib/clipper.js');
-const clipperGlobal = globalThis.self?.ClipperLib;
-const resolvedClipper = (clipperModule && typeof clipperModule.ClipperOffset === 'function')
-    ? clipperModule
-    : clipperGlobal;
-
-if (!resolvedClipper || typeof resolvedClipper.ClipperOffset !== 'function') {
-    throw new Error('ClipperLib failed to initialize in CAM worker.');
-}
-
-globalThis.ClipperLib = resolvedClipper;
+import { ClipperWrapper } from '../../src/cam/ClipperWrapper.js';
 
 const DEFAULT_BOUNDS = {
     min: { x: 0, y: 0, z: 0 },
@@ -133,11 +116,14 @@ function sanitizeMetadata(metadata) {
     };
 }
 
-function handleGenerate(data) {
+async function handleGenerate(data) {
     const job = data?.job;
     if (!job || !Array.isArray(job.operations)) {
         throw new Error('Invalid CAM job payload.');
     }
+
+    // Initialize Clipper2 WASM
+    await ClipperWrapper.init();
 
     const toolLibrary = buildToolLibrary(data?.tools);
     const machine = new MachineConfig();
@@ -146,7 +132,7 @@ function handleGenerate(data) {
     }
 
     const generator = new ToolpathGenerator(machine, toolLibrary);
-    const gcode = generator.generateJob(job);
+    const gcode = await generator.generateJob(job);
 
     return { type: 'success', gcode };
 }
@@ -199,33 +185,36 @@ if (!parentPort) {
     throw new Error('Worker must be started with a parent port.');
 }
 
-parentPort.on('message', (message) => {
-    try {
-        const command = message?.command;
-        const data = message?.data;
+async function processMessage(message) {
+    const command = message?.command;
+    const data = message?.data;
 
-        if (command === 'generate') {
-            parentPort.postMessage(handleGenerate(data));
-            return;
-        }
-
-        if (command === 'parse') {
-            parentPort.postMessage(handleParse(data));
-            return;
-        }
-
-        if (command === 'postprocess') {
-            parentPort.postMessage(handlePostprocess(data));
-            return;
-        }
-
-        throw new Error(`Unknown CAM worker command: ${command}`);
-    } catch (error) {
-        console.error('CAM Worker Error:', error);
-        parentPort.postMessage({
-            type: 'error',
-            message: error?.message ?? 'Unknown error',
-            stack: error?.stack
-        });
+    if (command === 'generate') {
+        return await handleGenerate(data);
     }
+
+    if (command === 'parse') {
+        return handleParse(data);
+    }
+
+    if (command === 'postprocess') {
+        return handlePostprocess(data);
+    }
+
+    throw new Error(`Unknown CAM worker command: ${command}`);
+}
+
+parentPort.on('message', (message) => {
+    processMessage(message)
+        .then((result) => {
+            parentPort.postMessage(result);
+        })
+        .catch((error) => {
+            console.error('CAM Worker Error:', error);
+            parentPort.postMessage({
+                type: 'error',
+                message: error?.message ?? 'Unknown error',
+                stack: error?.stack
+            });
+        });
 });

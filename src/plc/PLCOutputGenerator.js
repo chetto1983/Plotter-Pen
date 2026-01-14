@@ -3,6 +3,8 @@
  * Generates human-readable PLC commands for plotter
  */
 
+import { fitArcsAndLines } from '../geometry/biarc.js';
+
 export class PLCOutputGenerator {
     constructor(config = {}) {
         this.precision = config.precision ?? 3;
@@ -196,25 +198,42 @@ export class PLCOutputGenerator {
             const pts = primitive.points;
             if (!pts || pts.length < 2) return null;
 
+            // Close the points array if needed for fitting
+            const closedPts = (primitive.closed || primitive.type === 'polygon') && pts.length > 2
+                ? [...pts, pts[0]]
+                : pts;
+
+            // Use biarc fitting to convert to arcs and lines
+            const fitted = fitArcsAndLines(closedPts, { tolerance: 0.5 });
+
             let cmdIdx = 0;
+            for (const seg of fitted) {
+                if (seg.type === 'arc') {
+                    // Calculate through point for PLC arc command (I, J = midpoint of arc)
+                    const startAngle = Math.atan2(seg.y1 - seg.cy, seg.x1 - seg.cx);
+                    const endAngle = Math.atan2(seg.y2 - seg.cy, seg.x2 - seg.cx);
+                    let sweep = endAngle - startAngle;
+                    if (sweep > Math.PI) sweep -= 2 * Math.PI;
+                    if (sweep < -Math.PI) sweep += 2 * Math.PI;
+                    const midAngle = startAngle + sweep / 2;
+                    const auxX = seg.cx + seg.r * Math.cos(midAngle);
+                    const auxY = seg.cy + seg.r * Math.sin(midAngle);
 
-            for (let i = 0; i < pts.length - 1; i++) {
-                cmds.push({
-                    index: index + cmdIdx,
-                    type: 'line',
-                    command: `L X ${fmt(pts[i + 1].x)}, Y ${fmt(pts[i + 1].y)}, V ${fmt(this.defaultSpeed)}`,
-                    primitive: primitive
-                });
+                    cmds.push({
+                        index: index + cmdIdx,
+                        type: 'arc',
+                        command: `A X ${fmt(seg.x2)}, Y ${fmt(seg.y2)}, I ${fmt(auxX)}, J ${fmt(auxY)}, V ${fmt(this.defaultSpeed)}`,
+                        primitive: primitive
+                    });
+                } else {
+                    cmds.push({
+                        index: index + cmdIdx,
+                        type: 'line',
+                        command: `L X ${fmt(seg.x2)}, Y ${fmt(seg.y2)}, V ${fmt(this.defaultSpeed)}`,
+                        primitive: primitive
+                    });
+                }
                 cmdIdx++;
-            }
-
-            if (primitive.closed || primitive.type === 'polygon') {
-                cmds.push({
-                    index: index + cmdIdx,
-                    type: 'line',
-                    command: `L X ${fmt(pts[0].x)}, Y ${fmt(pts[0].y)}, V ${fmt(this.defaultSpeed)}`,
-                    primitive: primitive
-                });
             }
             return cmds;
 

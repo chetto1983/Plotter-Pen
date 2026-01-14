@@ -115,4 +115,3 @@ Autosave state and named drawings are stored in a local SQLite database. By defa
 - The project uses ES modules. When adding new files, prefer `import`/`export` syntax.
 - Restart `npm start` after changing server-side code to pick up the latest changes.
 - Use `npm run dev` for watch mode during development.
-

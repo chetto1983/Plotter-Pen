@@ -1,23 +1,13 @@
-
 import { ToolpathGenerator } from '../src/cam/ToolpathGenerator.js';
 import { MachineConfig } from '../src/cam/MachineConfig.js';
 import { ToolLibrary } from '../src/cam/ToolLibrary.js';
-
-// Mock Clipper (since loading it in node is tricky with the current global hack)
-// We will manually load it or mock the wrapper if needed.
-// Ideally usage of 'clipper-lib' npm package specific for node.
-// but let's try to mimic the worker loader
-import { createRequire } from 'node:module';
-const require = createRequire(import.meta.url);
-
-// Global patch for Clipper
-if (!global.self) global.self = global;
-try {
-    require('../src/lib/clipper.js');
-} catch (e) { console.log('Clipper Load Error', e); }
+import { ClipperWrapper } from '../src/cam/ClipperWrapper.js';
 
 async function testProfile() {
     console.log('--- Testing Profile Generation ---');
+
+    // Initialize clipper2-wasm
+    await ClipperWrapper.init();
 
     // 1. Setup
     const machine = new MachineConfig();
@@ -61,12 +51,16 @@ async function testProfile() {
 
     // 3. Generate
     try {
-        const gcode = generator.generateJob(job);
+        const gcode = await generator.generateJob(job);
         console.log('[GENERATED G-CODE]');
         console.log(gcode);
     } catch (e) {
         console.error('Generation Error:', e);
+        process.exit(1);
     }
 }
 
-testProfile();
+testProfile().catch(err => {
+    console.error(err);
+    process.exit(1);
+});

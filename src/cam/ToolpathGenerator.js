@@ -8,6 +8,7 @@ import { generatePocket } from './strategies/pocketing.js';
 import { generateProfile } from './strategies/profiling.js';
 import { PrimitiveExtractor } from '../plc/PrimitiveExtractor.js';
 import { CAMError } from './CAMError.js';
+import { ClipperWrapper } from './ClipperWrapper.js';
 
 export class ToolpathGenerator {
     constructor(machineConfig, toolLibrary) {
@@ -23,6 +24,9 @@ export class ToolpathGenerator {
      * @returns {Promise<string>} Generated G-code
      */
     async generateJob(job) {
+        // Initialize Clipper2 WASM before any operations
+        await ClipperWrapper.init();
+
         this.gcode.clear();
         this.gcode.generateHeader();
 
@@ -92,6 +96,11 @@ export class ToolpathGenerator {
         for (const path of paths) {
             if (path && !Array.isArray(path) && path.arc) {
                 this.emitArcPath(path.arc, path.z, feedXY, feedZ);
+                continue;
+            }
+
+            if (path && !Array.isArray(path) && path.circle) {
+                this.emitCirclePath(path.circle, path.z, feedXY, feedZ);
                 continue;
             }
 
@@ -232,6 +241,35 @@ export class ToolpathGenerator {
         const clockwise = arcData.clockwise === true;
 
         this.gcode.addArc(end.x, end.y, i, j, clockwise, feedXY);
+        this.gcode.addRapid(null, null, this.machine.getSafetyHeight());
+    }
+
+    emitCirclePath(circleData, z, feedXY, feedZ) {
+        if (!circleData || typeof z !== 'number') {
+            return;
+        }
+
+        const { cx, cy, radius } = circleData;
+        if (![cx, cy, radius].every(v => typeof v === 'number' && Number.isFinite(v))) {
+            return;
+        }
+
+        // Start at rightmost point (cx + radius, cy) - like PLC does
+        const startX = cx + radius;
+        const startY = cy;
+
+        this.gcode.addRapid(startX, startY);
+        this.gcode.addLinear(startX, startY, z, feedZ);
+
+        // Split into two semicircles for maximum controller compatibility (like PLC)
+        // First semicircle: right → left (top half)
+        const midX = cx - radius;
+        const midY = cy;
+        this.gcode.addArc(midX, midY, -radius, 0, true, feedXY);
+
+        // Second semicircle: left → right (bottom half)
+        this.gcode.addArc(startX, startY, radius, 0, true, feedXY);
+
         this.gcode.addRapid(null, null, this.machine.getSafetyHeight());
     }
 

@@ -6,6 +6,13 @@
   <title>Sacchi Plotter Pen - CAD Editor</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "clipper2-wasm": "/node_modules/clipper2-wasm/dist/es/clipper2z.js"
+      }
+    }
+  </script>
   <script src="./src/lib/dxf-parser.js"></script>
 </head>
 
@@ -305,6 +312,20 @@
 
       <!-- CAM TAB -->
       <div id="tab-cam" class="ribbon-panel">
+        <!-- Selection Group -->
+        <div class="cad-toolbar-group">
+          <div class="cad-toolbar-buttons">
+            <button type="button" class="cad-tool-btn" id="btnCamSelectAll" title="Seleziona Tutto (Ctrl+A)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <path d="M9 12l2 2 4-4" />
+              </svg>
+              <span>Seleziona</span>
+            </button>
+          </div>
+          <span class="cad-toolbar-label">Selezione</span>
+        </div>
+
         <!-- Operations Group -->
         <div class="cad-toolbar-group">
           <div class="cad-toolbar-buttons">
@@ -800,7 +821,6 @@
     </div>
   </div>
 
-  <script src="src/lib/clipper.js"></script>
   <script type="module" src="src/app/PLCConfigManager.js"></script>
   <script type="module" src="src/main.js"></script>
   <script>

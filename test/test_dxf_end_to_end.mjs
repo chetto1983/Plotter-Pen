@@ -1,4 +1,3 @@
-import { createRequire } from 'node:module';
 import fs from 'node:fs/promises';
 
 import DxfParser from 'dxf-parser';
@@ -13,16 +12,7 @@ import { ToolLibrary } from '../src/cam/ToolLibrary.js';
 import { MachineConfig } from '../src/cam/MachineConfig.js';
 import { linearizeGCode } from '../src/cam/linearizeGCode.js';
 import { parseGCodeToPrimitives, generatePLCFromGCode } from '../src/cam/GCodePostProcessor.js';
-
-if (!globalThis.self) {
-    globalThis.self = globalThis;
-}
-
-const require = createRequire(import.meta.url);
-require('../src/lib/clipper.js');
-if (globalThis.self?.ClipperLib) {
-    globalThis.ClipperLib = globalThis.self.ClipperLib;
-}
+import { ClipperWrapper } from '../src/cam/ClipperWrapper.js';
 
 const DEFAULT_DXF = 'C:/Users/Davide/OneDrive - Sonepar/Documenti/Plotter-Pen/DXF/Laser Cut Modern Love Theme Wall Clock.dxf';
 const dxfPath = process.env.DXF_PATH || DEFAULT_DXF;
@@ -175,6 +165,9 @@ const enrichPlcData = (primitives) => primitives.map((prim) => {
 });
 
 const run = async () => {
+    // Initialize clipper2-wasm
+    await ClipperWrapper.init();
+
     assert(await fileExists(dxfPath), `DXF file not found: ${dxfPath}`);
 
     console.log(`DXF file: ${dxfPath}`);
@@ -248,7 +241,7 @@ const run = async () => {
     assert(ops.length > 0, 'No CAM operations created.');
     console.log(`CAM operations: ${ops.length}`);
 
-    const gcode = generator.generateJob({ operations: ops });
+    const gcode = await generator.generateJob({ operations: ops });
     assert(gcode.trim().length > 0, 'Generated CAM G-code is empty.');
     assert(!/NaN|undefined/.test(gcode), 'Generated CAM G-code contains invalid tokens.');
 

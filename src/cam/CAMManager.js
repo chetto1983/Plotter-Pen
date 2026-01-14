@@ -5,7 +5,6 @@
 import { MachineConfig } from './MachineConfig.js';
 import { ToolLibrary } from './ToolLibrary.js';
 import { getModalManager } from '../ui/ModalManager.js';
-import { buildSelectionPaths, groupLoopsByContainment } from './selectionUtils.js';
 
 export class CAMManager {
     constructor(app) {
@@ -61,7 +60,8 @@ export class CAMManager {
     }
 
     /**
-     * Create an operation from selected primitives
+     * Create operations from selected primitives
+     * Uses PLC-style direct primitive access (no intermediate point extraction)
      * @param {string} type - 'profile' or 'pocket'
      */
     createOperationFromSelection(type) {
@@ -72,222 +72,296 @@ export class CAMManager {
             return null;
         }
 
-        const selectionList = Array.from(selection);
-        const {
-            loops,
-            openPaths,
-            unsupportedTypes,
-            unsupportedCount
-        } = buildSelectionPaths(selectionList);
-        const pointsList = [];
+        const primitives = Array.from(selection);
+        const newOps = [];
         const warnings = [];
+        const unsupportedTypes = new Set();
 
-        if (type === 'pocket') {
-            const groups = groupLoopsByContainment(loops);
-            groups.forEach(group => {
-                const holePoints = Array.isArray(group.holes)
-                    ? group.holes.map(hole => hole.points).filter(Boolean)
-                    : [];
-                pointsList.push({
-                    points: group.outer,
-                    holes: holePoints,
-                    closed: true,
-                    sourceType: group.sourceType,
-                    sourceCount: group.sourceCount,
-                    disableArcFit: true
-                });
-            });
+        for (const prim of primitives) {
+            if (!prim || !prim.type) continue;
 
-            if (openPaths.length > 0) {
-                warnings.push(`Ignorate ${openPaths.length} geometrie aperte per la tasca.`);
+            const op = this.primitiveToOperation(prim, type);
+            if (op) {
+                this.operations.push(op);
+                newOps.push(op);
+            } else {
+                unsupportedTypes.add(prim.type);
             }
-        } else {
-            const groups = groupLoopsByContainment(loops);
-            groups.forEach(group => {
-                pointsList.push({
-                    points: group.outer,
-                    closed: true,
-                    sourceType: group.sourceType,
-                    sourceCount: group.sourceCount,
-                    disableArcFit: false,
-                    side: 'outside'
-                });
-
-                if (Array.isArray(group.holes) && group.holes.length > 0) {
-                    group.holes.forEach(hole => {
-                        pointsList.push({
-                            points: hole.points,
-                            closed: true,
-                            sourceType: hole.sourceType,
-                            sourceCount: hole.sourceCount,
-                            disableArcFit: false,
-                            side: 'inside'
-                        });
-                    });
-                }
-            });
-
-            openPaths.forEach(path => {
-                const arcSegment = Array.isArray(path.segments) && path.segments.length === 1 && path.segments[0].sourceType === 'arc'
-                    ? path.segments[0]
-                    : null;
-                const disableArcFit = arcSegment === null;
-
-                pointsList.push({
-                    points: path.points,
-                    arc: arcSegment?.arcData ?? null,
-                    closed: false,
-                    sourceType: 'open',
-                    sourceCount: path.segments?.length ?? 0,
-                    disableArcFit
-                });
-            });
         }
 
-        if (pointsList.length === 0) {
-            if (unsupportedCount > 0) {
+        if (newOps.length === 0) {
+            if (unsupportedTypes.size > 0) {
                 const types = Array.from(unsupportedTypes).join(', ');
-                const ignored = types ? `\nIgnorati: ${types}` : '';
                 getModalManager().alert({
                     title: 'Tipo non supportato',
-                    message: `Al momento il CAM supporta: Poligoni, Rettangoli, Cerchi, Linee e Archi.${ignored}`
+                    message: `Al momento il CAM supporta: Poligoni, Rettangoli, Cerchi, Linee e Archi.\nIgnorati: ${types}`
                 });
-                if (unsupportedCount >= selectionList.length) return null; // If EVERYTHING was unsupported, stop.
-            } else if (type === 'pocket' && openPaths.length > 0) {
-                getModalManager().alert({
-                    title: 'Geometria non valida',
-                    message: 'La tasca richiede contorni chiusi. Le geometrie selezionate sono aperte.'
-                });
-                return null;
             } else {
                 getModalManager().alert({
                     title: 'Geometria non valida',
                     message: 'Impossibile estrarre geometria valida dalla selezione.'
                 });
-                return null;
             }
+            return null;
         }
 
         if (unsupportedTypes.size > 0) {
-            const types = Array.from(unsupportedTypes).join(', ');
-            warnings.push(`Ignorati: ${types}`);
+            warnings.push(`Ignorati: ${Array.from(unsupportedTypes).join(', ')}`);
         }
 
         if (warnings.length > 0) {
             this.app.ui.updateStatus(warnings.join(' '));
         }
 
-        const newOps = [];
-        for (const item of pointsList) {
-            const disableArcFit = item.disableArcFit === true;
-            const op = {
-                id: Date.now() + Math.random().toString(36).substr(2, 5),
-                name: `${type.charAt(0).toUpperCase() + type.slice(1)} Op`,
-                type: type,
-                toolId: '1', // Default to 3mm Endmill
-                points: item.points, // Data for the strategy
-                arc: item.arc,
-                holes: item.holes,
-                closed: item.closed, // NEW: Track if it's closed
-                disableArcFit,
-                // Default params
-                startZ: this.jobSettings.startZ,
-                targetZ: -1,
-                stepDown: 1,
-                side: item.side ?? (type === 'profile' ? 'outside' : undefined)
-            };
-            this.operations.push(op);
-            newOps.push(op);
-        }
-
         return newOps;
     }
 
-    circleToPolygon(circle, segments = 64) {
-        const points = [];
-        for (let i = 0; i < segments; i++) {
-            const angle = (i / segments) * Math.PI * 2;
-            points.push({
-                x: circle.center.x + Math.cos(angle) * circle.radius,
-                y: circle.center.y + Math.sin(angle) * circle.radius
-            });
-        }
-        return points;
-    }
-
-    arcToPolygon(arc, segments = 32) {
-        // arc properties: radius, cx, cy, startAngle, sweep
-        const points = [];
-        const start = arc.startAngle;
-        const sweep = arc.sweep;
-        // Dynamic resolution based on arc length/size? For now fixed segments or simple adaptive
-        const totalAngle = Math.abs(sweep);
-        // Ensure at least enough segments for the angle
-        const steps = Math.max(segments, Math.ceil(totalAngle / (Math.PI / 18)));
-
-        for (let i = 0; i <= steps; i++) {
-            const t = i / steps;
-            const angle = start + sweep * t;
-            points.push({
-                x: arc.cx + arc.radius * Math.cos(angle),
-                y: arc.cy + arc.radius * Math.sin(angle)
-            });
-        }
-        return points;
-    }
-
-    serializeArc(arc) {
-        if (!arc) {
-            return null;
-        }
-
-        return {
-            x1: arc.x1,
-            y1: arc.y1,
-            x2: arc.x2,
-            y2: arc.y2,
-            cx: arc.cx,
-            cy: arc.cy,
-            radius: arc.radius,
-            clockwise: arc.isClockwise === true
+    /**
+     * Convert a primitive directly to a CAM operation
+     * Same approach as PLCOutputGenerator - read coordinates from primitive
+     */
+    primitiveToOperation(prim, type) {
+        const baseOp = {
+            id: Date.now() + Math.random().toString(36).substr(2, 5),
+            name: `${type.charAt(0).toUpperCase() + type.slice(1)} Op`,
+            type: type,
+            toolId: '1',
+            startZ: this.jobSettings.startZ,
+            targetZ: -1,
+            stepDown: 1,
+            side: type === 'profile' ? 'outside' : undefined
         };
+
+        switch (prim.type) {
+            case 'circle': {
+                // Read directly from primitive (like PLC does)
+                const cx = prim.center?.x ?? prim.cx;
+                const cy = prim.center?.y ?? prim.cy;
+                const radius = prim.radius ?? prim._radius;
+                return {
+                    ...baseOp,
+                    circleData: { cx, cy, radius },
+                    closed: true,
+                    disableArcFit: false,
+                    points: [] // Empty - circleData is primary
+                };
+            }
+
+            case 'arc': {
+                // Read directly from primitive
+                return {
+                    ...baseOp,
+                    arc: {
+                        x1: prim.x1,
+                        y1: prim.y1,
+                        x2: prim.x2,
+                        y2: prim.y2,
+                        cx: prim.cx,
+                        cy: prim.cy,
+                        clockwise: prim.isClockwise === true
+                    },
+                    closed: false,
+                    disableArcFit: false,
+                    points: []
+                };
+            }
+
+            case 'line': {
+                // Line as 2-point path
+                return {
+                    ...baseOp,
+                    points: [
+                        { x: prim.x1, y: prim.y1 },
+                        { x: prim.x2, y: prim.y2 }
+                    ],
+                    closed: false,
+                    disableArcFit: true
+                };
+            }
+
+            case 'polygon': {
+                // Read points directly from primitive
+                if (!prim.points || prim.points.length < 3) return null;
+                return {
+                    ...baseOp,
+                    points: prim.points.map(p => ({ x: p.x, y: p.y })),
+                    closed: true,
+                    disableArcFit: type === 'pocket'
+                };
+            }
+
+            case 'polyline': {
+                // Read points directly from primitive
+                if (!prim.points || prim.points.length < 2) return null;
+                return {
+                    ...baseOp,
+                    points: prim.points.map(p => ({ x: p.x, y: p.y })),
+                    closed: prim.closed === true,
+                    disableArcFit: type === 'pocket'
+                };
+            }
+
+            case 'rectangle': {
+                // Convert rectangle to polygon points
+                const pts = [
+                    { x: prim.x, y: prim.y },
+                    { x: prim.x + prim.width, y: prim.y },
+                    { x: prim.x + prim.width, y: prim.y + prim.height },
+                    { x: prim.x, y: prim.y + prim.height }
+                ];
+                return {
+                    ...baseOp,
+                    points: pts,
+                    closed: true,
+                    disableArcFit: type === 'pocket'
+                };
+            }
+
+            default:
+                return null;
+        }
     }
 
     removeOperation(id) {
         this.operations = this.operations.filter(op => op.id !== id);
     }
 
-    async generateGCode() {
-        if (this.operations.length === 0) {
-            return '';
+    /**
+     * Select all primitives (like Ctrl+A in main tab)
+     */
+    selectAllPrimitives() {
+        if (!this.app || !this.app.primitives) {
+            console.warn('CAMManager: No primitives to select');
+            return;
         }
 
-        const job = {
-            operations: this.operations
-        };
+        // Clear current selection
+        if (this.app.selectedPrimitives) {
+            this.app.selectedPrimitives.clear();
+        } else {
+            this.app.selectedPrimitives = new Set();
+        }
 
-        const tools = this.toolLibrary?.getAllTools?.() ?? [];
-        const payload = {
-            job,
-            settings: this.jobSettings,
-            tools
-        };
+        // Select all non-dimension primitives
+        for (const prim of this.app.primitives) {
+            if (prim && prim.type &&
+                prim.type !== 'dimension' &&
+                prim.type !== 'angularDimension' &&
+                prim.type !== 'radiusDimension') {
+                this.app.selectedPrimitives.add(prim);
+            }
+        }
 
-        const response = await fetch('/api/cam/generate', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
+        // Update UI and redraw (same as SelectionManager)
+        const count = this.app.selectedPrimitives.size;
+        if (this.app.renderer) this.app.renderer.invalidateCache();
+        this.app.render();
+        if (this.app.ui?.updateStatus) {
+            this.app.ui.updateStatus(`Selezionati ${count} elementi`);
+        }
+        console.log(`CAMManager: Selected ${count} primitives`);
+    }
+
+    async generateGCode() {
+        // Get selected primitives directly (like PLC does)
+        const primitives = Array.from(this.app.selectedPrimitives || []);
+
+        if (primitives.length === 0) {
+            throw new Error('Nessuna geometria selezionata.');
+        }
+
+        // Check if we have pocket operations
+        const hasPocket = this.operations.some(op => op.type === 'pocket');
+        const type = hasPocket ? 'pocket' : 'profile';
+
+        // Get tool info
+        const tool = this.toolLibrary?.getTool?.('1') ?? { diameter: 3 };
+
+        // Serialize primitives for worker (extract raw data like PLC does)
+        const serializedPrimitives = primitives.map(prim => {
+            if (!prim || !prim.type) return null;
+            const data = { type: prim.type };
+
+            // Copy relevant properties based on type
+            switch (prim.type) {
+                case 'circle':
+                    data.cx = prim.center?.x ?? prim.cx;
+                    data.cy = prim.center?.y ?? prim.cy;
+                    data.radius = prim.radius ?? prim._radius;
+                    break;
+                case 'arc':
+                    data.cx = prim.cx;
+                    data.cy = prim.cy;
+                    data.radius = prim.radius;
+                    data.startAngle = prim.startAngle;
+                    data.sweep = prim.sweep;
+                    data.x1 = prim.x1;
+                    data.y1 = prim.y1;
+                    data.x2 = prim.x2;
+                    data.y2 = prim.y2;
+                    break;
+                case 'line':
+                    data.x1 = prim.x1;
+                    data.y1 = prim.y1;
+                    data.x2 = prim.x2;
+                    data.y2 = prim.y2;
+                    break;
+                case 'rectangle':
+                    data.x = prim.x;
+                    data.y = prim.y;
+                    data.width = prim.width;
+                    data.height = prim.height;
+                    break;
+                case 'polygon':
+                case 'polyline':
+                    data.points = prim.points?.map(p => ({ x: p.x, y: p.y }));
+                    data.closed = prim.closed;
+                    break;
+                default:
+                    return null;
+            }
+            return data;
+        }).filter(Boolean);
+
+        // Log primitive types being sent
+        const typeCounts = serializedPrimitives.reduce((acc, p) => { acc[p.type] = (acc[p.type] || 0) + 1; return acc; }, {});
+        console.log(`CAMManager: Sending ${serializedPrimitives.length} primitives (${type}):`, typeCounts);
+
+        // Serialize to JSON - do this BEFORE fetch to see if this is where it freezes
+        console.log('CAMManager: Serializing JSON...');
+        const payload = JSON.stringify({
+            primitives: serializedPrimitives,
+            type,
+            settings: {
+                safeZ: this.jobSettings.safeZ ?? 5,
+                targetZ: this.jobSettings.targetZ ?? -1,
+                stepDown: this.jobSettings.stepDown ?? 1,
+                toolId: '1'
             },
-            body: JSON.stringify(payload)
+            tools: [tool]
+        });
+        console.log(`CAMManager: Payload size: ~${Math.round(payload.length / 1024)}KB`);
+
+        // Use backend worker for heavy computation (segment connection, pocket generation)
+        console.log('CAMManager: Sending fetch request...');
+        const fetchStart = performance.now();
+        const response = await fetch('/api/cam/process', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: payload
         });
 
+        console.log('CAMManager: Waiting for response...');
         const result = await response.json();
+        console.log(`CAMManager: Fetch completed in ${Math.round(performance.now() - fetchStart)}ms, status=${response.status}`);
 
         if (!response.ok || result?.status !== 'ok') {
+            console.error('CAMManager: Error response:', result);
             throw new Error(result?.message ?? 'Errore generazione G-Code.');
         }
 
-        return result?.gcode ?? '';
+        console.log(`CAMManager: Worker returned ${result.stats?.gcodeLines ?? 0} lines, ${result.stats?.loops ?? 0} loops`);
+        return result.gcode;
     }
 
     async parseGCodePreview(gcodeText) {
@@ -512,6 +586,13 @@ export class CAMManager {
         // Use document-level delegation to handle dynamic button existence
         document.addEventListener('click', (e) => {
             const target = e.target;
+
+            // --- SELECTION ---
+            if (target.closest('#btnCamSelectAll')) {
+                console.log('CAMManager: Select All button clicked');
+                this.selectAllPrimitives();
+                return;
+            }
 
             // --- OPERATIONS ---
             if (target.closest('#btnCamProfile')) {
@@ -783,92 +864,128 @@ export class CAMManager {
         const list = document.getElementById('gcodeOutputList');
         if (!list) return;
 
+        // Cancel any pending render
+        if (this._gcodeRenderRAF) {
+            cancelAnimationFrame(this._gcodeRenderRAF);
+            this._gcodeRenderRAF = null;
+        }
+
         list.innerHTML = '';
         if (!gcode || !gcode.trim()) {
             list.innerHTML = '<div class="cad-output-empty">G-Code non ancora generato</div>';
             return;
         }
 
-        const lines = gcode.split('\n');
+        const lines = gcode.split('\n').filter(l => l.trim());
+        const totalLines = lines.length;
+        const CHUNK_SIZE = 100; // Lines per frame
+        const MAX_RENDER = 5000; // Max lines to render (virtualization lite)
+        let currentIndex = 0;
+
+        // Show truncation warning if needed
+        if (totalLines > MAX_RENDER) {
+            const warn = document.createElement('div');
+            warn.className = 'cad-output-warning';
+            warn.style.cssText = 'padding:8px;background:#553;color:#ffa;font-size:11px;';
+            warn.textContent = `Visualizzate ${MAX_RENDER} di ${totalLines} linee. Usa il download per il file completo.`;
+            list.appendChild(warn);
+        }
+
+        const linesToRender = lines.slice(0, MAX_RENDER);
         const tokenRegex = /\([^)]+\)|G\d+|M\d+|[XYZIJ][-+]?\d*\.?\d+|F[-+]?\d*\.?\d+|S[-+]?\d*\.?\d+/gi;
 
-        const appendText = (container, text) => {
-            if (text) {
-                container.appendChild(document.createTextNode(text));
-            }
-        };
+        const renderChunk = () => {
+            const fragment = document.createDocumentFragment();
+            const endIndex = Math.min(currentIndex + CHUNK_SIZE, linesToRender.length);
 
-        const appendSpan = (container, text, style) => {
-            const span = document.createElement('span');
-            span.textContent = text;
-            if (style) Object.assign(span.style, style);
-            container.appendChild(span);
-        };
+            for (let i = currentIndex; i < endIndex; i++) {
+                const line = linesToRender[i];
+                const div = document.createElement('div');
+                div.className = 'cad-output-item';
+                div.style.cssText = "padding:4px 8px;font-family:'Consolas',monospace;";
 
-        const renderHighlightedLine = (line, container) => {
-            let lastIndex = 0;
-            let match;
-            tokenRegex.lastIndex = 0;
-
-            while ((match = tokenRegex.exec(line)) !== null) {
-                const start = match.index;
-                if (start > lastIndex) {
-                    appendText(container, line.slice(lastIndex, start));
-                }
-
-                const token = match[0];
-                const upper = token[0]?.toUpperCase();
-
-                if (token.startsWith('(')) {
-                    appendSpan(container, token, { color: '#6a9955' });
-                } else if (upper === 'G') {
-                    appendSpan(container, token, { color: '#569cd6', fontWeight: 'bold' });
-                } else if (upper === 'M') {
-                    appendSpan(container, token, { color: '#c586c0', fontWeight: 'bold' });
-                } else if (upper && 'XYZIJ'.includes(upper)) {
-                    appendSpan(container, token[0], { color: '#9cdcfe' });
-                    appendSpan(container, token.slice(1), { color: '#b5cea8' });
-                } else if (upper === 'F' || upper === 'S') {
-                    appendSpan(container, token, { color: '#dcdcaa' });
+                if (line.startsWith('(')) {
+                    div.style.color = '#6a9955';
+                    div.textContent = line;
                 } else {
-                    appendText(container, token);
+                    this._renderHighlightedLine(line, div, tokenRegex);
                 }
-
-                lastIndex = start + token.length;
+                fragment.appendChild(div);
             }
 
-            if (lastIndex < line.length) {
-                appendText(container, line.slice(lastIndex));
+            list.appendChild(fragment);
+            currentIndex = endIndex;
+
+            if (currentIndex < linesToRender.length) {
+                this._gcodeRenderRAF = requestAnimationFrame(renderChunk);
+            } else {
+                this._gcodeRenderRAF = null;
+                // Add delegated click handler once (not per line)
+                if (!list.dataset.clickBound) {
+                    list.dataset.clickBound = 'true';
+                    list.addEventListener('click', (e) => {
+                        const item = e.target.closest('.cad-output-item');
+                        if (item) {
+                            list.querySelectorAll('.cad-output-item.selected').forEach(d => d.classList.remove('selected'));
+                            item.classList.add('selected');
+                        }
+                    });
+                }
             }
         };
 
-        lines.forEach((line) => {
-            if (!line.trim()) return;
+        // Start chunked rendering
+        this._gcodeRenderRAF = requestAnimationFrame(renderChunk);
+        list.scrollTop = 0;
+    }
 
-            const div = document.createElement('div');
-            div.className = 'cad-output-item';
-            div.style.padding = '4px 8px'; // Slightly more compact
-            div.style.fontFamily = "'Consolas', monospace";
+    _renderHighlightedLine(line, container, tokenRegex) {
+        let lastIndex = 0;
+        let match;
+        tokenRegex.lastIndex = 0;
 
-            if (line.startsWith('(')) {
-                div.style.color = '#6a9955';
-                div.textContent = line;
-            } else {
-                renderHighlightedLine(line, div);
+        while ((match = tokenRegex.exec(line)) !== null) {
+            const start = match.index;
+            if (start > lastIndex) {
+                container.appendChild(document.createTextNode(line.slice(lastIndex, start)));
             }
 
-            // Click to highlight in preview? (Future feature)
-            div.addEventListener('click', () => {
-                document.querySelectorAll('#gcodeOutputList .cad-output-item').forEach(d => d.classList.remove('selected'));
-                div.classList.add('selected');
-                // TODO: Sync with viewer
-            });
+            const token = match[0];
+            const upper = token[0]?.toUpperCase();
+            const span = document.createElement('span');
 
-            list.appendChild(div);
-        });
+            if (token.startsWith('(')) {
+                span.style.color = '#6a9955';
+                span.textContent = token;
+            } else if (upper === 'G') {
+                span.style.cssText = 'color:#569cd6;font-weight:bold';
+                span.textContent = token;
+            } else if (upper === 'M') {
+                span.style.cssText = 'color:#c586c0;font-weight:bold';
+                span.textContent = token;
+            } else if (upper && 'XYZIJ'.includes(upper)) {
+                span.style.color = '#9cdcfe';
+                span.textContent = token[0];
+                container.appendChild(span);
+                const valSpan = document.createElement('span');
+                valSpan.style.color = '#b5cea8';
+                valSpan.textContent = token.slice(1);
+                container.appendChild(valSpan);
+                lastIndex = start + token.length;
+                continue;
+            } else if (upper === 'F' || upper === 'S') {
+                span.style.color = '#dcdcaa';
+                span.textContent = token;
+            } else {
+                span.textContent = token;
+            }
+            container.appendChild(span);
+            lastIndex = start + token.length;
+        }
 
-        // Auto scroll to top
-        list.scrollTop = 0;
+        if (lastIndex < line.length) {
+            container.appendChild(document.createTextNode(line.slice(lastIndex)));
+        }
     }
 
     async updatePreviewFromServer() {

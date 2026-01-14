@@ -1,1202 +1,378 @@
-# CAD Features Implementation Roadmap
+# CAM Engine Roadmap v2.0
 
-## Overview
+## Priority: Biarc Fitting in Go
 
-This document outlines the implementation plan for four key CAD features:
+| File | Status | Change |
+|------|--------|--------|
+| `server/cam-engine/biarc.go` | TODO | Port `fitArcsAndLines()` from JS |
+| `server/cam-engine/profile.go` | TODO | Use biarc in `writeClosedPath/writeOpenPath` |
+| `server/cam-engine/geometry.go` | TODO | Add `PathSegment` struct with arc data |
 
-1. **Move/Delete Selected** - Basic editing operations
-2. **Box Selection** - Rubber band multi-select
-3. **Save/Load JSON** - Drawing persistence
-4. **Import DXF** - Load CAD files
+**Goal**: G2/G3 output instead of G1-only. ~100 lines vs ~1000s.
+
+## Architecture
+
+```
+Go CAM Engine (server/cam-engine/)
+├── main.go      - HTTP API, settings
+├── gcode.go     - G0/G1/G2/G3/M codes ✓
+├── geometry.go  - Loops, segments, spatial grid
+├── biarc.go     - Arc fitting (TODO)
+├── profile.go   - Profile toolpaths
+├── pocket.go    - Pocket strategies
+└── clipper.go   - Boolean ops
+```
+
+## Backlog
+
+| Priority | Feature | File |
+|----------|---------|------|
+| P0 | Biarc fitting | biarc.go |
+| P1 | Drilling cycles G81/82/83 | drilling.go |
+| P2 | Lead-in/lead-out | leadin.go |
+| P3 | Adaptive clearing | pocket.go |
+| P4 | Post-processor profiles | postprocessor.go |
 
 ---
 
-## 1. Move/Delete Selected Primitives
+## Current State Assessment
 
-### Current State
+### Go CAM Engine (88ms for 100 pockets ✓)
+| Component | Status | Issues |
+|-----------|--------|--------|
+| `gcode.go` | ✓ Complete | Full G0-G92, M0-M30 coverage |
+| `geometry.go` | ✓ Working | Spatial grid, segment connection |
+| `clipper.go` | ✓ Working | ctessum/go.clipper binding |
+| `pocket.go` | ✓ Basic | Constant stepover only |
+| `profile.go` | ✓ Basic | G2/G3 arcs for circles only |
 
-- Selection system exists (`selectedPrimitives` Set in main.js)
-- Primitives have position properties but no `translate()` method
-- No delete functionality implemented
-
-### Implementation Steps
-
-#### 1.1 Add Transform Methods to Primitives
-
-**File:** `src/geometry/primitives.js`
-
-```javascript
-// Add to Primitive base class
-translate(dx, dy) {
-    throw new Error('translate() must be implemented');
-}
-
-// Line implementation
-translate(dx, dy) {
-    this.a = new Point(this.a.x + dx, this.a.y + dy);
-    this.b = new Point(this.b.x + dx, this.b.y + dy);
-}
-
-// Arc implementation
-translate(dx, dy) {
-    this.a = new Point(this.a.x + dx, this.a.y + dy);
-    this.b = new Point(this.b.x + dx, this.b.y + dy);
-    this.c = new Point(this.c.x + dx, this.c.y + dy);
-}
-
-// Circle implementation
-translate(dx, dy) {
-    this.center = new Point(this.center.x + dx, this.center.y + dy);
-}
-
-// Rectangle implementation
-translate(dx, dy) {
-    this.x += dx;
-    this.y += dy;
-}
-
-// Polygon implementation
-translate(dx, dy) {
-    this.points = this.points.map(p => new Point(p.x + dx, p.y + dy));
-}
-```
-
-#### 1.2 Delete Selected Primitives
-
-**File:** `src/main.js`
-
-```javascript
-deleteSelected() {
-    if (this.selectedPrimitives.size === 0) return;
-
-    // Save state for undo
-    this.stateManager.pushState();
-
-    // Remove selected primitives
-    this.primitives = this.primitives.filter(p => !this.selectedPrimitives.has(p));
-    this.selectedPrimitives.clear();
-
-    this.render();
-}
-```
-
-#### 1.3 Move Selected with Arrow Keys
-
-**File:** `src/app/InputHandler.js`
-
-```javascript
-// Add to keyboard handler
-handleKeyDown(e) {
-    const moveAmount = e.shiftKey ? 10 : 1; // mm, shift for larger steps
-
-    switch(e.key) {
-        case 'Delete':
-        case 'Backspace':
-            this.app.deleteSelected();
-            e.preventDefault();
-            break;
-        case 'ArrowUp':
-            this.app.moveSelected(0, moveAmount);
-            e.preventDefault();
-            break;
-        case 'ArrowDown':
-            this.app.moveSelected(0, -moveAmount);
-            e.preventDefault();
-            break;
-        case 'ArrowLeft':
-            this.app.moveSelected(-moveAmount, 0);
-            e.preventDefault();
-            break;
-        case 'ArrowRight':
-            this.app.moveSelected(moveAmount, 0);
-            e.preventDefault();
-            break;
-    }
-}
-```
-
-#### 1.4 Move Selected Method
-
-**File:** `src/main.js`
-
-```javascript
-moveSelected(dx, dy) {
-    if (this.selectedPrimitives.size === 0) return;
-
-    // Save state for undo
-    this.stateManager.pushState();
-
-    // Move all selected primitives
-    for (const primitive of this.selectedPrimitives) {
-        primitive.translate(dx, dy);
-    }
-
-    this.render();
-}
-```
-
-#### 1.5 Drag Move with Mouse
-
-**File:** `src/main.js`
-
-```javascript
-// Add state tracking
-this.isDragging = false;
-this.dragStart = null;
-this.dragOffset = null;
-
-// In mouse down handler (select tool)
-if (this.selectedPrimitives.size > 0 && this.isPointInSelection(worldPos)) {
-    this.isDragging = true;
-    this.dragStart = worldPos;
-    this.stateManager.pushState();
-}
-
-// In mouse move handler
-if (this.isDragging) {
-    const dx = worldPos.x - this.dragStart.x;
-    const dy = worldPos.y - this.dragStart.y;
-
-    for (const primitive of this.selectedPrimitives) {
-        primitive.translate(dx, dy);
-    }
-
-    this.dragStart = worldPos;
-    this.render();
-}
-
-// In mouse up handler
-this.isDragging = false;
-```
-
-### UI Updates
-
-- Add Delete button to toolbar (trash icon)
-- Show "Move: Arrow keys, Delete: Del" in status bar when items selected
-- Cursor change to 'move' when hovering over selection
+### Frontend UI
+| Component | Status | Issues |
+|-----------|--------|--------|
+| Operations panel | ⚠️ Basic | No per-operation settings |
+| Settings modal | ⚠️ Limited | Global settings only |
+| Tool selection | ❌ Missing | Hardcoded tool ID |
+| Strategy picker | ❌ Missing | No strategy options |
 
 ---
 
-## 2. Box Selection (Rubber Band)
+## Phase 1: G-Code Commands (Sprint 1)
 
-### Implementation Approach
+### 1.1 Drilling Canned Cycles
+**File**: `server/cam-engine/drilling.go` (NEW)
 
-Use a DOM overlay div for the selection rectangle - cleaner than two-canvas approach and doesn't require re-rendering primitives.
+```go
+// G81 - Standard drilling
+func (g *GCodeGenerator) G81(x, y, z, r, f float64)
 
-### Implementation Steps
+// G82 - Spot drilling (with dwell)
+func (g *GCodeGenerator) G82(x, y, z, r, p, f float64)
 
-#### 2.1 Add Selection Box Element
+// G83 - Peck drilling (chip breaking)
+func (g *GCodeGenerator) G83(x, y, z, r, q, f float64)
 
-**File:** `public/plotter_pen.html`
+// G84 - Tapping
+func (g *GCodeGenerator) G84(x, y, z, r, f float64)
+
+// G85 - Boring (feed out)
+func (g *GCodeGenerator) G85(x, y, z, r, f float64)
+```
+
+### 1.2 Arc Improvements
+**File**: `server/cam-engine/gcode.go`
+
+- G2/G3 with Z (helical interpolation)
+- Full circle support (I/J format for >180°)
+- Arc tolerance validation
+
+---
+
+## Phase 2: Toolpath Strategies (Sprint 2)
+
+### 2.1 Pocket Strategies
+**File**: `server/cam-engine/pocket.go`
+
+| Strategy | Algorithm | Use Case |
+|----------|-----------|----------|
+| **Constant Stepover** | Offset inward by fixed % | ✓ Current |
+| **Adaptive Clearing** | Maintain constant chip load | Roughing |
+| **Trochoidal** | Circular moves + linear step | HSM |
+| **Spiral** | Continuous inside-out path | Finishing |
+
+```go
+type PocketStrategy string
+const (
+    StrategyConstant   PocketStrategy = "constant"
+    StrategyAdaptive   PocketStrategy = "adaptive"
+    StrategyTrochoidal PocketStrategy = "trochoidal"
+    StrategySpiral     PocketStrategy = "spiral"
+)
+```
+
+### 2.2 Profile Strategies
+**File**: `server/cam-engine/profile.go`
+
+| Feature | Description |
+|---------|-------------|
+| **Side selection** | Inside / Outside / On-line |
+| **Climb vs Conventional** | Cut direction control |
+| **Lead-in/Lead-out** | Arc, ramp, or direct entry |
+| **Multiple passes** | Roughing + finishing offset |
+
+### 2.3 Drilling Strategy
+**File**: `server/cam-engine/drilling.go`
+
+```go
+type DrillStrategy struct {
+    Type       string  // "standard", "peck", "deep", "tap"
+    PeckDepth  float64 // Q value for G83
+    Dwell      float64 // P value for G82
+    Retract    string  // "rapid" or "feed"
+}
+```
+
+---
+
+## Phase 3: Entry/Exit Motions (Sprint 2)
+
+### 3.1 Lead-In Types
+**File**: `server/cam-engine/leadin.go` (NEW)
+
+| Type | G-code | Parameters |
+|------|--------|------------|
+| Direct | G0 → G1 | None |
+| Ramp | G1 with Z | Angle, distance |
+| Helix | G2/G3 + Z | Radius, pitch |
+| Arc | G2/G3 | Radius |
+
+```go
+type LeadIn struct {
+    Type     string  // "direct", "ramp", "helix", "arc"
+    Angle    float64 // For ramp (degrees)
+    Radius   float64 // For helix/arc (mm)
+    Distance float64 // Approach distance (mm)
+}
+```
+
+### 3.2 Lead-Out Types
+| Type | Description |
+|------|-------------|
+| Direct | Retract vertically |
+| Arc | Tangent departure |
+| Overcut | Pass start point |
+
+---
+
+## Phase 4: Tool Management (Sprint 3)
+
+### 4.1 Tool Library Schema
+**File**: `server/cam-engine/tools.go` (NEW)
+
+```go
+type Tool struct {
+    ID           int     `json:"id"`
+    Name         string  `json:"name"`
+    Type         string  `json:"type"` // endmill, drill, ball, chamfer
+    Diameter     float64 `json:"diameter"`
+    FluteLength  float64 `json:"fluteLength"`
+    TotalLength  float64 `json:"totalLength"`
+    NumberFlutes int     `json:"numberOfFlutes"`
+    Material     string  `json:"material"` // hss, carbide, diamond
+    MaxRPM       float64 `json:"maxRPM"`
+    MaxFeedXY    float64 `json:"maxFeedXY"`
+    MaxFeedZ     float64 `json:"maxFeedZ"`
+}
+```
+
+### 4.2 Tool Selection Logic
+```go
+func SelectTool(feature Feature, tools []Tool) *Tool {
+    // 1. Filter by type (pocket → endmill, hole → drill)
+    // 2. Filter by diameter (tool < feature width)
+    // 3. Filter by reach (flute length > depth)
+    // 4. Sort by diameter (largest first for roughing)
+    // 5. Return best match
+}
+```
+
+---
+
+## Phase 5: UI/UX Improvements (Sprint 3)
+
+### 5.1 Operation Panel Redesign
+**File**: `plotter_pen.html` (lines 662-727)
 
 ```html
-<div id="canvas-container">
-    <canvas id="cad-canvas"></canvas>
-    <div id="selection-box" class="selection-box"></div>
+<div class="cam-operation">
+  <div class="op-header">
+    <span class="op-icon">🔄</span>
+    <span class="op-name">Profile #1</span>
+    <span class="op-tool">T1 - 3mm End Mill</span>
+  </div>
+  <div class="op-details">
+    <span>Depth: -5mm</span>
+    <span>Feed: 800mm/min</span>
+  </div>
+  <div class="op-actions">
+    <button class="btn-edit">Edit</button>
+    <button class="btn-delete">Delete</button>
+    <button class="btn-up">↑</button>
+    <button class="btn-down">↓</button>
+  </div>
 </div>
 ```
 
-#### 2.2 Style Selection Box
+### 5.2 Per-Operation Settings Modal
+**File**: `plotter_pen.html` (NEW modal)
 
-**File:** `public/style.css`
+| Section | Controls |
+|---------|----------|
+| **Tool** | Dropdown with tool library |
+| **Strategy** | Radio: Constant/Adaptive/Trochoidal |
+| **Side** | Radio: Outside/Inside/On-line |
+| **Depths** | Start Z, Target Z, Step Down |
+| **Feeds** | Feed XY, Feed Z, Spindle RPM |
+| **Entry** | Dropdown: Direct/Ramp/Helix/Arc |
 
-```css
-#canvas-container {
-    position: relative;
-}
+### 5.3 Strategy Visualization
+- Show toolpath preview before generation
+- Color-code by operation type
+- Animation of tool movement
 
-.selection-box {
-    position: absolute;
-    border: 1px dashed #00ffff;
-    background: rgba(0, 255, 255, 0.1);
-    pointer-events: none;
-    display: none;
-    z-index: 10;
-}
-
-.selection-box.active {
-    display: block;
-}
-```
-
-#### 2.3 Box Selection Logic
-
-**File:** `src/main.js`
-
+### 5.4 Progress Feedback
 ```javascript
-// State
-this.isBoxSelecting = false;
-this.boxStart = null;
-this.selectionBoxEl = document.getElementById('selection-box');
-
-// Start box selection (mouse down on empty space with select tool)
-startBoxSelection(screenPos) {
-    this.isBoxSelecting = true;
-    this.boxStart = screenPos;
-    this.selectionBoxEl.classList.add('active');
-    this.updateSelectionBox(screenPos);
-}
-
-// Update box during drag
-updateSelectionBox(screenPos) {
-    const left = Math.min(this.boxStart.x, screenPos.x);
-    const top = Math.min(this.boxStart.y, screenPos.y);
-    const width = Math.abs(screenPos.x - this.boxStart.x);
-    const height = Math.abs(screenPos.y - this.boxStart.y);
-
-    this.selectionBoxEl.style.left = left + 'px';
-    this.selectionBoxEl.style.top = top + 'px';
-    this.selectionBoxEl.style.width = width + 'px';
-    this.selectionBoxEl.style.height = height + 'px';
-}
-
-// Finish selection (mouse up)
-finishBoxSelection(screenPos, additive) {
-    this.isBoxSelecting = false;
-    this.selectionBoxEl.classList.remove('active');
-
-    // Convert screen coords to world coords
-    const start = this.renderer.screenToModel(this.boxStart);
-    const end = this.renderer.screenToModel(screenPos);
-
-    const minX = Math.min(start.x, end.x);
-    const maxX = Math.max(start.x, end.x);
-    const minY = Math.min(start.y, end.y);
-    const maxY = Math.max(start.y, end.y);
-
-    // Clear selection if not additive (shift not held)
-    if (!additive) {
-        this.selectedPrimitives.clear();
-    }
-
-    // Select primitives inside box
-    for (const primitive of this.primitives) {
-        if (this.primitiveIntersectsBox(primitive, minX, minY, maxX, maxY)) {
-            this.selectedPrimitives.add(primitive);
-        }
-    }
-
-    this.render();
-}
-```
-
-#### 2.4 Box Intersection Tests
-
-**File:** `src/geometry/primitives.js`
-
-```javascript
-// Add to Primitive base class
-intersectsBox(minX, minY, maxX, maxY) {
-    throw new Error('intersectsBox() must be implemented');
-}
-
-// Line - check if line intersects or is inside box
-intersectsBox(minX, minY, maxX, maxY) {
-    // Check if either endpoint is inside
-    if (this.pointInBox(this.a, minX, minY, maxX, maxY) ||
-        this.pointInBox(this.b, minX, minY, maxX, maxY)) {
-        return true;
-    }
-    // Check if line intersects any box edge
-    return this.lineIntersectsBox(this.a, this.b, minX, minY, maxX, maxY);
-}
-
-// Circle - check bounding box overlap + distance check
-intersectsBox(minX, minY, maxX, maxY) {
-    // Find closest point on box to circle center
-    const closestX = Math.max(minX, Math.min(this.center.x, maxX));
-    const closestY = Math.max(minY, Math.min(this.center.y, maxY));
-
-    const dx = this.center.x - closestX;
-    const dy = this.center.y - closestY;
-
-    return (dx * dx + dy * dy) <= (this.radius * this.radius);
-}
-
-// Rectangle - simple AABB overlap
-intersectsBox(minX, minY, maxX, maxY) {
-    return !(this.x + this.width < minX ||
-             this.x > maxX ||
-             this.y + this.height < minY ||
-             this.y > maxY);
-}
-
-// Arc/Polygon - sample points along curve
-intersectsBox(minX, minY, maxX, maxY) {
-    const samples = this.samplePoints(20);
-    return samples.some(p =>
-        p.x >= minX && p.x <= maxX && p.y >= minY && p.y <= maxY
-    );
-}
-```
-
-#### 2.5 Selection Modes (Optional Enhancement)
-
-Two common CAD behaviors:
-
-- **Window Selection** (left-to-right): Select only fully contained primitives
-- **Crossing Selection** (right-to-left): Select any intersecting primitives
-
-```javascript
-finishBoxSelection(screenPos, additive) {
-    const isWindowSelect = screenPos.x > this.boxStart.x;
-
-    // Window: fully contained, Crossing: any intersection
-    const testMethod = isWindowSelect ? 'isFullyInside' : 'intersectsBox';
-    // ...
-}
+// Show progress during generation
+CAMManager.onProgress = (percent, message) => {
+    progressBar.style.width = percent + '%';
+    statusText.textContent = message;
+};
 ```
 
 ---
 
-## 3. Save/Load JSON
+## Phase 6: Post-Processor System (Sprint 4)
 
-### Current State
+### 6.1 Machine Profiles
+**File**: `server/cam-engine/postprocessor.go` (NEW)
 
-- StateManager already has `serializePrimitives()` and `deserializePrimitives()`
-- Used for undo/redo, can be reused for file save/load
+```go
+type MachineProfile struct {
+    Name          string
+    LineNumbers   bool
+    LineIncrement int
+    ArcFormat     string // "R" or "IJ"
+    CommentStyle  string // ";" or "()"
+    Precision     int    // Decimal places
+    SafeStart     []string // G-codes at program start
+    SafeEnd       []string // G-codes at program end
+}
 
-### Implementation Steps
-
-#### 3.1 File Structure
-
-```json
-{
-    "version": "1.0",
-    "created": "2024-01-15T10:30:00Z",
-    "workspace": {
-        "width": 600,
-        "height": 600,
-        "gridSpacing": 10
-    },
-    "primitives": [
-        {
-            "type": "line",
-            "id": "line_1705312200000_1",
-            "style": {
-                "strokeColor": "#ffffff",
-                "lineWidth": 1
-            },
-            "x1": 0, "y1": 0,
-            "x2": 100, "y2": 100
-        }
-    ]
+var Profiles = map[string]MachineProfile{
+    "generic": {Name: "Generic 3-Axis", ArcFormat: "R"},
+    "fanuc":   {Name: "Fanuc", LineNumbers: true, ArcFormat: "IJ"},
+    "haas":    {Name: "Haas", LineNumbers: true, ArcFormat: "R"},
+    "grbl":    {Name: "GRBL/LinuxCNC", ArcFormat: "R"},
 }
 ```
 
-#### 3.2 Save to File
-
-**File:** `src/app/FileManager.js` (new file)
-
-```javascript
-export class FileManager {
-    constructor(app) {
-        this.app = app;
-    }
-
-    saveToFile() {
-        const data = {
-            version: '1.0',
-            created: new Date().toISOString(),
-            workspace: {
-                width: this.app.workspaceWidth,
-                height: this.app.workspaceHeight,
-                gridSpacing: this.app.gridSpacing
-            },
-            primitives: this.app.primitives.map(p => p.toJSON())
-        };
-
-        const json = JSON.stringify(data, null, 2);
-        const blob = new Blob([json], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `drawing_${Date.now()}.json`;
-        a.click();
-
-        URL.revokeObjectURL(url);
-    }
-
-    async loadFromFile() {
-        return new Promise((resolve, reject) => {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = '.json';
-
-            input.onchange = async (e) => {
-                const file = e.target.files[0];
-                if (!file) return reject('No file selected');
-
-                try {
-                    const text = await file.text();
-                    const data = JSON.parse(text);
-                    this.applyLoadedData(data);
-                    resolve(data);
-                } catch (err) {
-                    reject(`Failed to load file: ${err.message}`);
-                }
-            };
-
-            input.click();
-        });
-    }
-
-    applyLoadedData(data) {
-        // Validate version
-        if (!data.version || !data.primitives) {
-            throw new Error('Invalid file format');
-        }
-
-        // Clear current state
-        this.app.primitives = [];
-        this.app.selectedPrimitives.clear();
-
-        // Apply workspace settings
-        if (data.workspace) {
-            this.app.setWorkspace(
-                data.workspace.width,
-                data.workspace.height,
-                data.workspace.gridSpacing
-            );
-        }
-
-        // Load primitives
-        this.app.primitives = this.app.stateManager.deserializePrimitives(
-            JSON.stringify(data.primitives)
-        );
-
-        // Reset undo stack
-        this.app.stateManager.clearHistory();
-        this.app.stateManager.pushState();
-
-        this.app.render();
-    }
-}
-```
-
-#### 3.3 LocalStorage Auto-Save (Optional)
-
-```javascript
-// Auto-save every 30 seconds
-startAutoSave() {
-    setInterval(() => {
-        const data = this.getDrawingData();
-        localStorage.setItem('plotter_pen_autosave', JSON.stringify(data));
-    }, 30000);
-}
-
-// Load on startup
-loadAutoSave() {
-    const saved = localStorage.getItem('plotter_pen_autosave');
-    if (saved) {
-        const data = JSON.parse(saved);
-        if (confirm('Restore previous session?')) {
-            this.applyLoadedData(data);
-        }
-    }
-}
-```
-
-#### 3.4 UI Integration
-
-**File:** `public/plotter_pen.html`
-
-```html
-<!-- Add to toolbar -->
-<div class="tool-group">
-    <button id="save-btn" class="tool-btn" title="Save Drawing (Ctrl+S)">
-        <svg><!-- save icon --></svg>
-    </button>
-    <button id="load-btn" class="tool-btn" title="Open Drawing (Ctrl+O)">
-        <svg><!-- folder-open icon --></svg>
-    </button>
-</div>
-```
-
-#### 3.5 Keyboard Shortcuts
-
-```javascript
-// Ctrl+S to save
-if (e.ctrlKey && e.key === 's') {
-    e.preventDefault();
-    this.fileManager.saveToFile();
-}
-
-// Ctrl+O to open
-if (e.ctrlKey && e.key === 'o') {
-    e.preventDefault();
-    this.fileManager.loadFromFile();
-}
-```
+### 6.2 Post-Processor Options
+| Option | Values |
+|--------|--------|
+| Line numbers | On/Off, increment |
+| Arc format | R (radius) / IJ (center) |
+| Comments | ; semicolon / () parentheses |
+| Precision | 2-6 decimal places |
+| Units | mm (G21) / inch (G20) |
 
 ---
 
-## 4. Import DXF
+## Phase 7: Safety & Validation (Sprint 4)
 
-### Library Choice
-
-**dxf-parser** (npm) - Lightweight, well-maintained, parses DXF to JSON structure.
-
-### Installation
-
-```bash
-npm install dxf-parser
-```
-
-### Implementation Steps
-
-#### 4.1 DXF Importer Class
-
-**File:** `src/import/DXFImporter.js` (new file)
-
-```javascript
-import DxfParser from 'dxf-parser';
-import { Line, Arc, Circle, Polygon, Point } from '../geometry/primitives.js';
-
-export class DXFImporter {
-    constructor() {
-        this.parser = new DxfParser();
-    }
-
-    async importFile(file) {
-        const text = await file.text();
-        return this.parse(text);
-    }
-
-    parse(dxfContent) {
-        const dxf = this.parser.parseSync(dxfContent);
-        const primitives = [];
-
-        if (!dxf || !dxf.entities) {
-            throw new Error('Invalid DXF file');
-        }
-
-        for (const entity of dxf.entities) {
-            const primitive = this.convertEntity(entity);
-            if (primitive) {
-                primitives.push(primitive);
-            }
-        }
-
-        return {
-            primitives,
-            bounds: this.calculateBounds(primitives)
-        };
-    }
-
-    convertEntity(entity) {
-        switch (entity.type) {
-            case 'LINE':
-                return this.convertLine(entity);
-            case 'CIRCLE':
-                return this.convertCircle(entity);
-            case 'ARC':
-                return this.convertArc(entity);
-            case 'LWPOLYLINE':
-            case 'POLYLINE':
-                return this.convertPolyline(entity);
-            case 'POINT':
-                // Skip points or convert to small circle
-                return null;
-            case 'SPLINE':
-                return this.convertSpline(entity);
-            default:
-                console.warn(`Unsupported DXF entity: ${entity.type}`);
-                return null;
-        }
-    }
-
-    convertLine(entity) {
-        return new Line(
-            new Point(entity.vertices[0].x, entity.vertices[0].y),
-            new Point(entity.vertices[1].x, entity.vertices[1].y)
-        );
-    }
-
-    convertCircle(entity) {
-        return new Circle(
-            new Point(entity.center.x, entity.center.y),
-            entity.radius
-        );
-    }
-
-    convertArc(entity) {
-        // DXF arcs use center, radius, start/end angles
-        const center = new Point(entity.center.x, entity.center.y);
-        const startAngle = entity.startAngle * (Math.PI / 180);
-        const endAngle = entity.endAngle * (Math.PI / 180);
-
-        // Convert to three-point arc (our format)
-        const startPoint = new Point(
-            center.x + entity.radius * Math.cos(startAngle),
-            center.y + entity.radius * Math.sin(startAngle)
-        );
-        const endPoint = new Point(
-            center.x + entity.radius * Math.cos(endAngle),
-            center.y + entity.radius * Math.sin(endAngle)
-        );
-
-        return new Arc(startPoint, endPoint, center);
-    }
-
-    convertPolyline(entity) {
-        const points = entity.vertices.map(v => new Point(v.x, v.y));
-        const closed = entity.shape || false;
-        return new Polygon(points, closed);
-    }
-
-    convertSpline(entity) {
-        // Approximate spline with polyline using control points
-        // For more accuracy, implement proper spline interpolation
-        if (entity.controlPoints && entity.controlPoints.length > 0) {
-            const points = entity.controlPoints.map(cp => new Point(cp.x, cp.y));
-            return new Polygon(points, false);
-        }
-        return null;
-    }
-
-    calculateBounds(primitives) {
-        let minX = Infinity, minY = Infinity;
-        let maxX = -Infinity, maxY = -Infinity;
-
-        for (const p of primitives) {
-            const bbox = p.getBoundingBox();
-            minX = Math.min(minX, bbox.minX);
-            minY = Math.min(minY, bbox.minY);
-            maxX = Math.max(maxX, bbox.maxX);
-            maxY = Math.max(maxY, bbox.maxY);
-        }
-
-        return { minX, minY, maxX, maxY };
-    }
+### 7.1 Collision Detection
+```go
+func CheckCollisions(toolpath []Point, stock BoundingBox, tool Tool) []Warning {
+    // 1. Rapid moves stay above stock top
+    // 2. Tool fits within stock boundaries
+    // 3. Z depth within stock height
+    // 4. Tool reach covers required depth
 }
 ```
 
-#### 4.2 Add Bounding Box to Primitives
-
-**File:** `src/geometry/primitives.js`
-
-```javascript
-// Add to Primitive base class
-getBoundingBox() {
-    throw new Error('getBoundingBox() must be implemented');
+### 7.2 Geometry Validation
+```go
+func ValidateGeometry(primitive Primitive) error {
+    // 1. Check for self-intersecting polygons
+    // 2. Minimum feature size > tool diameter
+    // 3. Internal corners accessible by tool radius
+    // 4. Closed paths for pocketing operations
 }
-
-// Line
-getBoundingBox() {
-    return {
-        minX: Math.min(this.a.x, this.b.x),
-        minY: Math.min(this.a.y, this.b.y),
-        maxX: Math.max(this.a.x, this.b.x),
-        maxY: Math.max(this.a.y, this.b.y)
-    };
-}
-
-// Circle
-getBoundingBox() {
-    return {
-        minX: this.center.x - this.radius,
-        minY: this.center.y - this.radius,
-        maxX: this.center.x + this.radius,
-        maxY: this.center.y + this.radius
-    };
-}
-
-// Rectangle
-getBoundingBox() {
-    return {
-        minX: this.x,
-        minY: this.y,
-        maxX: this.x + this.width,
-        maxY: this.y + this.height
-    };
-}
-
-// Polygon
-getBoundingBox() {
-    const xs = this.points.map(p => p.x);
-    const ys = this.points.map(p => p.y);
-    return {
-        minX: Math.min(...xs),
-        minY: Math.min(...ys),
-        maxX: Math.max(...xs),
-        maxY: Math.max(...ys)
-    };
-}
-```
-
-#### 4.3 Integration with FileManager
-
-**File:** `src/app/FileManager.js`
-
-```javascript
-import { DXFImporter } from '../import/DXFImporter.js';
-
-async loadDXF() {
-    return new Promise((resolve, reject) => {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.dxf';
-
-        input.onchange = async (e) => {
-            const file = e.target.files[0];
-            if (!file) return reject('No file selected');
-
-            try {
-                const importer = new DXFImporter();
-                const result = await importer.importFile(file);
-
-                // Option to merge or replace
-                const merge = confirm('Add to existing drawing? (Cancel to replace)');
-
-                if (!merge) {
-                    this.app.primitives = [];
-                    this.app.selectedPrimitives.clear();
-                }
-
-                // Add imported primitives
-                this.app.primitives.push(...result.primitives);
-
-                // Fit view to imported content
-                if (!merge) {
-                    this.app.fitToContent(result.bounds);
-                }
-
-                this.app.stateManager.pushState();
-                this.app.render();
-
-                resolve(result);
-            } catch (err) {
-                reject(`Failed to import DXF: ${err.message}`);
-            }
-        };
-
-        input.click();
-    });
-}
-```
-
-#### 4.4 Fit View to Content
-
-**File:** `src/main.js`
-
-```javascript
-fitToContent(bounds) {
-    if (!bounds) return;
-
-    const padding = 50; // mm
-    const contentWidth = bounds.maxX - bounds.minX + padding * 2;
-    const contentHeight = bounds.maxY - bounds.minY + padding * 2;
-
-    // Update workspace to fit content
-    this.workspaceWidth = Math.max(contentWidth, 100);
-    this.workspaceHeight = Math.max(contentHeight, 100);
-
-    // Center view on content
-    const centerX = (bounds.minX + bounds.maxX) / 2;
-    const centerY = (bounds.minY + bounds.maxY) / 2;
-
-    this.renderer.setWorkspace(this.workspaceWidth, this.workspaceHeight);
-    this.renderer.centerOn(centerX, centerY);
-    this.renderer.fitZoom(contentWidth, contentHeight);
-}
-```
-
-#### 4.5 UI Button for DXF Import
-
-```html
-<button id="import-dxf-btn" class="tool-btn" title="Import DXF">
-    <svg><!-- file-import icon --></svg>
-</button>
 ```
 
 ---
 
 ## Implementation Priority
 
-### Phase 1: Core Editing (Move/Delete)
+### Sprint 1 (Foundation)
+1. ☐ Add drilling canned cycles (G81/82/83)
+2. ☐ Implement helical interpolation (G2/G3+Z)
+3. ☐ Per-operation settings in UI
+4. ☐ Tool selection dropdown
 
-1. Add `translate()` to all primitives
-2. Implement `deleteSelected()`
-3. Add keyboard handlers (Delete, Arrow keys)
-4. Add mouse drag move
-5. Update toolbar/status
+### Sprint 2 (Strategies)
+1. ☐ Adaptive clearing algorithm
+2. ☐ Trochoidal milling
+3. ☐ Lead-in/lead-out implementation
+4. ☐ Strategy selector in UI
 
-### Phase 2: Box Selection
+### Sprint 3 (Polish)
+1. ☐ Tool library management UI
+2. ☐ Operation reordering
+3. ☐ Progress indicators
+4. ☐ Toolpath preview enhancement
 
-1. Add selection box DOM element
-2. Implement selection box sizing/positioning
-3. Add `intersectsBox()` to all primitives
-4. Integrate with mouse handlers
-5. Add window/crossing modes
-
-### Phase 3: Save/Load JSON
-
-1. Create FileManager class
-2. Implement save to file
-3. Implement load from file
-4. Add keyboard shortcuts (Ctrl+S, Ctrl+O)
-5. Add auto-save (optional)
-
-### Phase 4: DXF Import
-
-1. Install dxf-parser
-2. Create DXFImporter class
-3. Implement entity conversion for LINE, CIRCLE, ARC, POLYLINE
-4. Add `getBoundingBox()` to primitives
-5. Implement fit-to-content view adjustment
-6. Test with sample DXF files
+### Sprint 4 (Production)
+1. ☐ Post-processor selection
+2. ☐ Collision detection basics
+3. ☐ Geometry validation
+4. ☐ Machine profile system
 
 ---
 
-## Testing Checklist
+## Files to Create
 
-### Move/Delete ✅ IMPLEMENTED
+| File | Purpose |
+|------|---------|
+| `server/cam-engine/drilling.go` | Drilling strategies & canned cycles |
+| `server/cam-engine/leadin.go` | Entry/exit motion generation |
+| `server/cam-engine/tools.go` | Tool library management |
+| `server/cam-engine/postprocessor.go` | Machine-specific output |
+| `server/cam-engine/validate.go` | Geometry & collision checks |
 
-- [x] Delete single selected primitive
-- [x] Delete multiple selected primitives
-- [x] Arrow keys move selection (1mm steps)
-- [x] Shift+Arrow keys move selection (10mm steps)
-- [x] Mouse drag moves selection
-- [x] Undo/redo works after move/delete
+## Files to Modify
 
-### Box Selection ✅ IMPLEMENTED
-
-- [x] Click+drag creates selection box
-- [x] Selection box highlights correctly
-- [x] Primitives inside box get selected
-- [x] Shift+drag adds to selection
-- [x] Window vs crossing mode works
-
-### Save/Load ✅ IMPLEMENTED
-
-- [x] Ctrl+S triggers save
-- [x] JSON file contains all primitives
-- [x] Ctrl+O opens load dialog
-- [x] Loading restores primitives correctly
-- [x] Workspace settings restored
-
-### DXF Import ✅ IMPLEMENTED
-
-- [x] Can open DXF file dialog
-- [x] Lines imported correctly
-- [x] Circles imported correctly
-- [x] Arcs imported correctly
-- [x] Polylines imported correctly
-- [x] View fits to imported content
-- [x] Merge mode adds to existing
+| File | Changes |
+|------|---------|
+| `server/cam-engine/gcode.go` | Helical arcs, line numbers |
+| `server/cam-engine/pocket.go` | Strategy selection |
+| `server/cam-engine/profile.go` | Lead-in/lead-out |
+| `server/cam-engine/main.go` | Tool library, post-processor |
+| `plotter_pen.html` | Per-operation UI, strategy picker |
+| `src/cam/CAMManager.js` | Operation editing, tool selection |
+| `src/cam/ToolLibrary.js` | UI integration |
 
 ---
 
-## Phase 5: Professional CAD Features (Planned)
+## Verification Plan
 
-### 5.1 Layer System ✅ IMPLEMENTED
-
-- [x] Layer panel in sidebar (add/remove/rename layers + rename button)
-- [x] Layer visibility toggle (eye icon)
-- [x] Layer lock (prevent editing)
-- [x] Assign primitives to layers
-- [x] Layer colors/styles
-- [x] "Send to layer" context menu (move selection to layer)
-- [x] Custom modal dialogs (prompt, confirm) - Ultra-modern 2026 design
-- [x] Custom color picker modal with preset swatches
-
-### 5.2 DXF Export ✅ IMPLEMENTED
-
-- [x] Export current drawing to DXF use (<https://www.npmjs.com/package/dxf-writer>)
-- [x] Support LINE, ARC, CIRCLE, POLYLINE entities
-- [x] Preserve layer information
-- [x] Unit conversion (mm)
-
-## 5. Dimension Annotations
-
-### Current State
-
-- Linear Dimension: **Done**
-- Angular Dimension: **Done** (with automatic shortest-arc logic)
-- Radius Dimension: **Done** (with automatic snap highlighting)
-- Renderer Refactoring: **Done** (`DimensionRenderer` extracted)
-- UI: **Done** (Dropdown menu for dimensions)
-
-### Implementation Steps
-
-#### 5.1 Radius Dimension Tool (Completed)
-
-- [x] Create `RadiusDimension` primitive
-- [x] Create `RadiusDimensionTool`
-- [x] Implement rendering in `DimensionRenderer`
-- [x] Add to tool palette
-
-#### 5.2 Hover Highlighting (Completed)
-
-- [x] Add `setHoveredPrimitive` to `CADApplication`
-- [x] Update `InputHandler` to highlight snapped primitives
-- [x] Update `SelectionManager` to support global hover state
-
-### 5.6 Chamfer Tool ✅ IMPLEMENTED
-
-- [x] Chamfer logic (D distance)
-- [x] Chamfer tool implementation
-- [x] UI Button added
-- [x] Command input support (D value)
-
-### 5.7 Trim/Extend Tool ✅ IMPLEMENTED
-
-- [x] Intersection logic (Line-Line)
-- [x] Trim functionality (click to remove)
-- [x] Extend functionality (click to extend)
-- [x] Shift toggle support
-- [x] UI Button added
-
-### 5.8 Array Tool ✅ IMPLEMENTED
-
-- [x] Rectangular Array (Rows, Cols, Spacing)
-- [x] Polar Array (Count, Angle, Rotation)
-- [x] Custom Config Dialog (ModalManager)
-- [x] Array Tool Logic (UI -> Selection -> Params -> Generation)
+1. **Unit Tests**: Each G-code command validates output format
+2. **Integration Test**: 100 circle pocket < 500ms
+3. **Visual Test**: Preview matches generated toolpath
+4. **Simulation**: Run through G-code simulator (CAMotics)
+5. **Machine Test**: Cut test part on actual CNC
 
 ---
 
-## 6. Professional CAD Features
-
-- [ ] Print/Plot Support
-- [ ] Layer Properties (Lineweight, Color, Locked) - **Partially Done**
-- [ ] Block/Group Support
-- [x] Undo/Redo System - **Done**
-- [ ] Array tool (rectangular/polar)
-
----
-
-## Phase 6: Enterprise Features (Planned)
-
-### 6.1 Multi-Machine Support
-
-- [ ] Machine profiles (name, IP, connection type)
-- [ ] Switch between machines
-- [ ] Machine-specific settings
-
-### 6.2 Job Queue System
-
-- [ ] Queue multiple drawings for sequential execution
-- [ ] Job priority ordering
-- [ ] Job status tracking (pending, running, complete)
-- [ ] Cancel/pause job
-
-### 6.3 User Authentication
-
-- [ ] Login/logout
-- [ ] User roles (admin, operator, viewer)
-- [ ] Access control per user
-
-### 6.4 Audit Logging
-
-- [ ] Track drawing edits (who, when, what)
-- [ ] Track PLC transmissions
-- [ ] Export audit log
-
----
-
-## Phase 7: Quality & Packaging (Planned)
-
-### 7.1 Testing
-
-- [ ] Unit tests for geometry functions
-- [ ] Integration tests for tools
-- [ ] Browser-based E2E tests
-- [ ] Automated CI pipeline
-
-### 7.2 Offline/PWA Support
-
-- [ ] Service worker for offline access
-- [ ] PWA manifest
-- [ ] Install prompt
-
-### 7.3 Desktop Packaging (Electron)
-
-- [ ] Electron wrapper
-- [ ] Windows installer (NSIS/MSI)
-- [ ] macOS app bundle
-- [ ] Auto-update mechanism
-
-### 7.4 Documentation
-
-- [ ] User manual (PDF/online)
-- [ ] Video tutorials
-- [ ] API documentation
-- [ ] Keyboard shortcuts PDF
-
----
-
-## Phase 8: Commercial Distribution (Planned)
-
-### 8.1 Licensing System
-
-- [ ] License key validation
-- [ ] Trial period management
-- [ ] Feature tiers (Basic/Pro/Enterprise)
-
-### 8.2 Pricing Model
-
-- [ ] One-time purchase option
-- [ ] Subscription option
-- [ ] Volume licensing
-
-### 8.3 Support System
-
-- [ ] Bug reporting form
-- [ ] Feature request submission
-- [ ] Email support integration
-
----
-
-## Phase 9: Milling / CAM Support (Planned)
-
-### 9.1 G-code Output Generator
-
-- [ ] Standard G-code output format
-- [ ] G00 - Rapid positioning
-- [ ] G01 - Linear interpolation with feed rate
-- [ ] G02/G03 - Circular interpolation CW/CCW
-- [ ] M03/M04/M05 - Spindle control (on CW, on CCW, stop)
-- [ ] M08/M09 - Coolant on/off
-- [ ] G90/G91 - Absolute/Incremental mode selection
-- [ ] Post-processor selection (Fanuc, Haas, LinuxCNC, Mach3)
-
-### 9.2 Toolpath Operations
-
-| Operation | Description | Status |
-|-----------|-------------|--------|
-| **Contour** | Machine outer/inner perimeter | 🔲 Planned |
-| **Pocket** | Clear enclosed area (zigzag/spiral) | 🔲 Planned |
-| **Drill** | Point-to-point hole drilling (G81) | 🔲 Planned |
-| **Peck Drill** | Deep hole with chip breaking (G83) | 🔲 Planned |
-| **Bore** | Precision hole enlargement (G85/G86) | 🔲 Planned |
-| **Face** | Surface flattening | 🔲 Planned |
-| **Engrave** | V-carve text/patterns | 🔲 Planned |
-
-### 9.3 Machine Parameters
-
-- [ ] Spindle speed (RPM) input
-- [ ] Feed rate (mm/min) input
-- [ ] Plunge rate (Z descent speed)
-- [ ] Step-down (depth per pass)
-- [ ] Step-over (pocket overlap %)
-- [ ] Safe Z height (retract position)
-- [ ] Stock surface (Z0 reference)
-- [ ] Final depth input
-
-### 9.4 Tool Library
-
-- [x] **Tool: Chamfer**: Create bevelled corners between two lines.
-- [x] **Tool: Trim/Extend**: Trim or extend lines to a boundary.
-- [x] **Tool: Array**: Create copies of objects in a rectangular grid.
-- [ ] Tool database (add/edit/delete tools)
-- [ ] Tool types: End mill, Ball nose, Drill, V-bit
-- [ ] Tool diameter
-- [ ] Flute count
-- [ ] Tool length
-- [ ] Cutting length
-- [ ] Material presets (speeds/feeds for aluminum, wood, plastic, steel)
-- [ ] Tool change commands (M06 Txx)
-
-### 9.5 Multi-pass Depth Cutting
-
-- [ ] Automatic multi-pass generation based on step-down
-- [ ] Roughing pass with finishing allowance
-- [ ] Finishing pass at final depth
-- [ ] Lead-in/Lead-out moves for smooth entry/exit
-- [ ] Ramp entry (helical descent into material)
-
-### 9.6 Toolpath Visualization
-
-- [ ] 3D toolpath preview
-- [ ] Color-coded by operation type
-- [ ] Rapid moves vs cutting moves distinction
-- [ ] Tool simulation animation
-- [ ] Collision detection warning
-
-### 9.7 CAM-Specific Commands
-
-```gcode
-; Example G-code output
-G21          ; Units: mm
-G90          ; Absolute positioning
-G17          ; XY plane selection
-M03 S12000   ; Spindle on CW at 12000 RPM
-G00 Z5.000   ; Rapid to safe height
-G00 X10.000 Y10.000  ; Rapid to start position
-G01 Z-2.000 F100     ; Plunge to depth at plunge feed
-G01 X50.000 F500     ; Cut to X50 at cutting feed
-G02 X70.000 Y30.000 I10.000 J0.000 F500  ; Arc CW
-G00 Z5.000   ; Rapid retract
-M05          ; Spindle stop
-M30          ; Program end
-```
-
----
-
-## Current Status Summary
-
-| Phase | Feature | Status |
-|-------|---------|--------|
-| 1 | Move/Delete | ✅ Complete |
-| 2 | Box Selection | ✅ Complete |
-| 3 | Save/Load JSON | ✅ Complete |
-| 4 | DXF Import | ✅ Complete |
-| 5 | Professional CAD | 🚧 In Progress |
-| 6 | Enterprise Features | 🔲 Planned |
-| 7 | Quality & Packaging | 🔲 Planned |
-| 8 | Commercial Distribution | 🔲 Planned |
-| 9 | Milling / CAM | 🔲 Planned |
-
-### Phase 5 Details
-
-| Feature | Status |
-|---------|--------|
-| 5.1 Layer System | ✅ Complete |
-| 5.2 DXF Export | ✅ Complete |
-| 5.3 Dimension Annotations | ✅ Complete |
-| 5.4 Offset Tool | ✅ Complete |
-| 5.4 Fillet Tool | ✅ Complete |
-| 5.5 Database Persistence | ✅ Complete |
-| 5.6 Chamfer Tool | ✅ Complete |
-| 5.7 Trim/Extend Tool | ✅ Complete |
-| 5.8 Array Tool | ✅ Complete |
-
----
-
-## Quick Wins (Low effort, High impact)
-
-1. **DXF Export** - Users can export their work
-2. **Keyboard shortcuts PDF** - Print-friendly reference
-3. **Dark/Light theme toggle** - User preference
-4. **Touch support** - Tablet users
-5. **PWA manifest** - Installable web app
-
----
-
-## Dependencies
-
-```json
-{
-    "dependencies": {
-        "dxf-parser": "^1.1.2"
-    },
-    "devDependencies": {
-        "electron": "^28.0.0",
-        "electron-builder": "^24.0.0"
-    }
-}
-```
-
----
-
-## Resources
-
-- [dxf-parser npm](https://www.npmjs.com/package/dxf-parser)
-- [DXF Reference](https://images.autodesk.com/adsk/files/autocad_2012_pdf_dxf-reference_enu.pdf)
-- [Canvas Hit Testing](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial/Hit_regions_and_accessibility)
-- [File System Access API](https://developer.mozilla.org/en-US/docs/Web/API/File_System_Access_API)
-- [Electron Documentation](https://www.electronjs.org/docs/latest)
-- [PWA Documentation](https://web.dev/progressive-web-apps/)
+## Sources
+- [Autodesk PowerMill Features](https://www.autodesk.com/products/powermill/features)
+- [CNC Cookbook - CAM Toolpaths](https://www.cnccookbook.com/complete-guide-to-cam-toolpaths-and-operations-for-milling/)
+- [Hurco - Toolpath Strategies](https://blog.hurco.com/mastering-toolpath-strategies-a-cnc-machinists-guide-to-efficiency)

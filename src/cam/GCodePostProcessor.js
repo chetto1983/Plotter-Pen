@@ -277,7 +277,10 @@ export function parseGCodeToPrimitives(gcodeText, options = {}) {
 
         if (activeMotion === 2 || activeMotion === 3) {
             const clockwise = activeMotion === 2;
-            if (movedXY) {
+            // Full circle: start == end with I/J values
+            const isFullCircle = !movedXY && (values.i !== undefined || values.j !== undefined);
+
+            if (movedXY || isFullCircle) {
                 let cx;
                 let cy;
 
@@ -312,8 +315,16 @@ export function parseGCodeToPrimitives(gcodeText, options = {}) {
                 }
 
                 if (Number.isFinite(cx) && Number.isFinite(cy)) {
-                    primitives.push(buildArc(startX, startY, targetX, targetY, cx, cy, clockwise, id++));
-                } else {
+                    if (isFullCircle) {
+                        // Full circle: create as circle primitive for PLC
+                        const radius = Math.hypot(startX - cx, startY - cy);
+                        const circle = { type: 'circle', cx, cy, radius, id: `gcircle_${id++}` };
+                        circle.plcData = { type: 3, cx, cy, r: radius };
+                        primitives.push(circle);
+                    } else {
+                        primitives.push(buildArc(startX, startY, targetX, targetY, cx, cy, clockwise, id++));
+                    }
+                } else if (movedXY) {
                     // Arc center could not be computed - degrade to line
                     const line = new Line(startX, startY, targetX, targetY, `gline_${id++}`);
                     line.plcData = { type: 1, x1: startX, y1: startY, x2: targetX, y2: targetY };
