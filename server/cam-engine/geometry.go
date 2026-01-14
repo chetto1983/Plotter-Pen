@@ -3,11 +3,10 @@ package main
 import (
 	"fmt"
 	"math"
-	"sort"
 )
 
 const (
-	tolerance    = 0.5 // mm - endpoint connection tolerance
+	// tolerance removed (dynamic)
 	gridCellSize = 5.0 // mm - spatial grid cell size
 	arcSegments  = 64  // max points per arc
 )
@@ -18,6 +17,7 @@ type Loop struct {
 	CircleData *CircleData
 	Area       float64
 	IsHole     bool
+	Holes      [][]Point
 }
 
 type CircleData struct {
@@ -75,7 +75,8 @@ func (g *SpatialGrid) queryNear(p Point) []gridEntry {
 }
 
 // buildPaths converts primitives to closed loops and open paths
-func buildPaths(primitives []Primitive) ([]Loop, [][]Point) {
+// buildPaths converts primitives to closed loops and open paths
+func buildPaths(primitives []Primitive, tolerance float64) ([]Loop, [][]Point) {
 	var loops []Loop
 	var segments []Segment
 
@@ -104,7 +105,7 @@ func buildPaths(primitives []Primitive) ([]Loop, [][]Point) {
 	// Connect segments into loops using spatial grid
 	var openPaths [][]Point
 	if len(segments) > 0 {
-		connectedLoops, connectedOpen := connectSegments(segments)
+		connectedLoops, connectedOpen := connectSegments(segments, tolerance)
 		for _, pts := range connectedLoops {
 			loops = append(loops, Loop{
 				Points: pts,
@@ -150,6 +151,14 @@ func primitiveToPolygon(prim Primitive) []Point {
 		if len(prim.Points) >= 3 {
 			return prim.Points
 		}
+
+	case "spline":
+		if prim.Closed {
+			pts := splineToPoints(prim, 100)
+			if len(pts) >= 3 {
+				return pts
+			}
+		}
 	}
 	return nil
 }
@@ -188,6 +197,16 @@ func primitiveToSegment(prim Primitive) *Segment {
 				Points: prim.Points,
 			}
 		}
+
+	case "spline":
+		pts := splineToPoints(prim, 100)
+		if len(pts) >= 2 {
+			return &Segment{
+				Start:  pts[0],
+				End:    pts[len(pts)-1],
+				Points: pts,
+			}
+		}
 	}
 	return nil
 }
@@ -219,7 +238,7 @@ func arcToPoints(cx, cy, r, startAngle, sweep float64) []Point {
 }
 
 // connectSegments chains segments into closed loops using spatial grid
-func connectSegments(segments []Segment) ([][]Point, [][]Point) {
+func connectSegments(segments []Segment, tolerance float64) ([][]Point, [][]Point) {
 	if len(segments) == 0 {
 		return nil, nil
 	}
@@ -242,7 +261,7 @@ func connectSegments(segments []Segment) ([][]Point, [][]Point) {
 		// Check segments starting near 'end'
 		for _, entry := range startGrid.queryNear(end) {
 			if !used[entry.index] && entry.index != excludeIdx {
-				if pointsClose(end, segments[entry.index].Start) {
+				if pointsClose(end, segments[entry.index].Start, tolerance) {
 					return entry.index, false, true
 				}
 			}
@@ -250,7 +269,7 @@ func connectSegments(segments []Segment) ([][]Point, [][]Point) {
 		// Check segments ending near 'end' (need to reverse)
 		for _, entry := range endGrid.queryNear(end) {
 			if !used[entry.index] && entry.index != excludeIdx {
-				if pointsClose(end, segments[entry.index].End) {
+				if pointsClose(end, segments[entry.index].End, tolerance) {
 					return entry.index, true, true
 				}
 			}
@@ -273,7 +292,7 @@ func connectSegments(segments []Segment) ([][]Point, [][]Point) {
 
 		for iter := 0; iter < maxIter; iter++ {
 			// Check if closed
-			if pointsClose(end, start) && len(pathPoints) >= 3 {
+			if pointsClose(end, start, tolerance) && len(pathPoints) >= 3 {
 				loops = append(loops, pathPoints)
 				closed = true
 				break
@@ -304,10 +323,10 @@ func connectSegments(segments []Segment) ([][]Point, [][]Point) {
 	return loops, openPaths
 }
 
-func pointsClose(a, b Point) bool {
+func pointsClose(a, b Point, tol float64) bool {
 	dx := a.X - b.X
 	dy := a.Y - b.Y
-	return dx*dx+dy*dy <= tolerance*tolerance
+	return dx*dx+dy*dy <= tol*tol
 }
 
 func reversePoints(pts []Point) []Point {
@@ -339,18 +358,130 @@ func groupByContainment(loops []Loop) []Loop {
 		return nil
 	}
 
-	// Sort by absolute area (largest first = outer boundaries)
-	sort.Slice(loops, func(i, j int) bool {
-		return math.Abs(loops[i].Area) > math.Abs(loops[j].Area)
-	})
-
-	// For now, just return all loops (containment grouping can be added later)
-	// Mark negative area as holes
+	n := len(loops)
+	parents := make([]int, n)
+	absAreas := make([]float64, n)
 	for i := range loops {
-		loops[i].IsHole = loops[i].Area < 0
+		parents[i] = -1
+		absAreas[i] = math.Abs(loops[i].Area)
+		loops[i].Holes = nil
+	}
+
+	for i := range loops {
+		if len(loops[i].Points) < 3 {
+			continue
+		}
+		p := loops[i].Points[0]
+		minArea := math.Inf(1)
+		parentIdx := -1
+
+		for j := range loops {
+			if i == j {
+				continue
+			}
+			if len(loops[j].Points) < 3 {
+				continue
+			}
+			if absAreas[j] <= absAreas[i] {
+				continue
+			}
+			if !pointInPolygon(p, loops[j].Points) {
+				continue
+			}
+			if absAreas[j] < minArea {
+				minArea = absAreas[j]
+				parentIdx = j
+			}
+		}
+
+		parents[i] = parentIdx
+	}
+
+	for i := range loops {
+		depth := 0
+		parent := parents[i]
+		guard := 0
+		for parent != -1 && guard < n {
+			depth++
+			parent = parents[parent]
+			guard++
+		}
+		loops[i].IsHole = depth%2 == 1
+	}
+
+	for i := range loops {
+		if !loops[i].IsHole {
+			continue
+		}
+		parent := parents[i]
+		if parent == -1 {
+			continue
+		}
+		loops[parent].Holes = append(loops[parent].Holes, loops[i].Points)
 	}
 
 	return loops
+}
+
+func filterOuterPolygons(polys [][]Point) [][]Point {
+	if len(polys) == 0 {
+		return polys
+	}
+
+	n := len(polys)
+	parents := make([]int, n)
+	absAreas := make([]float64, n)
+	for i := range polys {
+		parents[i] = -1
+		absAreas[i] = math.Abs(polygonArea(polys[i]))
+	}
+
+	for i := range polys {
+		if len(polys[i]) < 3 {
+			continue
+		}
+		p := polys[i][0]
+		minArea := math.Inf(1)
+		parentIdx := -1
+
+		for j := range polys {
+			if i == j {
+				continue
+			}
+			if len(polys[j]) < 3 {
+				continue
+			}
+			if absAreas[j] <= absAreas[i] {
+				continue
+			}
+			if !pointInPolygon(p, polys[j]) {
+				continue
+			}
+			if absAreas[j] < minArea {
+				minArea = absAreas[j]
+				parentIdx = j
+			}
+		}
+
+		parents[i] = parentIdx
+	}
+
+	result := make([][]Point, 0, n)
+	for i := range polys {
+		depth := 0
+		parent := parents[i]
+		guard := 0
+		for parent != -1 && guard < n {
+			depth++
+			parent = parents[parent]
+			guard++
+		}
+		if depth%2 == 0 {
+			result = append(result, polys[i])
+		}
+	}
+
+	return result
 }
 
 // pointInPolygon checks if point is inside polygon using ray casting

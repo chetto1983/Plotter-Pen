@@ -52,7 +52,7 @@ func generateSinglePocket(idx int, loop Loop, toolRadius, stepOver float64) Pock
 	result := PocketResult{Index: idx}
 
 	// Check for circle optimization
-	if loop.CircleData != nil {
+	if loop.CircleData != nil && len(loop.Holes) == 0 {
 		cd := loop.CircleData
 		effectiveRadius := cd.Radius - toolRadius
 		if effectiveRadius <= toolRadius {
@@ -68,7 +68,7 @@ func generateSinglePocket(idx int, loop Loop, toolRadius, stepOver float64) Pock
 	}
 
 	// General polygon pocketing with inward offsets
-	result.Passes = generatePolygonPocket(loop.Points, toolRadius, stepOver)
+	result.Passes = generatePolygonPocket(loop.Points, loop.Holes, toolRadius, stepOver)
 	return result
 }
 
@@ -95,12 +95,13 @@ func generateCirclePocket(cx, cy, radius, toolRadius, stepOver float64) [][][]Po
 }
 
 // generatePolygonPocket creates inward offset passes for polygon
-func generatePolygonPocket(outer []Point, toolRadius, stepOver float64) [][][]Point {
+func generatePolygonPocket(outer []Point, holes [][]Point, toolRadius, stepOver float64) [][][]Point {
 	if len(outer) < 3 {
 		return nil
 	}
 
 	var passes [][][]Point
+	keepOut := offsetHolePaths(holes, toolRadius)
 	current := [][]Point{outer}
 	maxIterations := 1000 // Safety limit
 
@@ -119,7 +120,7 @@ func generatePolygonPocket(outer []Point, toolRadius, stepOver float64) [][][]Po
 			}
 			offsetResult := OffsetPolygon(poly, offset)
 			for _, p := range offsetResult {
-				if len(p) >= 3 && polygonArea(p) > 0.1 { // Min area threshold
+				if len(p) >= 3 && math.Abs(polygonArea(p)) > 0.1 { // Min area threshold
 					nextPaths = append(nextPaths, p)
 				}
 			}
@@ -129,11 +130,49 @@ func generatePolygonPocket(outer []Point, toolRadius, stepOver float64) [][][]Po
 			break
 		}
 
+		if len(keepOut) > 0 {
+			var clipped [][]Point
+			for _, poly := range nextPaths {
+				diff := DifferencePolygons(poly, keepOut)
+				diff = filterOuterPolygons(diff)
+				for _, p := range diff {
+					if len(p) >= 3 && math.Abs(polygonArea(p)) > 0.1 {
+						clipped = append(clipped, p)
+					}
+				}
+			}
+			nextPaths = clipped
+			if len(nextPaths) == 0 {
+				break
+			}
+		}
+
 		passes = append(passes, nextPaths)
 		current = nextPaths
 	}
 
 	return passes
+}
+
+func offsetHolePaths(holes [][]Point, toolRadius float64) [][]Point {
+	if len(holes) == 0 || toolRadius <= 0 {
+		return nil
+	}
+
+	var keepOut [][]Point
+	for _, hole := range holes {
+		if len(hole) < 3 {
+			continue
+		}
+		offset := OffsetPolygon(hole, toolRadius)
+		for _, p := range offset {
+			if len(p) >= 3 && math.Abs(polygonArea(p)) > 0.1 {
+				keepOut = append(keepOut, p)
+			}
+		}
+	}
+
+	return keepOut
 }
 
 // pocketsToGCode converts pocket results to G-code string
@@ -204,7 +243,7 @@ func pocketsToGCode(results []PocketResult, settings Settings) (string, int) {
 						}
 
 						// Close if needed
-						if len(contour) > 1 && !pointsClose(contour[0], contour[len(contour)-1]) {
+						if len(contour) > 1 && !pointsClose(contour[0], contour[len(contour)-1], settings.Tolerance) {
 							gen.LinearXY(contour[0].X, contour[0].Y, settings.FeedXY)
 						}
 					}

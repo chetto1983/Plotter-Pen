@@ -3,8 +3,9 @@ import fs from 'fs';
 import DxfParser from 'dxf-parser';
 import { PrimitiveExtractor } from '../src/plc/PrimitiveExtractor.js';
 import { runCamGo, getCamEngineInfo } from '../server/workers/cam-go-bridge.js';
+import interpolate from '../src/geometry/b-spline.js';
 
-const DXF_PATH = 'c:/Users/Davide/OneDrive - Sonepar/Documenti/Plotter-Pen/DXF/test_simple.dxf';
+const DXF_PATH = 'c:/Users/Davide/OneDrive - Sonepar/Documenti/Plotter-Pen/DXF/Laser Cut Wooden Earring Blanks Dangle Charms .dxf';
 
 async function testDXFValidation() {
     console.log(`=== Validating DXF: ${DXF_PATH} ===`);
@@ -26,8 +27,12 @@ async function testDXFValidation() {
 
     const entities = dxf.entities;
     console.log(`DXF Parsed: ${entities.length} entities found.`);
+    const types = entities.map(e => e.type);
+    console.log('Entity Types:', [...new Set(types)]);
+    fs.writeFileSync('debug_types.json', JSON.stringify([...new Set(types)], null, 2));
 
     // 1. PLC EXTRACTION
+
     console.log('\n--- 1. Testing PLC Extraction ---');
     // Map DXF entities to "strokes"
     const strokes = entities.map(ent => {
@@ -82,6 +87,16 @@ async function testDXFValidation() {
                 cx: ent.center.x, cy: ent.center.y,
                 radius: ent.radius
             });
+        } else if (ent.type === 'SPLINE') {
+            if (ent.controlPoints && ent.controlPoints.length > 0) {
+                camPrimitives.push({
+                    type: 'spline',
+                    controlPoints: ent.controlPoints.map(p => ({ x: p.x, y: p.y })),
+                    knots: ent.knotValues,
+                    degree: ent.degreeOfSplineCurve,
+                    closed: ent.closed === true || ent.formDegree === 1
+                });
+            }
         }
     });
 
@@ -93,7 +108,8 @@ async function testDXFValidation() {
         startZ: 0,
         targetZ: -1,
         stepDown: 1,
-        profileSide: 'outside'
+        profileSide: 'outside',
+        tolerance: 0.5 // Validating robust stitching
     };
 
     // Test PROFILE

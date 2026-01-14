@@ -19,6 +19,7 @@ export class CAMManager {
             startZ: 0,
             units: this.machine.units,
             profileSide: 'outside',
+            tolerance: 0.5,
             gcode: {
                 precision: this.machine.gcode?.precision ?? 3
             }
@@ -218,6 +219,19 @@ export class CAMManager {
                 };
             }
 
+            case 'SPLINE': {
+                // Send raw spline data to Go engine
+                return {
+                    ...baseOp,
+                    type: 'spline', // Use specific type
+                    controlPoints: prim.controlPoints?.map(p => ({ x: p.x, y: p.y })),
+                    knots: prim.knotValues,
+                    degree: prim.degreeOfSplineCurve,
+                    closed: prim.closed === true || prim.formDegree === 1,
+                    points: [] // No pre-calculated points needed
+                };
+            }
+
             default:
                 return null;
         }
@@ -318,6 +332,13 @@ export class CAMManager {
                     data.points = prim.points?.map(p => ({ x: p.x, y: p.y }));
                     data.closed = prim.closed;
                     break;
+                case 'SPLINE':
+                    data.type = 'spline'; // Normalize type name
+                    data.controlPoints = prim.controlPoints?.map(p => ({ x: p.x, y: p.y }));
+                    data.knots = prim.knotValues;
+                    data.degree = prim.degreeOfSplineCurve;
+                    data.closed = prim.closed === true || prim.formDegree === 1;
+                    break;
                 default:
                     return null;
             }
@@ -338,7 +359,10 @@ export class CAMManager {
                 targetZ: this.jobSettings.targetZ ?? -1,
                 stepDown: this.jobSettings.stepDown ?? 1,
                 toolId: '1',
-                profileSide: this.jobSettings.profileSide ?? 'outside'
+                stepDown: this.jobSettings.stepDown ?? 1,
+                toolId: '1',
+                profileSide: this.jobSettings.profileSide ?? 'outside',
+                tolerance: this.jobSettings.tolerance ?? 0.5
             },
             tools: [tool]
         });
@@ -744,7 +768,8 @@ export class CAMManager {
             startZInput: document.getElementById('camStartZ'),
             unitsSelect: document.getElementById('camUnits'),
             precisionInput: document.getElementById('camPrecision'),
-            profileSideSelect: document.getElementById('camProfileSide')
+            profileSideSelect: document.getElementById('camProfileSide'),
+            toleranceInput: document.getElementById('camTolerance')
         };
     }
 
@@ -755,7 +780,8 @@ export class CAMManager {
             startZInput,
             unitsSelect,
             precisionInput,
-            profileSideSelect
+            profileSideSelect,
+            toleranceInput
         } = this.getCamSettingsElements();
         if (!modal) {
             console.warn('CAMManager: CAM settings modal not found.');
@@ -786,6 +812,10 @@ export class CAMManager {
             profileSideSelect.value = this.jobSettings.profileSide ?? 'outside';
         }
 
+        if (toleranceInput) {
+            toleranceInput.value = Number.isFinite(this.jobSettings.tolerance) ? this.jobSettings.tolerance : 0.5;
+        }
+
         modal.classList.add('open');
     }
 
@@ -801,7 +831,8 @@ export class CAMManager {
             startZInput,
             unitsSelect,
             precisionInput,
-            profileSideSelect
+            profileSideSelect,
+            toleranceInput
         } = this.getCamSettingsElements();
         if (!modal) {
             return;
@@ -812,6 +843,7 @@ export class CAMManager {
         const nextUnits = unitsSelect ? unitsSelect.value : null;
         const nextPrecision = precisionInput ? parseInt(precisionInput.value, 10) : NaN;
         const nextProfileSide = profileSideSelect ? profileSideSelect.value : null;
+        const nextTolerance = toleranceInput ? parseFloat(toleranceInput.value) : NaN;
         const previousStartZ = this.jobSettings.startZ;
 
         if (Number.isFinite(nextSafeZ)) {
@@ -842,6 +874,10 @@ export class CAMManager {
 
         if (nextProfileSide) {
             this.jobSettings.profileSide = nextProfileSide;
+        }
+
+        if (Number.isFinite(nextTolerance)) {
+            this.jobSettings.tolerance = nextTolerance;
         }
 
         this.machine.update({

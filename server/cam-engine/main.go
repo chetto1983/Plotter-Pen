@@ -24,8 +24,12 @@ type Primitive struct {
 	Y          float64 `json:"y,omitempty"`
 	Width      float64 `json:"width,omitempty"`
 	Height     float64 `json:"height,omitempty"`
-	Points     []Point `json:"points,omitempty"`
-	Center     *Point  `json:"center,omitempty"`
+	Points        []Point   `json:"points,omitempty"`
+	Center        *Point    `json:"center,omitempty"`
+	ControlPoints []Point   `json:"controlPoints,omitempty"`
+	Knots         []float64 `json:"knots,omitempty"`
+	Degree        int       `json:"degree,omitempty"`
+	Closed        bool      `json:"closed,omitempty"`
 }
 
 type Point struct {
@@ -44,6 +48,7 @@ type Settings struct {
 	FeedZ        float64 `json:"feedZ"`
 	SpindleRPM   float64 `json:"spindleRPM"`
 	SafetyHeight float64 `json:"safetyHeight"`
+	Tolerance    float64 `json:"tolerance"`
 }
 
 type Input struct {
@@ -91,7 +96,7 @@ func main() {
 
 	// Build paths from primitives
 	log("Building paths...")
-	loops, openPaths := buildPaths(input.Primitives)
+	loops, openPaths := buildPaths(input.Primitives, settings.Tolerance)
 	log("Found %d loops, %d open paths", len(loops), len(openPaths))
 
 	// Generate G-code based on operation type
@@ -168,6 +173,9 @@ func applyDefaults(s Settings) Settings {
 	}
 	if s.SafetyHeight == 0 {
 		s.SafetyHeight = 5.0
+	}
+	if s.Tolerance == 0 {
+		s.Tolerance = 0.5
 	}
 	return s
 }
