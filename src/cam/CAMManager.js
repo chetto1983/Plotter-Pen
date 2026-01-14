@@ -359,8 +359,6 @@ export class CAMManager {
                 targetZ: this.jobSettings.targetZ ?? -1,
                 stepDown: this.jobSettings.stepDown ?? 1,
                 toolId: '1',
-                stepDown: this.jobSettings.stepDown ?? 1,
-                toolId: '1',
                 profileSide: this.jobSettings.profileSide ?? 'outside',
                 tolerance: this.jobSettings.tolerance ?? 0.5
             },
