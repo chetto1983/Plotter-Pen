@@ -7,12 +7,9 @@ import { DXFImporter } from '../src/import/DXFImporter.js';
 import { PathOptimizer } from '../src/plc/PathOptimizer.js';
 import { PLCOutputGenerator } from '../src/plc/PLCOutputGenerator.js';
 import { createPrimitiveFromJSON } from '../src/geometry/primitives.js';
-import { ToolpathGenerator } from '../src/cam/ToolpathGenerator.js';
-import { ToolLibrary } from '../src/cam/ToolLibrary.js';
-import { MachineConfig } from '../src/cam/MachineConfig.js';
+import { runCamGo } from '../server/workers/cam-go-bridge.js';
 import { linearizeGCode } from '../src/cam/linearizeGCode.js';
 import { parseGCodeToPrimitives, generatePLCFromGCode } from '../src/cam/GCodePostProcessor.js';
-import { ClipperWrapper } from '../src/cam/ClipperWrapper.js';
 
 const DEFAULT_DXF = 'C:/Users/Davide/OneDrive - Sonepar/Documenti/Plotter-Pen/DXF/Laser Cut Modern Love Theme Wall Clock.dxf';
 const dxfPath = process.env.DXF_PATH || DEFAULT_DXF;
@@ -30,21 +27,6 @@ const assert = (condition, message) => {
     if (!condition) {
         throw new Error(message);
     }
-};
-
-const buildPoints = (primitive) => {
-    if (!primitive || typeof primitive.samplePoints !== 'function') {
-        return null;
-    }
-    return primitive.samplePoints();
-};
-
-const isClosedPrimitive = (primitive) => {
-    if (!primitive) return false;
-    if (primitive.type === 'circle' || primitive.type === 'rectangle' || primitive.type === 'polygon') {
-        return true;
-    }
-    return primitive.closed === true;
 };
 
 const calcLinearBounds = (gcode) => {
@@ -164,10 +146,51 @@ const enrichPlcData = (primitives) => primitives.map((prim) => {
     return prim;
 });
 
-const run = async () => {
-    // Initialize clipper2-wasm
-    await ClipperWrapper.init();
+const serializePrimitive = (prim) => {
+    if (!prim || !prim.type) return null;
+    const data = { type: prim.type };
 
+    switch (prim.type) {
+        case 'circle':
+            data.cx = prim.center?.x ?? prim.cx;
+            data.cy = prim.center?.y ?? prim.cy;
+            data.radius = prim.radius ?? prim._radius;
+            break;
+        case 'arc':
+            data.cx = prim.cx ?? prim.center?.x;
+            data.cy = prim.cy ?? prim.center?.y;
+            data.radius = prim.radius;
+            data.startAngle = prim.startAngle ?? prim._startAngle;
+            data.sweep = prim.sweep ?? prim._sweep;
+            data.x1 = prim.x1;
+            data.y1 = prim.y1;
+            data.x2 = prim.x2;
+            data.y2 = prim.y2;
+            break;
+        case 'line':
+            data.x1 = prim.x1;
+            data.y1 = prim.y1;
+            data.x2 = prim.x2;
+            data.y2 = prim.y2;
+            break;
+        case 'rectangle':
+            data.x = prim.x;
+            data.y = prim.y;
+            data.width = prim.width;
+            data.height = prim.height;
+            break;
+        case 'polygon':
+        case 'polyline':
+            data.points = prim.points?.map(p => ({ x: p.x, y: p.y }));
+            data.closed = prim.closed;
+            break;
+        default:
+            return null;
+    }
+    return data;
+};
+
+const run = async () => {
     assert(await fileExists(dxfPath), `DXF file not found: ${dxfPath}`);
 
     console.log(`DXF file: ${dxfPath}`);
@@ -199,49 +222,30 @@ const run = async () => {
     const rehydrated = serialized.map(createPrimitiveFromJSON);
     assert(rehydrated.length === optimized.length, 'Rehydration count mismatch.');
 
-    const tools = new ToolLibrary();
-    const generator = new ToolpathGenerator(new MachineConfig(), tools);
+    const primitives = rehydrated
+        .map(serializePrimitive)
+        .filter(Boolean);
 
-    const ops = [];
-    let opId = 0;
-    for (const prim of rehydrated) {
-        const points = buildPoints(prim);
-        if (!points || points.length < 2) {
-            continue;
-        }
-        ops.push({
-            id: `profile_${opId}`,
-            name: `Profile ${opId}`,
-            type: 'profile',
-            toolId: '1',
-            points,
-            closed: isClosedPrimitive(prim),
+    assert(primitives.length > 0, 'No CAM primitives created.');
+    console.log(`CAM primitives: ${primitives.length}`);
+
+    const result = await runCamGo({
+        primitives,
+        type: 'profile',
+        settings: {
+            toolDiameter: 3,
+            stepOver: 40,
             startZ: 0,
             targetZ: -1,
             stepDown: 1,
-            side: 'outside'
-        });
-
-        if (isClosedPrimitive(prim)) {
-            ops.push({
-                id: `pocket_${opId}`,
-                name: `Pocket ${opId}`,
-                type: 'pocket',
-                toolId: '1',
-                points,
-                closed: true,
-                startZ: 0,
-                targetZ: -1,
-                stepDown: 1
-            });
+            feedXY: 800,
+            feedZ: 200,
+            safetyHeight: 5,
+            spindleRPM: 12000
         }
-        opId += 1;
-    }
+    });
 
-    assert(ops.length > 0, 'No CAM operations created.');
-    console.log(`CAM operations: ${ops.length}`);
-
-    const gcode = await generator.generateJob({ operations: ops });
+    const gcode = result?.gcode ?? '';
     assert(gcode.trim().length > 0, 'Generated CAM G-code is empty.');
     assert(!/NaN|undefined/.test(gcode), 'Generated CAM G-code contains invalid tokens.');
 

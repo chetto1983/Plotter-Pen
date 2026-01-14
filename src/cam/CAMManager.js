@@ -18,6 +18,7 @@ export class CAMManager {
             safeZ: this.machine.getSafetyHeight?.() ?? 5,
             startZ: 0,
             units: this.machine.units,
+            profileSide: 'outside',
             gcode: {
                 precision: this.machine.gcode?.precision ?? 3
             }
@@ -129,7 +130,7 @@ export class CAMManager {
             startZ: this.jobSettings.startZ,
             targetZ: -1,
             stepDown: 1,
-            side: type === 'profile' ? 'outside' : undefined
+            side: type === 'profile' ? (this.jobSettings.profileSide ?? 'outside') : undefined
         };
 
         switch (prim.type) {
@@ -336,7 +337,8 @@ export class CAMManager {
                 safeZ: this.jobSettings.safeZ ?? 5,
                 targetZ: this.jobSettings.targetZ ?? -1,
                 stepDown: this.jobSettings.stepDown ?? 1,
-                toolId: '1'
+                toolId: '1',
+                profileSide: this.jobSettings.profileSide ?? 'outside'
             },
             tools: [tool]
         });
@@ -741,12 +743,20 @@ export class CAMManager {
             safeZInput: document.getElementById('camSafeZ'),
             startZInput: document.getElementById('camStartZ'),
             unitsSelect: document.getElementById('camUnits'),
-            precisionInput: document.getElementById('camPrecision')
+            precisionInput: document.getElementById('camPrecision'),
+            profileSideSelect: document.getElementById('camProfileSide')
         };
     }
 
     openCamSettings() {
-        const { modal, safeZInput, startZInput, unitsSelect, precisionInput } = this.getCamSettingsElements();
+        const {
+            modal,
+            safeZInput,
+            startZInput,
+            unitsSelect,
+            precisionInput,
+            profileSideSelect
+        } = this.getCamSettingsElements();
         if (!modal) {
             console.warn('CAMManager: CAM settings modal not found.');
             return;
@@ -772,6 +782,10 @@ export class CAMManager {
             precisionInput.value = Number.isFinite(precision) ? precision : 3;
         }
 
+        if (profileSideSelect) {
+            profileSideSelect.value = this.jobSettings.profileSide ?? 'outside';
+        }
+
         modal.classList.add('open');
     }
 
@@ -781,7 +795,14 @@ export class CAMManager {
     }
 
     applyCamSettings() {
-        const { modal, safeZInput, startZInput, unitsSelect, precisionInput } = this.getCamSettingsElements();
+        const {
+            modal,
+            safeZInput,
+            startZInput,
+            unitsSelect,
+            precisionInput,
+            profileSideSelect
+        } = this.getCamSettingsElements();
         if (!modal) {
             return;
         }
@@ -790,6 +811,7 @@ export class CAMManager {
         const nextStartZ = startZInput ? parseFloat(startZInput.value) : NaN;
         const nextUnits = unitsSelect ? unitsSelect.value : null;
         const nextPrecision = precisionInput ? parseInt(precisionInput.value, 10) : NaN;
+        const nextProfileSide = profileSideSelect ? profileSideSelect.value : null;
         const previousStartZ = this.jobSettings.startZ;
 
         if (Number.isFinite(nextSafeZ)) {
@@ -816,6 +838,10 @@ export class CAMManager {
                 ...(this.jobSettings.gcode || {}),
                 precision: nextPrecision
             };
+        }
+
+        if (nextProfileSide) {
+            this.jobSettings.profileSide = nextProfileSide;
         }
 
         this.machine.update({

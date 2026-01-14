@@ -47,6 +47,7 @@ src/_deprecated/
 /Example/*
 .claude/settings.local.json
 database.*
+DXF
 
 .playwright-mcp/after_genera.png
 .playwright-mcp/anteprima_view.png

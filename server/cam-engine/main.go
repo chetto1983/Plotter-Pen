@@ -39,6 +39,7 @@ type Settings struct {
 	StartZ       float64 `json:"startZ"`
 	TargetZ      float64 `json:"targetZ"`
 	StepDown     float64 `json:"stepDown"`
+	ProfileSide  string  `json:"profileSide"`
 	FeedXY       float64 `json:"feedXY"`
 	FeedZ        float64 `json:"feedZ"`
 	SpindleRPM   float64 `json:"spindleRPM"`
@@ -152,6 +153,9 @@ func applyDefaults(s Settings) Settings {
 	}
 	if s.StepDown == 0 {
 		s.StepDown = 1.0
+	}
+	if s.ProfileSide == "" {
+		s.ProfileSide = "outside"
 	}
 	if s.FeedXY == 0 {
 		s.FeedXY = 800.0

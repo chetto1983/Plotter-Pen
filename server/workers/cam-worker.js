@@ -1,34 +1,13 @@
 import { parentPort } from 'worker_threads';
 import { GCodeParser } from '@polar3d/gcode-viewer';
 
-import { ToolpathGenerator } from '../../src/cam/ToolpathGenerator.js';
-import { MachineConfig } from '../../src/cam/MachineConfig.js';
-import { ToolLibrary } from '../../src/cam/ToolLibrary.js';
 import { generatePLCFromGCode } from '../../src/cam/GCodePostProcessor.js';
 import { linearizeGCode } from '../../src/cam/linearizeGCode.js';
-import { ClipperWrapper } from '../../src/cam/ClipperWrapper.js';
 
 const DEFAULT_BOUNDS = {
     min: { x: 0, y: 0, z: 0 },
     max: { x: 0, y: 0, z: 0 }
 };
-
-function buildToolLibrary(tools) {
-    const toolLibrary = new ToolLibrary();
-
-    if (!Array.isArray(tools) || tools.length === 0) {
-        return toolLibrary;
-    }
-
-    toolLibrary.tools = new Map();
-    tools.forEach(tool => {
-        if (tool && typeof tool === 'object') {
-            toolLibrary.addTool(tool);
-        }
-    });
-
-    return toolLibrary;
-}
 
 function preparePreviewGCode(gcodeText) {
     if (typeof gcodeText !== 'string') {
@@ -116,27 +95,6 @@ function sanitizeMetadata(metadata) {
     };
 }
 
-async function handleGenerate(data) {
-    const job = data?.job;
-    if (!job || !Array.isArray(job.operations)) {
-        throw new Error('Invalid CAM job payload.');
-    }
-
-    // Initialize Clipper2 WASM
-    await ClipperWrapper.init();
-
-    const toolLibrary = buildToolLibrary(data?.tools);
-    const machine = new MachineConfig();
-    if (data?.settings && typeof data.settings === 'object') {
-        machine.update(data.settings);
-    }
-
-    const generator = new ToolpathGenerator(machine, toolLibrary);
-    const gcode = await generator.generateJob(job);
-
-    return { type: 'success', gcode };
-}
-
 function handleParse(data) {
     const gcodeText = data?.gcode;
     if (typeof gcodeText !== 'string' || gcodeText.trim().length === 0) {
@@ -188,10 +146,6 @@ if (!parentPort) {
 async function processMessage(message) {
     const command = message?.command;
     const data = message?.data;
-
-    if (command === 'generate') {
-        return await handleGenerate(data);
-    }
 
     if (command === 'parse') {
         return handleParse(data);

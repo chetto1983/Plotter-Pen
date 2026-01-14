@@ -1,103 +1,36 @@
-import { ToolpathGenerator } from '../src/cam/ToolpathGenerator.js';
-import { MachineConfig } from '../src/cam/MachineConfig.js';
-import { ToolLibrary } from '../src/cam/ToolLibrary.js';
-import { ClipperWrapper } from '../src/cam/ClipperWrapper.js';
+import { runCamGo } from '../server/workers/cam-go-bridge.js';
 
 async function runTest() {
-    // Initialize clipper2-wasm
-    await ClipperWrapper.init();
+    const primitives = [
+        { type: 'circle', cx: 0, cy: 0, radius: 10 }
+    ];
 
-    const tools = new ToolLibrary();
-    const generator = new ToolpathGenerator(new MachineConfig(), tools);
-
-    const op = {
-        id: 'op-pocket-1',
-        name: 'Pocket Test',
+    const result = await runCamGo({
+        primitives,
         type: 'pocket',
-        toolId: '1',
-        points: [
-            { x: 0, y: 0 },
-            { x: 20, y: 0 },
-            { x: 20, y: 10 },
-            { x: 0, y: 10 }
-        ],
-        closed: true,
-        startZ: 0,
-        targetZ: -1,
-        stepDown: 1
-    };
-
-    const job = { operations: [op] };
-    const gcode = await generator.generateJob(job);
-    const lines = gcode.split('\n');
-    const arcLines = lines.filter(line => /^\s*G0?2\b/i.test(line) || /^\s*G0?3\b/i.test(line));
-    if (arcLines.length > 0) {
-        throw new Error(`Pocket G-code should be linear only, found arcs: ${arcLines.join(', ')}`);
-    }
-
-    let currentX = null;
-    let currentY = null;
-    let pathStart = null;
-    let pathEnd = null;
-    let inPath = false;
-    let checkedPaths = 0;
-
-    const parseAxis = (line, axis) => {
-        const match = line.match(new RegExp(`${axis}([-+]?\\d*\\.?\\d+)`));
-        return match ? parseFloat(match[1]) : null;
-    };
-
-    for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith('(')) continue;
-
-        if (trimmed.startsWith('G0')) {
-            const z = parseAxis(trimmed, 'Z');
-            const x = parseAxis(trimmed, 'X');
-            const y = parseAxis(trimmed, 'Y');
-
-            if (x !== null) currentX = x;
-            if (y !== null) currentY = y;
-
-            if (inPath && z !== null) {
-                checkedPaths += 1;
-                const dx = (pathEnd?.x ?? 0) - (pathStart?.x ?? 0);
-                const dy = (pathEnd?.y ?? 0) - (pathStart?.y ?? 0);
-                if (Math.hypot(dx, dy) > 1e-3) {
-                    throw new Error(`Pocket path ${checkedPaths} did not close (start=${pathStart?.x},${pathStart?.y} end=${pathEnd?.x},${pathEnd?.y}).`);
-                }
-                inPath = false;
-                pathStart = null;
-                pathEnd = null;
-            }
-            continue;
+        settings: {
+            toolDiameter: 3,
+            stepOver: 40,
+            startZ: 0,
+            targetZ: -1,
+            stepDown: 1,
+            feedXY: 800,
+            feedZ: 200,
+            safetyHeight: 5
         }
+    });
 
-        if (trimmed.startsWith('G1')) {
-            const x = parseAxis(trimmed, 'X');
-            const y = parseAxis(trimmed, 'Y');
-            const z = parseAxis(trimmed, 'Z');
-
-            if (!inPath && z !== null && currentX !== null && currentY !== null) {
-                pathStart = { x: currentX, y: currentY };
-                pathEnd = { x: currentX, y: currentY };
-                inPath = true;
-            }
-
-            if (x !== null) currentX = x;
-            if (y !== null) currentY = y;
-
-            if (inPath && (x !== null || y !== null)) {
-                pathEnd = { x: currentX, y: currentY };
-            }
-        }
+    const gcode = result?.gcode ?? '';
+    if (!gcode.trim()) {
+        throw new Error('Pocket G-code was empty.');
     }
 
-    if (checkedPaths === 0) {
-        throw new Error('No pocket paths were validated.');
+    const arcLines = gcode.split('\n').filter(line => /^\s*G0?2\b/i.test(line) || /^\s*G0?3\b/i.test(line));
+    if (arcLines.length === 0) {
+        throw new Error('Expected pocket G-code to include G2/G3 arcs for circle pockets.');
     }
 
-    console.log('Pocket G-code closure test passed.');
+    console.log('Pocket arc fitting test passed.');
 }
 
 runTest().catch(err => {

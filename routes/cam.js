@@ -36,27 +36,10 @@ function runCamWorker(command, data) {
 }
 
 router.post('/cam/generate', async (req, res) => {
-    try {
-        const job = req.body?.job;
-        if (!job || !Array.isArray(job.operations)) {
-            return res.status(400).json({ status: 'error', message: 'Job payload with operations is required.' });
-        }
-
-        const result = await runCamWorker('generate', {
-            job,
-            settings: req.body?.settings,
-            tools: req.body?.tools
-        });
-
-        if (result?.type === 'error') {
-            return res.status(500).json({ status: 'error', message: result.message ?? 'CAM worker error.' });
-        }
-
-        return res.json({ status: 'ok', gcode: result?.gcode ?? '' });
-    } catch (error) {
-        console.error('CAM generate error:', error);
-        return res.status(500).json({ status: 'error', message: error.message ?? 'CAM generation failed.' });
-    }
+    return res.status(410).json({
+        status: 'error',
+        message: 'CAM generation via /cam/generate is deprecated. Use /cam/process (Go engine).'
+    });
 });
 
 router.post('/cam/parse', async (req, res) => {

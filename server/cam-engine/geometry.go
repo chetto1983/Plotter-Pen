@@ -7,9 +7,9 @@ import (
 )
 
 const (
-	tolerance    = 0.5  // mm - endpoint connection tolerance
-	gridCellSize = 5.0  // mm - spatial grid cell size
-	arcSegments  = 64   // max points per arc
+	tolerance    = 0.5 // mm - endpoint connection tolerance
+	gridCellSize = 5.0 // mm - spatial grid cell size
+	arcSegments  = 64  // max points per arc
 )
 
 // Loop represents a closed polygon
@@ -102,20 +102,21 @@ func buildPaths(primitives []Primitive) ([]Loop, [][]Point) {
 	}
 
 	// Connect segments into loops using spatial grid
+	var openPaths [][]Point
 	if len(segments) > 0 {
-		connectedLoops := connectSegments(segments)
+		connectedLoops, connectedOpen := connectSegments(segments)
 		for _, pts := range connectedLoops {
 			loops = append(loops, Loop{
 				Points: pts,
 				Area:   polygonArea(pts),
 			})
 		}
+		openPaths = connectedOpen
 	}
 
 	// Group loops by containment (outer + holes)
 	groupedLoops := groupByContainment(loops)
-
-	return groupedLoops, nil // No open paths for now
+	return groupedLoops, openPaths
 }
 
 func getCenter(prim Primitive) (float64, float64) {
@@ -218,12 +219,13 @@ func arcToPoints(cx, cy, r, startAngle, sweep float64) []Point {
 }
 
 // connectSegments chains segments into closed loops using spatial grid
-func connectSegments(segments []Segment) [][]Point {
+func connectSegments(segments []Segment) ([][]Point, [][]Point) {
 	if len(segments) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	var loops [][]Point
+	var openPaths [][]Point
 	used := make([]bool, len(segments))
 
 	// Build spatial grids for start and end points
@@ -256,7 +258,7 @@ func connectSegments(segments []Segment) [][]Point {
 		return -1, false, false
 	}
 
-	// Build loops
+	// Build loops and open paths
 	for i := range segments {
 		if used[i] {
 			continue
@@ -267,11 +269,13 @@ func connectSegments(segments []Segment) [][]Point {
 		start := pathPoints[0]
 		end := pathPoints[len(pathPoints)-1]
 		maxIter := len(segments) * 2
+		closed := false
 
 		for iter := 0; iter < maxIter; iter++ {
 			// Check if closed
 			if pointsClose(end, start) && len(pathPoints) >= 3 {
 				loops = append(loops, pathPoints)
+				closed = true
 				break
 			}
 
@@ -291,9 +295,13 @@ func connectSegments(segments []Segment) [][]Point {
 			pathPoints = append(pathPoints, nextPts[1:]...)
 			end = pathPoints[len(pathPoints)-1]
 		}
+
+		if !closed && len(pathPoints) >= 2 {
+			openPaths = append(openPaths, pathPoints)
+		}
 	}
 
-	return loops
+	return loops, openPaths
 }
 
 func pointsClose(a, b Point) bool {

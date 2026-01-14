@@ -158,32 +158,55 @@ func pocketsToGCode(results []PocketResult, settings Settings) (string, int) {
 
 		gen.WriteLine("; Pocket %d", result.Index+1)
 
+		fittedPasses := make([][][]FitSegment, len(result.Passes))
+		for passIdx, contours := range result.Passes {
+			passSegments := make([][]FitSegment, len(contours))
+			for contourIdx, contour := range contours {
+				if len(contour) == 0 {
+					continue
+				}
+				normalized := normalizeFitPoints(contour, true, fitPointEpsilon)
+				passSegments[contourIdx] = FitArcsAndLines(normalized, FitOptions{Tolerance: 0.5, AllowFullCircle: true})
+			}
+			fittedPasses[passIdx] = passSegments
+		}
+
 		// Multi-pass depth cutting
 		currentZ := settings.StartZ
 		for currentZ > settings.TargetZ {
 			nextZ := math.Max(currentZ-settings.StepDown, settings.TargetZ)
 
-			for _, contours := range result.Passes {
-				for _, contour := range contours {
+			for passIdx, contours := range result.Passes {
+				for contourIdx, contour := range contours {
 					if len(contour) == 0 {
 						continue
 					}
 
+					segments := fittedPasses[passIdx][contourIdx]
+					start := contour[0]
+					if len(segments) > 0 {
+						start = segments[0].Start
+					}
+
 					// Rapid to start
 					gen.RapidZ(settings.SafetyHeight)
-					gen.RapidXY(contour[0].X, contour[0].Y)
+					gen.RapidXY(start.X, start.Y)
 
 					// Plunge
 					gen.LinearZ(nextZ, settings.FeedZ)
 
-					// Cut contour
-					for i := 1; i < len(contour); i++ {
-						gen.LinearXY(contour[i].X, contour[i].Y, settings.FeedXY)
-					}
+					if len(segments) > 0 {
+						emitSegments(gen, segments, settings.FeedXY)
+					} else {
+						// Cut contour with linear moves
+						for i := 1; i < len(contour); i++ {
+							gen.LinearXY(contour[i].X, contour[i].Y, settings.FeedXY)
+						}
 
-					// Close if needed
-					if !pointsClose(contour[0], contour[len(contour)-1]) {
-						gen.LinearXY(contour[0].X, contour[0].Y, settings.FeedXY)
+						// Close if needed
+						if len(contour) > 1 && !pointsClose(contour[0], contour[len(contour)-1]) {
+							gen.LinearXY(contour[0].X, contour[0].Y, settings.FeedXY)
+						}
 					}
 				}
 			}

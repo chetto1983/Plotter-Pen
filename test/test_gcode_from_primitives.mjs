@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 import DxfParser from 'dxf-parser';
 import { DXFImporter } from '../src/import/DXFImporter.js';
-import { GCodeFromPrimitives } from '../src/cam/GCodeFromPrimitives.js';
+import { runCamGo } from '../server/workers/cam-go-bridge.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -45,17 +45,28 @@ async function testGCodeFromPrimitives() {
     const circles = parsed.primitives.filter(p => p.type === 'circle');
     console.log(`\n[3] Testing with ${circles.length} circles...`);
 
-    const generator = new GCodeFromPrimitives({
-        precision: 4,
-        safeZ: 5,
-        feedXY: 800,
-        feedZ: 200,
-        targetZ: -1,
-        toolRadius: 1.5,
-        offsetSide: 'outside'
+    const primitives = circles.slice(0, 5).map(circle => ({
+        type: 'circle',
+        cx: circle.center?.x ?? circle.cx,
+        cy: circle.center?.y ?? circle.cy,
+        radius: circle.radius ?? circle._radius
+    }));
+
+    const result = await runCamGo({
+        primitives,
+        type: 'profile',
+        settings: {
+            toolDiameter: 3,
+            startZ: 0,
+            targetZ: -1,
+            stepDown: 1,
+            feedXY: 800,
+            feedZ: 200,
+            safetyHeight: 5
+        }
     });
 
-    const gcode = generator.generate(circles.slice(0, 5)); // Test with first 5 circles
+    const gcode = result?.gcode ?? '';
     console.log('\n[4] Generated G-code:\n');
     console.log(gcode);
 
@@ -72,6 +83,11 @@ async function testGCodeFromPrimitives() {
     const g0Line = gcode.split('\n').find(l => l.startsWith('G0 X'));
     if (g0Line) {
         console.log(`    Actual G0: ${g0Line}`);
+    }
+
+    const arcLines = gcode.split('\n').filter(line => /^\s*G0?2\b/i.test(line) || /^\s*G0?3\b/i.test(line));
+    if (arcLines.length === 0) {
+        throw new Error('Expected G2/G3 arcs for circle profiles.');
     }
 
     console.log('\n=== TEST COMPLETE ===');

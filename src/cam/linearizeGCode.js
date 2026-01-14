@@ -9,6 +9,7 @@ import { TOLERANCE, LIMITS } from './constants.js';
 // Arc linearization tolerance (mm chordal error)
 const ARC_TOLERANCE = TOLERANCE.ARC_LINEARIZE;
 const MAX_SEGMENTS = LIMITS.MAX_ARC_SEGMENTS;
+const TWO_PI = Math.PI * 2;
 
 // N_ARC_CORRECTION: how often to recalculate exact position (0 = every segment)
 const N_ARC_CORRECTION = 12;
@@ -25,6 +26,9 @@ const N_ARC_CORRECTION = 12;
  */
 function rToIJ(dx, dy, r, isCW) {
     const d2 = dx * dx + dy * dy;
+    if (d2 < 1e-12) {
+        return null;
+    }
     const h_x2_div_d_sq = 4.0 * r * r - d2;
 
     if (h_x2_div_d_sq < 0) {
@@ -151,6 +155,9 @@ export function linearizeGCode(gcode) {
             const startX = currentX;
             const startY = currentY;
             const startZ = currentZ;
+            const movedXY = Math.abs(targetX - startX) > 1e-9 || Math.abs(targetY - startY) > 1e-9;
+            const hasIJ = iMatch !== null || jMatch !== null;
+            const isFullCircle = !movedXY && hasIJ;
 
             let centerX, centerY, radius;
 
@@ -202,19 +209,25 @@ export function linearizeGCode(gcode) {
             const rt_axis0 = targetX - centerX;
             const rt_axis1 = targetY - centerY;
 
-            // Angular travel via cross/dot product
-            let angularTravel = Math.atan2(
-                r_axis0 * rt_axis1 - r_axis1 * rt_axis0,
-                r_axis0 * rt_axis0 + r_axis1 * rt_axis1
-            );
+            let angularTravel;
 
-            // Adjust for arc direction
-            if (isCW) {
-                // CW: angular_travel should be negative
-                if (angularTravel > 0) angularTravel -= 2 * Math.PI;
+            if (isFullCircle) {
+                angularTravel = isCW ? -TWO_PI : TWO_PI;
             } else {
-                // CCW: angular_travel should be positive
-                if (angularTravel < 0) angularTravel += 2 * Math.PI;
+                // Angular travel via cross/dot product
+                angularTravel = Math.atan2(
+                    r_axis0 * rt_axis1 - r_axis1 * rt_axis0,
+                    r_axis0 * rt_axis0 + r_axis1 * rt_axis1
+                );
+
+                // Adjust for arc direction
+                if (isCW) {
+                    // CW: angular_travel should be negative
+                    if (angularTravel > 0) angularTravel -= TWO_PI;
+                } else {
+                    // CCW: angular_travel should be positive
+                    if (angularTravel < 0) angularTravel += TWO_PI;
+                }
             }
 
             // Calculate segments
