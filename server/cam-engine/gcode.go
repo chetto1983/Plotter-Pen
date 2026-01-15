@@ -110,6 +110,19 @@ func (g *GCodeGenerator) G4(seconds float64) {
 	g.Write("G4 P%.3f", seconds)
 }
 
+// ArcIJ emits an arc command using I,J center offsets (industrial-grade)
+// I = Center.X - Start.X, J = Center.Y - Start.Y
+// clockwise=true emits G2 (CW), clockwise=false emits G3 (CCW)
+func (g *GCodeGenerator) ArcIJ(x, y, i, j float64, clockwise bool, feed float64) {
+	f := &feed
+	iPtr, jPtr := &i, &j
+	if clockwise {
+		g.G2(x, y, nil, iPtr, jPtr, f)
+	} else {
+		g.G3(x, y, nil, iPtr, jPtr, f)
+	}
+}
+
 // ==================== PLANE SELECTION ====================
 
 func (g *GCodeGenerator) G17() { g.Write("G17") } // XY plane

@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"math"
-	"os"
 )
 
 const (
@@ -25,10 +24,20 @@ type CircleData struct {
 	Cx, Cy, Radius float64
 }
 
+// ArcData preserves arc geometry through the CAM pipeline
+// This enables direct G2/G3 output without lossy arc re-fitting
+type ArcData struct {
+	Cx, Cy     float64 // Arc center
+	Radius     float64
+	StartAngle float64 // Radians
+	Sweep      float64 // Radians (positive = CCW, negative = CW)
+}
+
 // Segment represents a line or arc segment with endpoints
 type Segment struct {
 	Start, End Point
 	Points     []Point
+	ArcData    *ArcData // Non-nil for arc primitives, enables direct G2/G3 output
 }
 
 // SpatialGrid for O(1) endpoint lookup
@@ -184,10 +193,18 @@ func primitiveToSegment(prim Primitive) *Segment {
 		if len(points) < 2 {
 			return nil
 		}
+		// Preserve arc metadata for direct G2/G3 output (industrial-grade)
 		return &Segment{
 			Start:  points[0],
 			End:    points[len(points)-1],
 			Points: points,
+			ArcData: &ArcData{
+				Cx:         cx,
+				Cy:         cy,
+				Radius:     r,
+				StartAngle: prim.StartAngle,
+				Sweep:      prim.Sweep,
+			},
 		}
 
 	case "polyline":
@@ -244,8 +261,6 @@ func connectSegments(segments []Segment, tolerance float64) ([][]Point, [][]Poin
 		return nil, nil
 	}
 
-	fmt.Fprintf(os.Stderr, "DEBUG: connectSegments called with %d segments\n", len(segments))
-
 	var loops [][]Point
 	var openPaths [][]Point
 	used := make([]bool, len(segments))
@@ -266,11 +281,6 @@ func connectSegments(segments []Segment, tolerance float64) ([][]Point, [][]Poin
 			if !used[entry.index] && entry.index != excludeIdx {
 				if pointsClose(end, segments[entry.index].Start, tolerance) {
 					return entry.index, false, true
-				} else {
-					d := distance(end, segments[entry.index].Start)
-					if d < 5.0 { // log near misses
-						fmt.Fprintf(os.Stderr, "DEBUG: Gap check Start[%d]: %.4f > tol %.4f\n", entry.index, d, tolerance)
-					}
 				}
 			}
 		}
@@ -279,11 +289,6 @@ func connectSegments(segments []Segment, tolerance float64) ([][]Point, [][]Poin
 			if !used[entry.index] && entry.index != excludeIdx {
 				if pointsClose(end, segments[entry.index].End, tolerance) {
 					return entry.index, true, true
-				} else {
-					d := distance(end, segments[entry.index].End)
-					if d < 5.0 {
-						fmt.Fprintf(os.Stderr, "DEBUG: Gap check End[%d]: %.4f > tol %.4f\n", entry.index, d, tolerance)
-					}
 				}
 			}
 		}

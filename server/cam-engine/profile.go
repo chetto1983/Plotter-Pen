@@ -103,8 +103,8 @@ func writeProfileOp(gen *GCodeGenerator, loop Loop, toolRadius float64, side str
 	}
 
 	for _, p := range offsetPaths {
-		// Densify path to prevent false circular fits on long straight segments
-		// p = DensifyPath(p, 5.0) // Not needed for G1 mode
+		// Densify path to ensure arc fitting has enough points
+		p = DensifyPath(p, 2.0)                 // Add points every 2mm for better arc recognition
 		writeClosedPath(gen, p, settings, true) // ENABLE ARC FIT
 	}
 }

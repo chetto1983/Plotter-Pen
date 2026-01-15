@@ -237,11 +237,10 @@ export function linearizeGCode(gcode) {
             const thetaPerSegment = angularTravel / segments;
             const zPerSegment = (targetZ - startZ) / segments;
 
-            // Vector rotation optimization (cncwebsim method)
-            // Taylor series approximation for small angles
-            let cos_T = 2.0 - thetaPerSegment * thetaPerSegment;
-            let sin_T = thetaPerSegment * 0.16666667 * (cos_T + 4.0);
-            cos_T *= 0.5;
+            // Compute rotation increments
+            // Use exact trig for all cases (Taylor approximation only valid for very small angles)
+            const cos_T = Math.cos(thetaPerSegment);
+            const sin_T = Math.sin(thetaPerSegment);
 
             // Current radius vector (from center to current point)
             let r0 = -r_axis0; // Note: negative because we want center-relative

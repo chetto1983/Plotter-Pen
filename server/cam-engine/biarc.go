@@ -178,8 +178,8 @@ func FitArcsAndLines(points []Point, options FitOptions) []FitSegment {
 					// 3. Accumulated Sweep check (Prevent loop-the-loop on open paths)
 					if valid && !opts.AllowFullCircle {
 						totalSweep := getAccumulatedSweep(segment, circle.center)
-						// allow up to ~230 degrees (4.0 rad) for caps/hairpins, but reject full loops (2PI)
-						if totalSweep > 4.0 {
+						// Allow arcs up to 360° (2π), reject only multi-turn spirals
+						if totalSweep > 2*math.Pi {
 							valid = false
 						}
 					}
