@@ -1,0 +1,92 @@
+package main
+
+import (
+	"fmt"
+	"log"
+
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+	"plotter-pen/internal/handler"
+	"plotter-pen/internal/persistence"
+	"plotter-pen/internal/system"
+)
+
+func main() {
+	// Load configuration from environment
+	cfg := system.LoadServerConfig()
+
+	// Set Gin mode
+	gin.SetMode(cfg.GinMode)
+
+	// Initialize database
+	db, err := persistence.InitDB(cfg.DBPath)
+	if err != nil {
+		log.Fatalf("Failed to initialize database: %v", err)
+	}
+
+	// Create Gin router
+	r := gin.Default()
+
+	// Serve static files
+	r.Static("/src", cfg.StaticDir+"/src")
+	r.Static("/styles", cfg.StaticDir+"/styles")
+	r.StaticFile("/", cfg.StaticDir+"/plotter_pen.html")
+	r.StaticFile("/plotter_pen.html", cfg.StaticDir+"/plotter_pen.html")
+
+	// API routes
+	api := r.Group("/api")
+	registerHandlers(api, db)
+
+	// Find available port
+	portCfg := system.PortConfig{
+		StartPort: cfg.Port,
+		MaxTries:  cfg.MaxPortTries,
+	}
+
+	port, err := system.FindAvailablePort(portCfg)
+	if err != nil {
+		log.Fatalf("Failed to find available port: %v", err)
+	}
+
+	// Format server URL
+	url := system.FormatServerURL(port, false)
+	log.Printf("Starting server on %s", url)
+
+	// Open browser if enabled
+	if cfg.OpenBrowser {
+		browserCfg := system.BrowserConfig{
+			Enabled: true,
+			Delay:   cfg.BrowserDelay,
+		}
+		go system.OpenBrowserWithConfig(url, browserCfg)
+	}
+
+	// Start server
+	addr := fmt.Sprintf("%s:%d", cfg.Host, port)
+	if err := r.Run(addr); err != nil {
+		log.Fatalf("Server failed: %v", err)
+	}
+}
+
+// registerHandlers registers all API handlers
+func registerHandlers(api *gin.RouterGroup, db *gorm.DB) {
+	// Persistence handlers
+	persistHandler := handler.NewPersistenceHandler(db)
+	persistHandler.RegisterRoutes(api)
+
+	// Machine handlers
+	machineHandler := handler.NewMachineHandler(db)
+	machineHandler.RegisterRoutes(api)
+
+	// CAM handlers
+	camHandler := handler.NewCAMHandler()
+	camHandler.RegisterRoutes(api)
+
+	// OPC UA handlers
+	opcuaHandler := handler.NewOpcuaHandler()
+	opcuaHandler.RegisterRoutes(api)
+
+	// DXF/SVG/STL handlers
+	dxfHandler := handler.NewDXFHandler()
+	dxfHandler.RegisterRoutes(api)
+}
