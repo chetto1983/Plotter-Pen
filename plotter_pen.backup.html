@@ -1,0 +1,1103 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+  <meta charset="utf-8" />
+  <title>Sacchi Plotter Pen - CAD Editor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="src/ui/modal.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "clipper2-wasm": "/node_modules/clipper2-wasm/dist/es/clipper2z.js"
+      }
+    }
+  </script>
+  <script src="./src/lib/dxf-parser.js"></script>
+</head>
+
+<body class="cad-app">
+  <!-- Header / Menu Bar -->
+  <header class="cad-header">
+    <div class="cad-header-left">
+      <div class="cad-brand">
+        <span class="cad-brand-name">Sacchi Plotter Pen</span>
+        <span class="cad-brand-version">v2.2</span>
+      </div>
+    </div>
+    <nav class="cad-nav" id="mainNav">
+      <a href="plotter_pen.html" class="cad-nav-link active">Editor</a>
+    </nav>
+
+  </header>
+
+  <!-- RIBBON UI -->
+  <div class="cad-ribbon">
+    <div class="cad-ribbon-tabs">
+      <button class="ribbon-tab" data-tab="home">Home</button>
+      <button class="ribbon-tab" data-tab="view">Vista & File</button>
+      <button class="ribbon-tab" data-tab="cam">CAM & CNC</button>
+    </div>
+
+    <div class="cad-ribbon-content">
+      <!-- HOME TAB (Combines Draw, Modify, Annotate) -->
+      <div id="tab-home" class="ribbon-panel active">
+
+        <!-- DRAW GROUP -->
+        <div class="cad-toolbar-group">
+          <div class="cad-toolbar-buttons">
+            <button type="button" class="cad-tool-btn" data-tool="line" title="Linea (L)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="4" y1="20" x2="20" y2="4" />
+              </svg>
+              <span>Linea</span>
+            </button>
+
+            <div class="cad-tool-dropdown">
+              <button type="button" class="cad-tool-btn" data-tool="arc" title="Arco (A)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M4 18 A 10 10 0 0 1 20 18" />
+                </svg>
+                <span>Arco</span>
+                <svg class="dropdown-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+              <div class="cad-dropdown-menu">
+                <button type="button" class="cad-dropdown-item" data-arc-mode="3p">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 16 A 10 10 0 0 1 20 16" />
+                    <circle cx="4" cy="16" r="1.5" />
+                    <circle cx="12" cy="8" r="1.5" />
+                    <circle cx="20" cy="16" r="1.5" />
+                  </svg>
+                  <span>3 Punti</span>
+                </button>
+                <button type="button" class="cad-dropdown-item" data-arc-mode="cse">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M6 16 A 8 8 0 0 1 18 16" />
+                    <circle cx="12" cy="16" r="1.5" fill="#2196F3" />
+                  </svg>
+                  <span>Centro, Inizio, Fine</span>
+                </button>
+                <button type="button" class="cad-dropdown-item" data-arc-mode="seb">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 18 A 10 10 0 0 1 20 18" />
+                    <path d="M12 8 L12 14" stroke-dasharray="2,2" />
+                  </svg>
+                  <span>Inizio, Fine, Bulge</span>
+                </button>
+              </div>
+            </div>
+
+            <button type="button" class="cad-tool-btn" data-tool="circle" title="Cerchio (C)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="8" />
+                <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+              </svg>
+              <span>Cerchio</span>
+            </button>
+            <button type="button" class="cad-tool-btn" data-tool="rectangle" title="Rettangolo (R)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="4" y="6" width="16" height="12" />
+                <circle cx="4" cy="6" r="1.5" fill="currentColor" />
+              </svg>
+              <span>Rettangolo</span>
+            </button>
+            <button type="button" class="cad-tool-btn" data-tool="polygon" title="Poligono (P)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="12,3 21,9 18,20 6,20 3,9" />
+              </svg>
+              <span>Poligono</span>
+            </button>
+          </div>
+          <span class="cad-toolbar-label">Disegno</span>
+        </div>
+
+        <!-- MODIFY GROUP -->
+        <div class="cad-toolbar-group">
+          <div class="cad-toolbar-buttons">
+            <button type="button" class="cad-tool-btn" data-tool="select" title="Seleziona (S)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 3 L 10 21 L 13 13 L 21 10 Z" />
+              </svg>
+              <span>Seleziona</span>
+            </button>
+
+            <div class="cad-toolbar-divider"></div>
+
+            <button type="button" class="cad-tool-btn" data-tool="fillet" title="Raccordo (F)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 20v-8a8 8 0 018-8h8" />
+              </svg>
+              <span>Raccordo</span>
+            </button>
+            <button type="button" class="cad-tool-btn" data-tool="chamfer" title="Cimatura">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 20v-6l6-6h10" />
+              </svg>
+              <span>Cimatura</span>
+            </button>
+            <button type="button" class="cad-tool-btn" data-tool="trim" title="Taglia/Estendi (T)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M6 6l12 12M18 6L6 18M3 3l18 18" stroke-dasharray="4 4" />
+                <path d="M21 21L15 15" stroke="red" stroke-width="3" />
+              </svg>
+              <span>Taglia/Estendi</span>
+            </button>
+            <button type="button" class="cad-tool-btn" data-tool="array" title="Serie (Array)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="4" y="4" width="6" height="6" />
+                <rect x="14" y="4" width="6" height="6" />
+                <rect x="4" y="14" width="6" height="6" />
+                <rect x="14" y="14" width="6" height="6" />
+              </svg>
+              <span>Serie</span>
+            </button>
+
+            <div class="cad-toolbar-divider"></div>
+
+            <button type="button" class="cad-tool-btn" data-tool="delete" title="Elimina (DEL)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 6h18" />
+                <path d="M8 6V4h8v2" />
+                <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6" />
+              </svg>
+              <span>Elimina</span>
+            </button>
+          </div>
+          <span class="cad-toolbar-label">Modifica</span>
+        </div>
+
+        <!-- ANNOTATE GROUP -->
+        <div class="cad-toolbar-group">
+          <div class="cad-toolbar-buttons">
+            <button type="button" class="cad-tool-btn" data-tool="dimension" title="Lineare">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 12h16M4 12v-3M20 12v-3M7 7l-3 5 3 5M17 7l3 5-3 5" />
+              </svg>
+              <span>Lineare</span>
+            </button>
+            <button type="button" class="cad-tool-btn" data-tool="angular_dimension" title="Angolare">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M19 19H5V5" stroke-dasharray="2 2" />
+                <path d="M5 12a7 7 0 0 1 7 7" />
+                <path d="M5 12l2 2M12 19l-2-2" />
+              </svg>
+              <span>Angolare</span>
+            </button>
+            <button type="button" class="cad-tool-btn" data-tool="radius_dimension" title="Raggio">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="7" />
+                <path d="M12 12l5-5" />
+                <path d="M16 8l1-1" />
+              </svg>
+              <span>Raggio</span>
+            </button>
+          </div>
+          <span class="cad-toolbar-label">Annotazioni</span>
+        </div>
+
+        <!-- Output Group (Moved here from View tab) -->
+        <div class="cad-toolbar-group">
+          <div class="cad-toolbar-buttons">
+            <button type="button" class="cad-tool-btn" id="btnSendPLC" title="Invia a PLC">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="22" y1="2" x2="11" y2="13" />
+                <polygon points="22 2 15 22 11 13 2 9 22 2" />
+              </svg>
+              <span>PLC</span>
+            </button>
+          </div>
+          <span class="cad-toolbar-label">Output</span>
+        </div>
+
+      </div>
+
+      <!-- VIEW TAB -->
+      <div id="tab-view" class="ribbon-panel">
+
+        <!-- Vista Group -->
+        <div class="cad-toolbar-group">
+          <div class="cad-toolbar-buttons">
+            <button type="button" class="cad-tool-btn" id="btnZoomIn" title="Zoom In">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="7" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                <line x1="11" y1="8" x2="11" y2="14" />
+                <line x1="8" y1="11" x2="11" y2="11" />
+              </svg>
+              <span>Zoom In</span>
+            </button>
+            <button type="button" class="cad-tool-btn" id="btnZoomOut" title="Zoom Out">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="7" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                <line x1="8" y1="11" x2="14" y2="11" />
+              </svg>
+              <span>Zoom Out</span>
+            </button>
+            <button type="button" class="cad-tool-btn" id="btnZoomFit" title="Zoom Estensioni">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="15 3 21 3 21 9" />
+                <polyline points="9 21 3 21 3 15" />
+                <line x1="21" y1="3" x2="14" y2="10" />
+                <line x1="3" y1="21" x2="10" y2="14" />
+              </svg>
+              <span>Estensioni</span>
+            </button>
+            <div class="cad-toolbar-divider"></div>
+            <button type="button" class="cad-tool-btn" id="btnUndo" title="Annulla">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 10h10a5 5 0 015 5v2" />
+                <polyline points="3 10 8 5 3 10 8 15" />
+              </svg>
+              <span>Annulla</span>
+            </button>
+            <button type="button" class="cad-tool-btn" id="btnRedo" title="Ripeti">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 10H11a5 5 0 00-5 5v2" />
+                <polyline points="21 10 16 5 21 10 16 15" />
+              </svg>
+              <span>Ripeti</span>
+            </button>
+          </div>
+          <span class="cad-toolbar-label">Vista</span>
+        </div>
+
+        <div class="cad-toolbar-separator"></div>
+
+        <!-- File Group -->
+        <div class="cad-toolbar-group">
+          <div class="cad-toolbar-buttons">
+            <button type="button" class="cad-tool-btn" id="btnSave" title="Salva">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />
+                <polyline points="17 21 17 13 7 13 7 21" />
+                <polyline points="7 3 7 8 15 8" />
+              </svg>
+              <span>Salva</span>
+            </button>
+
+            <label for="fileInput" class="cad-tool-btn" title="Apri">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
+              </svg>
+              <span>Apri</span>
+            </label>
+            <input type="file" id="fileInput" accept=".dxf,.json">
+
+            <button type="button" class="cad-tool-btn" id="btnExportDXF" title="Esporta DXF">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              <span>Esporta</span>
+            </button>
+
+            <button type="button" class="cad-tool-btn" id="btnClear" title="Pulisci">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <line x1="9" y1="9" x2="15" y2="15" />
+                <line x1="15" y1="9" x2="9" y2="15" />
+              </svg>
+              <span>Pulisci</span>
+            </button>
+          </div>
+          <span class="cad-toolbar-label">File</span>
+        </div>
+
+      </div>
+
+      <!-- CAM TAB -->
+      <div id="tab-cam" class="ribbon-panel">
+        <!-- Selection Group -->
+        <div class="cad-toolbar-group">
+          <div class="cad-toolbar-buttons">
+            <button type="button" class="cad-tool-btn" id="btnCamSelectAll" data-tool="select" title="Seleziona (S)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <path d="M9 12l2 2 4-4" />
+              </svg>
+              <span>Seleziona</span>
+            </button>
+          </div>
+          <span class="cad-toolbar-label">Selezione</span>
+        </div>
+
+        <!-- Operations Group -->
+        <div class="cad-toolbar-group">
+          <div class="cad-toolbar-buttons">
+            <button type="button" class="cad-tool-btn" id="btnCamProfile" title="Profilatura (Taglio contorno)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="4" y="4" width="16" height="16" rx="2" stroke-dasharray="4 4" />
+                <path d="M4 4 L20 4 L20 20 L4 20 Z" stroke="blue" stroke-width="3" />
+              </svg>
+              <span>Profilo</span>
+            </button>
+            <button type="button" class="cad-tool-btn" id="btnCamPocket" title="Tasca (Svuotamento)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="4" y="4" width="16" height="16" rx="2" />
+                <path d="M8 8h8M8 12h8M8 16h8" stroke="currentColor" stroke-width="1" />
+              </svg>
+              <span>Tasca</span>
+            </button>
+          </div>
+          <span class="cad-toolbar-label">Operazioni</span>
+        </div>
+
+        <!-- Job Group -->
+        <div class="cad-toolbar-group">
+          <div class="cad-toolbar-buttons">
+            <button type="button" class="cad-tool-btn" id="btnCamGenerate" title="Genera G-Code">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path
+                  d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3-3a1 1 0 0 0-1.4-1.4l-2.3 2.3-1-1a1 1 0 0 0-1.3 0.1z" />
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                <polyline points="15 3 21 3 21 9" />
+              </svg>
+              <span>Genera</span>
+            </button>
+            <button type="button" class="cad-tool-btn" id="btnCamSettings" title="Impostazioni Macchina">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path
+                  d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                </path>
+              </svg>
+              <span>Setup</span>
+            </button>
+            <button type="button" class="cad-tool-btn" id="btnOpenPLCConfig" title="Configurazione PLC">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="4" y="4" width="16" height="16" rx="2" />
+                <path d="M9 9h6" />
+                <path d="M9 13h6" />
+                <path d="M9 17h4" />
+              </svg>
+              <span>PLC Config</span>
+            </button>
+          </div>
+          <span class="cad-toolbar-label">Setup</span>
+        </div>
+
+        <!-- Output Group -->
+        <div class="cad-toolbar-group">
+          <div class="cad-toolbar-buttons">
+            <button type="button" class="cad-tool-btn" id="btnCamDownload" title="Scarica G-Code">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 15v4c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2v-4M17 9l-5 5-5-5M12 12.8V2.5" />
+              </svg>
+              <span>Download</span>
+            </button>
+          </div>
+          <span class="cad-toolbar-label">Output</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content Area -->
+  <main class="cad-main">
+    <!-- Left Panel - Settings -->
+    <aside class="cad-panel cad-panel-left" id="leftPanel">
+      <!-- Layer Panel -->
+      <div class="cad-panel-section" id="layerPanel">
+        <!-- Content rendered by LayerPanel.js -->
+      </div>
+
+      <div class="cad-panel-section">
+        <div class="cad-panel-header">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7" />
+            <rect x="14" y="3" width="7" height="7" />
+            <rect x="14" y="14" width="7" height="7" />
+            <rect x="3" y="14" width="7" height="7" />
+          </svg>
+          <span>Area di Lavoro</span>
+        </div>
+        <div class="cad-panel-content">
+          <div class="cad-input-row">
+            <label for="workspaceWidth">Larghezza (mm)</label>
+            <input type="number" id="workspaceWidth" value="600" min="10" max="2000">
+          </div>
+          <div class="cad-input-row">
+            <label for="workspaceHeight">Altezza (mm)</label>
+            <input type="number" id="workspaceHeight" value="600" min="10" max="2000">
+          </div>
+        </div>
+      </div>
+
+      <div class="cad-panel-section">
+        <div class="cad-panel-header">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <line x1="4" y1="4" x2="4" y2="20" />
+            <line x1="9" y1="4" x2="9" y2="20" />
+            <line x1="14" y1="4" x2="14" y2="20" />
+            <line x1="19" y1="4" x2="19" y2="20" />
+            <line x1="4" y1="4" x2="20" y2="4" />
+            <line x1="4" y1="9" x2="20" y2="9" />
+            <line x1="4" y1="14" x2="20" y2="14" />
+            <line x1="4" y1="19" x2="20" y2="19" />
+          </svg>
+          <span>Griglia & Snap</span>
+        </div>
+        <div class="cad-panel-content">
+          <div class="cad-toggle-row">
+            <label class="cad-toggle">
+              <input type="checkbox" id="showGrid" checked>
+              <span class="cad-toggle-slider"></span>
+              <span class="cad-toggle-label">Mostra griglia</span>
+            </label>
+          </div>
+          <div class="cad-toggle-row">
+            <label class="cad-toggle">
+              <input type="checkbox" id="snapGrid">
+              <span class="cad-toggle-slider"></span>
+              <span class="cad-toggle-label">Snap griglia</span>
+            </label>
+          </div>
+          <div class="cad-toggle-row">
+            <label class="cad-toggle">
+              <input type="checkbox" id="snapObjects" checked>
+              <span class="cad-toggle-slider"></span>
+              <span class="cad-toggle-label">Snap oggetti</span>
+            </label>
+          </div>
+          <div class="cad-input-row">
+            <label for="gridSpacing">Passo griglia (mm)</label>
+            <input type="number" id="gridSpacing" value="10" min="1" max="100">
+          </div>
+        </div>
+      </div>
+
+      <div class="cad-panel-section">
+        <div class="cad-panel-header">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2L12 22" />
+            <path d="M2 12L22 12" />
+          </svg>
+          <span>Coordinate</span>
+        </div>
+        <div class="cad-panel-content">
+          <div class="cad-coord-display">
+            <div class="cad-coord-item">
+              <span class="cad-coord-label">X</span>
+              <span class="cad-coord-value" id="coordX">0.00</span>
+              <span class="cad-coord-unit">mm</span>
+            </div>
+            <div class="cad-coord-item">
+              <span class="cad-coord-label">Y</span>
+              <span class="cad-coord-value" id="coordY">0.00</span>
+              <span class="cad-coord-unit">mm</span>
+            </div>
+          </div>
+          <div class="cad-snap-info" id="snapInfo">
+            <span class="cad-snap-type">-</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Canvas Area -->
+    <div class="cad-canvas-container">
+      <canvas id="cadCanvas"></canvas>
+      <div class="cad-canvas-overlay" id="canvasOverlay"></div>
+      <div class="cad-selection-box" id="selectionBox"></div>
+
+      <!-- Floating Edit Toolbar (appears when selection exists) -->
+      <div class="cad-float-toolbar" id="floatToolbar">
+        <!-- Rotate Group -->
+        <div class="cad-float-group">
+          <button type="button" class="cad-float-btn" id="ftRotateCCW" title="Ruota CCW (Q)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M2.5 2v6h6" />
+              <path d="M2.5 8C5 4 9 2 13.5 2a9.5 9.5 0 110 19c-4 0-7-2-9-5" />
+            </svg>
+          </button>
+          <div class="cad-float-input-wrap">
+            <input type="number" id="ftRotateAngle" class="cad-float-input" value="90" min="1" max="360" step="1"
+              title="Angolo di rotazione in gradi">
+            <span class="cad-float-unit">°</span>
+          </div>
+          <button type="button" class="cad-float-btn" id="ftRotateCW" title="Ruota CW (R/E)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21.5 2v6h-6" />
+              <path d="M21.5 8C19 4 15 2 10.5 2A9.5 9.5 0 1010.5 21c4 0 7-2 9-5" />
+            </svg>
+          </button>
+        </div>
+        <div class="cad-float-divider"></div>
+        <!-- Mirror Group -->
+        <button type="button" class="cad-float-btn" id="ftMirrorX" title="Specchia X (M)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 3v18" />
+            <path d="M17 7l4 5-4 5" />
+            <path d="M7 7l-4 5 4 5" />
+          </svg>
+        </button>
+        <button type="button" class="cad-float-btn" id="ftMirrorY" title="Specchia Y">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 12h18" />
+            <path d="M7 7l5-4 5 4" />
+            <path d="M7 17l5 4 5-4" />
+          </svg>
+        </button>
+        <div class="cad-float-divider"></div>
+        <!-- Scale Group -->
+        <div class="cad-float-group">
+          <button type="button" class="cad-float-btn" id="ftScaleDown" title="Riduci">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="7" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              <line x1="8" y1="11" x2="14" y2="11" />
+            </svg>
+          </button>
+          <div class="cad-float-input-wrap">
+            <input type="number" id="ftScaleFactor" class="cad-float-input" value="1.5" min="0.1" max="10" step="0.1"
+              title="Fattore di scala">
+            <span class="cad-float-unit">x</span>
+          </div>
+          <button type="button" class="cad-float-btn" id="ftScaleUp" title="Ingrandisci">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="7" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              <line x1="11" y1="8" x2="11" y2="14" />
+              <line x1="8" y1="11" x2="14" y2="11" />
+            </svg>
+          </button>
+        </div>
+        <div class="cad-float-divider"></div>
+        <!-- Move Group -->
+        <div class="cad-float-group">
+          <span class="cad-float-label">Sposta</span>
+          <div class="cad-float-input-wrap">
+            <input type="number" id="ftMoveX" class="cad-float-input cad-float-input-sm" value="0" step="1"
+              title="Spostamento X in mm">
+            <span class="cad-float-unit">X</span>
+          </div>
+          <div class="cad-float-input-wrap">
+            <input type="number" id="ftMoveY" class="cad-float-input cad-float-input-sm" value="0" step="1"
+              title="Spostamento Y in mm">
+            <span class="cad-float-unit">Y</span>
+          </div>
+          <button type="button" class="cad-float-btn cad-float-btn-sm" id="ftMoveApply" title="Applica spostamento">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </button>
+        </div>
+        <div class="cad-float-divider"></div>
+        <!-- Actions -->
+        <button type="button" class="cad-float-btn" id="ftCopy" title="Copia (Ctrl+C)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" />
+            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+          </svg>
+        </button>
+        <button type="button" class="cad-float-btn cad-float-btn-danger" id="ftDelete" title="Elimina (Del)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6" />
+            <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Right Panel - Output -->
+    <aside class="cad-panel cad-panel-right" id="rightPanel">
+      <div class="cad-panel-section cad-panel-fill" id="plcPanel">
+        <div class="cad-panel-header">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="4" y="4" width="16" height="16" rx="2" />
+            <line x1="8" y1="8" x2="8" y2="16" />
+            <line x1="12" y1="8" x2="12" y2="16" />
+            <line x1="16" y1="8" x2="16" y2="16" />
+          </svg>
+          <span>Output PLC</span>
+          <div class="cad-panel-actions">
+            <button type="button" class="cad-icon-btn-sm" id="btnSimulate" title="Simula percorso">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="5 3 19 12 5 21 5 3" />
+              </svg>
+            </button>
+            <button type="button" class="cad-icon-btn-sm" id="btnCopyOutput" title="Copia">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" />
+                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+              </svg>
+            </button>
+            <button type="button" class="cad-icon-btn-sm" id="btnDownloadOutput" title="Scarica">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="cad-panel-content cad-output-content">
+          <div class="cad-output-grid" id="outputGrid">
+            <div class="cad-output-empty">Disegna primitive per generare i comandi PLC</div>
+          </div>
+        </div>
+        <div class="cad-simulation-controls" id="simulationControls">
+          <div class="cad-speed-controls">
+            <div class="cad-speed-group">
+              <label for="simWorkSpeed" class="cad-speed-label">Work:</label>
+              <input type="number" id="simWorkSpeed" class="cad-number-input" min="10" max="1000" step="10" value="100"
+                title="Work Speed" placeholder="100">
+              <span class="cad-speed-unit">mm/s</span>
+            </div>
+            <div class="cad-speed-group">
+              <label for="simRapidSpeed" class="cad-speed-label">Rapid:</label>
+              <input type="number" id="simRapidSpeed" class="cad-number-input" min="10" max="5000" step="100"
+                value="1000" title="Rapid Speed" placeholder="1000">
+              <span class="cad-speed-unit">mm/s</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CAM OUTPUT PANEL -->
+      <div class="cad-panel-section cad-panel-fill cam-panel-container" id="camPanel">
+        <div class="cad-panel-header">
+          <span class="cad-header-label">CAM Output</span>
+        </div>
+        <div class="cad-panel-content cam-panel-content-flex">
+          <!-- Content injected by CAMManager -->
+
+          <!-- PREVIEW TABS (Moved inside to be hidden together) -->
+          <div class="cad-tabs-small cam-tabs-bottom">
+            <button class="cad-tab-sm active" data-subtab="preview">3D Preview</button>
+            <button class="cad-tab-sm" data-subtab="code">G-Code</button>
+          </div>
+
+          <div id="cam-subtab-preview" class="cam-subtab-sm active">
+            <div class="cad-cam-preview-container-sm">
+              <canvas id="camPreviewCanvas"></canvas>
+            </div>
+          </div>
+          <div id="cam-subtab-code" class="cam-subtab-sm" hidden>
+            <div id="gcodeContainer" class="cad-gcode-editor-sm cad-gcode-fancy-container"></div>
+          </div>
+        </div>
+      </div>
+      </div>
+
+      </div>
+      </div>
+
+      <div class="cad-panel-section">
+        <div class="cad-panel-header">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="16" x2="12" y2="12" />
+            <line x1="12" y1="8" x2="12.01" y2="8" />
+          </svg>
+          <span>Statistiche</span>
+        </div>
+        <div class="cad-panel-content">
+          <div class="cad-stats-grid">
+            <div class="cad-stat-item">
+              <span class="cad-stat-value" id="statLines">0</span>
+              <span class="cad-stat-label">Linee</span>
+            </div>
+            <div class="cad-stat-item">
+              <span class="cad-stat-value" id="statArcs">0</span>
+              <span class="cad-stat-label">Archi</span>
+            </div>
+            <div class="cad-stat-item">
+              <span class="cad-stat-value" id="statTotal">0</span>
+              <span class="cad-stat-label">Totale</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="cad-opcua-status" id="opcuaStatus"></div>
+    </aside>
+  </main>
+
+  <!-- Command Line -->
+  <div class="cad-command-bar" id="commandBar">
+    <div class="cad-command-autocomplete" id="commandAutocomplete"></div>
+    <div class="cad-command-prompt">
+      <span class="cad-prompt-symbol">&gt;</span>
+      <input type="text" id="commandInput" class="cad-command-input" placeholder="Digita comando o coordinate..."
+        autocomplete="off" spellcheck="false">
+    </div>
+    <div class="cad-command-hint" id="commandHint">Digita un comando (es: LINE, CIRCLE) o premi TAB per vedere tutti i
+      comandi</div>
+  </div>
+
+  <!-- Status Bar -->
+  <footer class="cad-statusbar">
+    <div class="cad-status-left">
+      <span class="cad-status-tool" id="statusTool">Nessuno strumento</span>
+      <span class="cad-status-divider">|</span>
+      <span class="cad-status-mode" id="statusMode">Ortho: OFF</span>
+    </div>
+    <div class="cad-status-center">
+      <span id="statusMessage">Pronto</span>
+    </div>
+    <div class="cad-status-right">
+      <span class="cad-status-zoom" id="statusZoom">100%</span>
+      <span class="cad-status-divider">|</span>
+      <span class="cad-status-coords">
+        <span id="statusX">X: 0.00</span>
+        <span id="statusY">Y: 0.00</span>
+      </span>
+    </div>
+  </footer>
+
+  <!-- Keyboard Shortcuts Modal -->
+  <div class="cad-modal" id="shortcutsModal" hidden>
+    <div class="cad-modal-content">
+      <div class="cad-modal-header">
+        <h2>Scorciatoie da Tastiera</h2>
+        <button type="button" class="cad-modal-close" id="closeShortcuts">&times;</button>
+      </div>
+      <div class="cad-modal-body">
+        <div class="cad-shortcuts-grid">
+          <div class="cad-shortcut"><kbd>L</kbd> Linea</div>
+          <div class="cad-shortcut"><kbd>A</kbd> Arco</div>
+          <div class="cad-shortcut"><kbd>C</kbd> Cerchio</div>
+          <div class="cad-shortcut"><kbd>R</kbd> Rettangolo</div>
+          <div class="cad-shortcut"><kbd>P</kbd> Poligono</div>
+          <div class="cad-shortcut"><kbd>S</kbd> Seleziona</div>
+          <div class="cad-shortcut"><kbd>DEL</kbd> Elimina selezione</div>
+          <div class="cad-shortcut"><kbd>Frecce</kbd> Sposta selezione</div>
+          <div class="cad-shortcut"><kbd>Shift+Frecce</kbd> Sposta 10mm</div>
+          <div class="cad-shortcut"><kbd>ESC</kbd> Annulla</div>
+          <div class="cad-shortcut"><kbd>Ctrl+S</kbd> Salva disegno</div>
+          <div class="cad-shortcut"><kbd>Ctrl+O</kbd> Apri disegno</div>
+          <div class="cad-shortcut"><kbd>Ctrl+Z</kbd> Annulla azione</div>
+          <div class="cad-shortcut"><kbd>Ctrl+Y</kbd> Ripeti azione</div>
+          <div class="cad-shortcut"><kbd>+/-</kbd> Zoom In/Out</div>
+          <div class="cad-shortcut"><kbd>F</kbd> Adatta vista</div>
+          <div class="cad-shortcut"><kbd>G</kbd> Griglia On/Off</div>
+          <div class="cad-shortcut"><kbd>F1</kbd> Aiuto</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="src/app/PLCConfigManager.js"></script>
+  <script type="module" src="src/main.js"></script>
+  <script>
+    // Ribbon Tab Switching
+    document.querySelectorAll('.ribbon-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        // Deactivate all
+        document.querySelectorAll('.ribbon-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.ribbon-panel').forEach(p => {
+          p.classList.remove('active');
+          p.style.display = ''; // Clear inline styles
+        });
+
+        // Activate current
+        tab.classList.add('active');
+        const tabId = tab.dataset.tab;
+        const panel = document.getElementById(`tab-${tabId}`);
+        if (panel) {
+          panel.classList.add('active');
+        }
+
+        // Handle Right Side Panel Switching
+        const plcPanel = document.getElementById('plcPanel');
+        const camPanel = document.getElementById('camPanel');
+
+        if (tabId === 'cam') {
+          if (plcPanel) plcPanel.style.display = 'none';
+          if (camPanel) camPanel.style.display = 'flex';
+        } else {
+          // For Home or File/View tabs, show PLC by default
+          if (plcPanel) plcPanel.style.display = 'flex';
+          if (camPanel) camPanel.style.display = 'none';
+        }
+      });
+    });
+
+    // CAM Bottom Tabs (Wizard)
+    document.querySelectorAll('.cad-tabs-small .cad-tab-sm[data-subtab]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        // Remove active from sibling buttons
+        btn.parentElement.querySelectorAll('.cad-tab-sm').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        // Hide all small subtabs
+        document.querySelectorAll('.cam-subtab-sm').forEach(p => {
+          p.style.display = 'none';
+          p.classList.remove('active');
+        });
+
+        // Show selected
+        const subtab = document.getElementById(`cam-subtab-${btn.dataset.subtab}`);
+        if (subtab) {
+          subtab.style.display = 'flex';
+          subtab.classList.add('active');
+
+          // Canvas Resize Trigger for Preview
+          if (btn.dataset.subtab === 'preview') {
+            const canvas = document.getElementById('camPreviewCanvas');
+            if (canvas) {
+              const container = canvas.parentElement;
+              const rect = container.getBoundingClientRect();
+              if (rect.width > 0 && rect.height > 0) {
+                // Set size matching container
+                canvas.width = rect.width * window.devicePixelRatio;
+                canvas.height = rect.height * window.devicePixelRatio;
+                canvas.style.width = rect.width + 'px';
+                canvas.style.height = rect.height + 'px';
+              }
+            }
+          }
+        }
+      });
+    });
+  </script>
+  <!-- CAM Settings Modal -->
+  <div class="cad-modal-overlay" id="camSettingsModal">
+    <div class="cad-modal cad-modal-config">
+      <div class="cad-modal-header">
+        <h2 class="cad-modal-title">Impostazioni CAM</h2>
+        <button type="button" class="cad-modal-close" id="btnCloseCamSettings">&times;</button>
+      </div>
+      <div class="cad-modal-body">
+        <form id="camSettingsForm" novalidate class="cad-modal-form">
+          <div class="cad-modal-cols-2">
+            <div class="cad-input-row cad-col-full">
+              <label for="camSafeZ">Safe Z (mm)</label>
+              <input type="number" id="camSafeZ" name="camSafeZ" step="0.1" class="cad-modal-input" />
+            </div>
+            <div class="cad-input-row cad-col-full">
+              <label for="camStartZ">Start Z (mm)</label>
+              <input type="number" id="camStartZ" name="camStartZ" step="0.1" class="cad-modal-input" />
+            </div>
+          </div>
+
+          <div class="cad-modal-cols-2">
+            <div class="cad-input-row cad-col-full">
+              <label for="camUnits">Unità</label>
+              <select id="camUnits" name="camUnits" class="cad-modal-select">
+                <option value="mm">mm</option>
+                <option value="in">in</option>
+              </select>
+            </div>
+            <div class="cad-input-row cad-col-full">
+              <label for="camPrecision">Precisione</label>
+              <input type="number" id="camPrecision" name="camPrecision" min="0" max="6" step="1"
+                class="cad-modal-input" />
+            </div>
+          </div>
+
+          <!-- New Options: StepOver & StepDown -->
+          <div class="cad-modal-cols-2">
+            <div class="cad-input-row cad-col-full">
+              <label for="camStepOver">Step Over (%)</label>
+              <input type="number" id="camStepOver" name="camStepOver" min="1" max="100" step="1" value="40"
+                class="cad-modal-input" />
+            </div>
+            <div class="cad-input-row cad-col-full">
+              <label for="camStepDown">Step Down (mm)</label>
+              <input type="number" id="camStepDown" name="camStepDown" step="0.1" value="1.0" class="cad-modal-input" />
+            </div>
+          </div>
+
+          <div class="cad-modal-cols-2">
+            <div class="cad-input-row cad-col-full">
+              <label for="camProfileSide">Lato profilo</label>
+              <select id="camProfileSide" name="camProfileSide" class="cad-modal-select">
+                <option value="outside">Esterno</option>
+                <option value="inside">Interno</option>
+                <option value="online">In linea</option>
+              </select>
+            </div>
+            <div class="cad-input-row cad-col-full">
+              <label for="camTolerance">Tolleranza (mm)</label>
+              <input type="number" id="camTolerance" name="camTolerance" min="0.01" max="10" step="0.01"
+                class="cad-modal-input" title="Tolleranza unione segmenti" />
+            </div>
+          </div>
+          <div class="cad-modal-cols-2">
+            <div class="cad-input-row cad-col-full cam-tool-row">
+              <div class="cam-tool-input-wrapper">
+                <label for="camToolDiameter">Diametro Utensile (mm)</label>
+                <input type="number" id="camToolDiameter" name="camToolDiameter" min="0.1" max="50" step="0.1"
+                  class="cad-modal-input" value="3.0" />
+              </div>
+              <button type="button" class="cad-btn-outline btn-manage-tools" id="btnManageTools"
+                title="Gestisci Libreria Utensili">
+                <span class="icon">&#9881;</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="cad-modal-actions-right">
+            <button type="button" class="cad-primary-btn cad-btn-outline" id="btnCamSettingsCancel">
+              Annulla
+            </button>
+            <button type="button" class="cad-primary-btn" id="btnCamSettingsApply">
+              Applica
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tool Library Modal -->
+  <div class="cad-modal-overlay" id="toolLibraryModal">
+    <div class="cad-modal">
+
+      <!-- Header -->
+      <div class="tool-lib-header">
+        <div class="tool-lib-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path
+              d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z">
+            </path>
+          </svg>
+          Libreria Utensili
+        </div>
+        <button type="button" class="tool-lib-close" id="btnCloseToolLibrary">&times;</button>
+      </div>
+
+      <!-- Body -->
+      <div class="tool-lib-body">
+
+        <!-- Left Sidebar: Tool List -->
+        <div class="tool-lib-sidebar">
+          <div class="tool-lib-list" id="toolListContainer">
+            <!-- Items injected by JS -->
+            <div class="tool-lib-empty">Caricamento...</div>
+          </div>
+        </div>
+
+        <!-- Main Content: Form -->
+        <div class="tool-lib-main">
+
+          <div>
+            <div class="tool-lib-section-title">Dettagli Utensile</div>
+            <div class="tool-form-grid">
+
+              <div class="tool-input-group full-width">
+                <label for="toolName">Nome Utensile</label>
+                <input type="text" id="toolName" class="tool-input" placeholder="Es. 0.5mm Endmill">
+              </div>
+
+              <div class="tool-input-group">
+                <label for="toolType">Tipo</label>
+                <select id="toolType" class="tool-input tool-select">
+                  <option value="endmill">Fresa Piana (Endmill)</option>
+                  <option value="ballnose">Fresa Sferica (Ballnose)</option>
+                  <option value="vbit">Bulino (V-Bit)</option>
+                </select>
+              </div>
+
+              <div class="tool-input-group">
+                <label for="toolDiameter">Diametro (mm)</label>
+                <input type="number" id="toolDiameter" class="tool-input" step="0.1" value="3.0">
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="tool-actions">
+            <button type="button" class="btn-tool-delete" id="btnDeleteTool" disabled>Elimina</button>
+            <button type="button" class="btn-tool-save" id="btnSaveTool">Salva Modifiche</button>
+          </div>
+
+          <button type="button" class="btn-tool-use" id="btnSelectToolFromLib">
+            Usa Utensile Selezionato
+          </button>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+  <!-- PLC Config Modal -->
+  <div class="cad-modal-overlay" id="plcConfigModal">
+    <div class="cad-modal cad-modal-config">
+      <div class="cad-modal-header">
+        <h2 class="cad-modal-title">Parametri OPC UA</h2>
+        <button type="button" class="cad-modal-close" id="btnClosePLCConfig">&times;</button>
+      </div>
+      <div class="cad-modal-body">
+        <form id="plcConfigForm" novalidate class="cad-modal-form">
+          <!-- Endpoint -->
+          <div class="cad-input-row cad-col-full">
+            <label for="endpoint">Endpoint OPC UA</label>
+            <input type="text" id="endpoint" name="endpoint" required placeholder="opc.tcp://192.168.1.100:4840"
+              class="cad-modal-input" />
+          </div>
+
+          <!-- Nodes -->
+          <div class="cad-modal-cols-2">
+            <div class="cad-input-row cad-col-full">
+              <label for="nodeId">Node ID Target</label>
+              <input type="text" id="nodeId" name="nodeId" required placeholder="ns=4;i=12" class="cad-modal-input" />
+            </div>
+            <div class="cad-input-row cad-col-full">
+              <label for="triggerNodeId">Node ID Trigger</label>
+              <input type="text" id="triggerNodeId" name="triggerNodeId" placeholder="ns=4;i=535"
+                class="cad-modal-input" />
+            </div>
+          </div>
+
+          <!-- Auth -->
+          <div class="cad-modal-cols-2">
+            <div class="cad-input-row cad-col-full">
+              <label for="username">Username</label>
+              <input type="text" id="username" name="username" placeholder="admin" autocomplete="username"
+                class="cad-modal-input" />
+            </div>
+            <div class="cad-input-row cad-col-full">
+              <label for="password">Password</label>
+              <input type="password" id="password" name="password" placeholder="••••••••"
+                autocomplete="current-password" class="cad-modal-input" />
+            </div>
+          </div>
+
+          <!-- Data -->
+          <div class="cad-modal-cols-2">
+            <div class="cad-input-row cad-col-full">
+              <label for="valueType">Tipo Valore</label>
+              <select id="valueType" name="valueType" class="cad-modal-select">
+                <option value="string_array">String Array</option>
+                <option value="string">String</option>
+                <option value="int_array">Int Array</option>
+                <option value="float_array">Float Array</option>
+                <option value="bool_array">Bool Array</option>
+              </select>
+            </div>
+            <div class="cad-input-row cad-col-full">
+              <label for="triggerResetDelayMs">Delay (ms)</label>
+              <input type="number" id="triggerResetDelayMs" name="triggerResetDelayMs" placeholder="500"
+                class="cad-modal-input" />
+            </div>
+          </div>
+
+          <input type="hidden" name="arrayLength" value="100">
+
+          <div id="configStatus" class="cad-modal-status" hidden></div>
+
+          <div class="cad-modal-actions-right">
+            <button type="button" class="cad-primary-btn cad-btn-outline" id="reloadConfigBtn">
+              Ricarica
+            </button>
+            <button type="submit" class="cad-primary-btn">
+              Salva Configurazione
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</body>
+
+</html>

@@ -99,6 +99,104 @@ export class CAMManager {
         // Clear
         bind('btnCamClearOps', () => this.clearOperations());
         bind('btnCamWizardClearOps', () => this.clearOperations());
+
+        // Preview Expand
+        bind('btnCamExpandPreview', () => this.toggleFullscreenPreview());
+
+        // Tab Switching Logic
+        const tabs = document.querySelectorAll('.cad-tab-sm');
+        tabs.forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                // Remove active from all tabs
+                tabs.forEach(t => t.classList.remove('active'));
+                // Add active to clicked
+                e.target.classList.add('active');
+
+                // Hide all subtabs
+                document.querySelectorAll('.cam-subtab-sm').forEach(el => el.hidden = true);
+                document.querySelectorAll('.cam-subtab-sm').forEach(el => el.classList.remove('active'));
+
+                // Show target subtab
+                const targetId = `cam-subtab-${e.target.dataset.subtab}`;
+                const target = document.getElementById(targetId);
+                if (target) {
+                    target.hidden = false;
+                    target.classList.add('active');
+                }
+
+                // If switching to preview, resize viewer because it might have been hidden
+                if (e.target.dataset.subtab === 'preview' && this.viewer) {
+                    requestAnimationFrame(() => this.viewer.resize());
+                }
+            });
+        });
+    }
+
+    toggleFullscreenPreview() {
+        if (!this.viewer || !this.viewer.canvas) return;
+
+        if (this.isFullscreen) {
+            this.closeFullscreenPreview();
+            return;
+        }
+
+        const canvas = this.viewer.canvas;
+        this.originalParent = canvas.parentElement;
+
+        // Create Overlay
+        const overlay = document.createElement('div');
+        overlay.id = 'cam-preview-overlay';
+        overlay.style.cssText = `
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: #0f1115; z-index: 10000; display: flex;
+            align-items: center; justify-content: center;
+        `;
+
+        // Move canvas
+        overlay.appendChild(canvas);
+
+        // Controls Container
+        const controls = document.createElement('div');
+        controls.style.cssText = `position: absolute; top: 20px; right: 20px; display: flex; gap: 10px;`;
+
+        // Close Button
+        const closeBtn = document.createElement('button');
+        closeBtn.innerHTML = '<svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+        closeBtn.style.cssText = `
+            background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); 
+            color: white; border-radius: 50%; width: 40px; height: 40px; 
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+        `;
+        closeBtn.onclick = () => this.closeFullscreenPreview();
+        controls.appendChild(closeBtn);
+        overlay.appendChild(controls);
+
+        document.body.appendChild(overlay);
+        this.isFullscreen = true;
+
+        // Trigger Resize
+        requestAnimationFrame(() => {
+            if (this.viewer) this.viewer.resize();
+        });
+    }
+
+    closeFullscreenPreview() {
+        const overlay = document.getElementById('cam-preview-overlay');
+        const canvas = this.viewer.canvas;
+
+        if (this.originalParent && canvas) {
+            // Re-insert before the button (which is last child usually, or we can just append and CSS handles 100%)
+            // The container has relative positioning.
+            this.originalParent.insertBefore(canvas, this.originalParent.firstChild);
+        }
+
+        if (overlay) document.body.removeChild(overlay);
+        this.isFullscreen = false;
+
+        // Trigger Resize back to small
+        requestAnimationFrame(() => {
+            if (this.viewer) this.viewer.resize();
+        });
     }
 
     selectAllPrimitives() {
@@ -172,7 +270,7 @@ export class CAMManager {
 
     renderOperationsList() {
         const container = document.getElementById('camOperationsList');
-        if (!container) return; // Hooked element might not exist yet (HTML update pending)
+        if (!container) return;
 
         if (this.operations.length === 0) {
             container.innerHTML = '<div class="cam-op-empty">Nessuna operazione.<br><small style="opacity:0.6">Seleziona geometrie e aggiungi Profilo (+)</small></div>';
@@ -183,18 +281,53 @@ export class CAMManager {
         this.operations.forEach(op => {
             const el = document.createElement('div');
             el.className = 'cam-op-item';
-            el.innerHTML = `
-                <div class="cam-op-info">
-                    <span class="cam-op-type ${op.type}">${op.type.toUpperCase()}</span>
-                    <span class="cam-op-name">${op.name}</span>
-                </div>
-                <button class="cam-op-delete" data-id="${op.id}" title="Rimuovi">&times;</button>
+
+            // Info info
+            const info = document.createElement('div');
+            info.className = 'cam-op-info';
+            info.innerHTML = `
+                <span class="cam-op-type ${op.type}">${op.type.toUpperCase()}</span>
+                <span class="cam-op-name">${op.name}</span>
             `;
-            // Bind delete
-            el.querySelector('.cam-op-delete').addEventListener('click', (e) => {
+            el.appendChild(info);
+
+            // Actions container
+            const actions = document.createElement('div');
+            actions.className = 'cam-op-actions';
+            actions.style.display = 'flex';
+            actions.style.gap = '5px';
+
+            // Edit Button (Unified Modal)
+            const editBtn = document.createElement('button');
+            editBtn.className = 'cam-op-btn edit';
+            editBtn.textContent = '✎';
+            editBtn.title = 'Modifica';
+            editBtn.style.background = 'none';
+            editBtn.style.border = 'none';
+            editBtn.style.color = 'var(--accent, #3b82f6)';
+            editBtn.style.cursor = 'pointer';
+            editBtn.onclick = (e) => {
+                e.stopPropagation();
+                this.opSettingsModal.open(op);
+            };
+            actions.appendChild(editBtn);
+
+            // Delete Button
+            const delBtn = document.createElement('button');
+            delBtn.className = 'cam-op-btn delete';
+            delBtn.innerHTML = '&times;';
+            delBtn.title = 'Rimuovi';
+            delBtn.style.background = 'none';
+            delBtn.style.border = 'none';
+            delBtn.style.color = 'var(--muted, #666)';
+            delBtn.style.cursor = 'pointer';
+            delBtn.onclick = (e) => {
                 e.stopPropagation();
                 this.removeOperation(op.id);
-            });
+            };
+            actions.appendChild(delBtn);
+
+            el.appendChild(actions);
             container.appendChild(el);
         });
     }

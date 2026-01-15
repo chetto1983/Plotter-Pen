@@ -186,7 +186,19 @@ export class DXFImporter {
                 points.push(this.toModelPoint(pt[0] / s, pt[1] / s));
             }
 
-            const isClosed = entity.closed || entity.closedSpline;
+            let isClosed = entity.closed || entity.closedSpline;
+
+            // FIXED: Check geometric gap. If large, force Open Spline to prevent "D-Shape" loops.
+            if (isClosed && points.length > 0) {
+                const first = points[0];
+                const last = points[points.length - 1];
+                // Calculate gap
+                const gap = Math.sqrt(Math.pow(first.x - last.x, 2) + Math.pow(first.y - last.y, 2));
+                if (gap > 0.5) {
+                    // Gap is too big to be a closed loop. It's an open curve (e.g. Smile).
+                    isClosed = false;
+                }
+            }
 
             // Check if this closed spline is a circle
             if (isClosed) {
@@ -204,8 +216,18 @@ export class DXFImporter {
                     const startPt = { x: first.x1, y: first.y1 };
                     const endPt = { x: last.x2, y: last.y2 };
                     const gap = Math.sqrt((startPt.x - endPt.x) ** 2 + (startPt.y - endPt.y) ** 2);
-                    if (gap > 0.5) {
-                        fitted.push(new Line(endPt.x, endPt.y, startPt.x, startPt.y));
+
+                    // FIXED: Do NOT strictly enforce closing with a straight line if gap is large.
+                    // This prevents "Smile" -> "D-Shape" artifacts.
+                    // Only close if it's practically closed already.
+                    if (gap < 0.5) {
+                        // Likely intended to be closed, bridge the tiny gap
+                        // normalized in next step or via Line
+                        if (gap > 0.001) {
+                            fitted.push(new Line(endPt.x, endPt.y, startPt.x, startPt.y));
+                        }
+                    } else {
+                        // Large gap = Open Curve. Do NOT add closing line.
                     }
                     return fitted;
                 }

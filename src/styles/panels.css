@@ -1,0 +1,286 @@
+/* ============================================
+   PANEL COMPONENTS (Layers, etc.)
+   ============================================ */
+
+/* Panel header icon sizing */
+.cad-panel-header svg {
+    width: 16px;
+    height: 16px;
+    color: var(--accent);
+    flex-shrink: 0;
+}
+
+/* Layer List */
+.cad-layer-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 50vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 2px;
+    padding-bottom: 10px;
+}
+
+.cad-layer-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: transparent;
+    border: 1px solid transparent;
+    width: 100%;
+    box-sizing: border-box;
+    transition: all 0.15s ease;
+}
+
+.cad-layer-item:hover {
+    background: rgba(82, 168, 255, 0.05);
+    border-color: var(--border-light);
+}
+
+.cad-layer-item.active {
+    background: rgba(82, 168, 255, 0.1);
+    border-color: var(--accent);
+}
+
+.cad-layer-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+}
+
+.cad-layer-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.cad-layer-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.cad-layer-name {
+    flex: 1;
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--fg);
+}
+
+.cad-layer-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.cad-layer-btn:hover {
+    color: var(--fg);
+    background: var(--accent-dim);
+    border-radius: 4px;
+}
+
+.cad-layer-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+.cad-layer-visibility.off,
+.cad-layer-lock.on {
+    color: var(--warning);
+}
+
+.cad-layer-color {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.cad-layer-delete {
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.cad-layer-item:hover .cad-layer-delete {
+    opacity: 1;
+}
+
+.cad-layer-delete:hover {
+    color: var(--error);
+}
+
+.cad-layer-rename-input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--accent);
+    color: var(--fg);
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    outline: none;
+}
+
+/* Layer settings row (appears on hover) */
+.cad-layer-settings {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0 0 24px;
+    opacity: 0;
+    max-height: 0;
+    overflow: hidden;
+    transition: opacity 0.15s, max-height 0.2s;
+}
+
+.cad-layer-item:hover .cad-layer-settings,
+.cad-layer-item.active .cad-layer-settings {
+    opacity: 1;
+    max-height: 32px;
+}
+
+.cad-layer-setting {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+}
+
+.cad-layer-setting label {
+    display: flex;
+    align-items: center;
+    color: var(--muted);
+}
+
+.cad-layer-input {
+    width: 50px;
+    padding: 3px 6px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    color: var(--fg);
+    font-size: 11px;
+    text-align: center;
+}
+
+.cad-layer-input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.cad-layer-input::-webkit-inner-spin-button,
+.cad-layer-input::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0;
+}
+
+/* ============================================
+   COORDINATE DISPLAY (Industrial Style)
+   ============================================ */
+
+.cad-coord-display {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.cad-coord-item {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    padding: 8px 10px;
+    background: rgba(11, 14, 22, 0.9);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+
+.cad-coord-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+.cad-coord-value {
+    font-size: 12px;
+    font-weight: 600;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: var(--fg);
+}
+
+.cad-coord-unit {
+    font-size: 9px;
+    color: var(--muted);
+}
+
+/* ============================================
+   SPEED CONTROLS (Industrial Style)
+   ============================================ */
+
+.cad-speed-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.cad-speed-group {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(82, 168, 255, 0.12);
+    border-radius: 8px;
+}
+
+.cad-speed-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--fg);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    min-width: 45px;
+}
+
+.cad-speed-input {
+    width: 60px;
+    padding: 6px 8px;
+    background: rgba(11, 14, 22, 0.9);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--fg);
+    font-size: 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    text-align: right;
+}
+
+.cad-speed-input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.cad-speed-unit {
+    font-size: 10px;
+    color: var(--muted);
+    min-width: 30px;
+}

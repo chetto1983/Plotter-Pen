@@ -169,5 +169,5 @@ export class PLCConfigManager {
     }
 }
 
-// Auto-initialize
-new PLCConfigManager();
+// Auto-init removed. Main app will instantiate.
+// new PLCConfigManager();

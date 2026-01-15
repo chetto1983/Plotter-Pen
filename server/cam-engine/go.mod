@@ -1,6 +1,6 @@
 module cam-engine
 
-go 1.25
+go 1.25.5
 
 require github.com/bolom009/go-clipper2 v1.3.0
 

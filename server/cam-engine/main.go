@@ -1,193 +1,284 @@
 package main
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
+	"math"
 	"os"
 	"time"
+
+	"cam-engine/pkg/clipper"
+	"cam-engine/pkg/curve"
+	"cam-engine/pkg/gcode"
+	"cam-engine/pkg/geom"
+	"cam-engine/pkg/plc"
 )
 
-// Input structures
-type Primitive struct {
-	Type          string    `json:"type"`
-	X1            float64   `json:"x1,omitempty"`
-	Y1            float64   `json:"y1,omitempty"`
-	X2            float64   `json:"x2,omitempty"`
-	Y2            float64   `json:"y2,omitempty"`
-	Cx            float64   `json:"cx,omitempty"`
-	Cy            float64   `json:"cy,omitempty"`
-	Radius        float64   `json:"radius,omitempty"`
-	StartAngle    float64   `json:"startAngle,omitempty"`
-	Sweep         float64   `json:"sweep,omitempty"`
-	X             float64   `json:"x,omitempty"`
-	Y             float64   `json:"y,omitempty"`
-	Width         float64   `json:"width,omitempty"`
-	Height        float64   `json:"height,omitempty"`
-	Points        []Point   `json:"points,omitempty"`
-	Center        *Point    `json:"center,omitempty"`
-	ControlPoints []Point   `json:"controlPoints,omitempty"`
-	Knots         []float64 `json:"knots,omitempty"`
-	Degree        int       `json:"degree,omitempty"`
-	Closed        bool      `json:"closed,omitempty"`
+// Input Structures (Matching Frontend JSON)
+type Input struct {
+	Primitives []Primitive `json:"primitives"`
+	Type       string      `json:"type"` // "profile" or "pocket"
+	Settings   Settings    `json:"settings"`
 }
 
-type Point struct {
-	X float64 `json:"x"`
-	Y float64 `json:"y"`
+type Primitive struct {
+	Type   string       `json:"type"`
+	Points []geom.Point `json:"points"` // generic points (Polygon/Polyline/Spline)
+	Closed bool         `json:"closed"`
+
+	// Analytic Fields (Line)
+	X1 float64 `json:"x1"`
+	Y1 float64 `json:"y1"`
+	X2 float64 `json:"x2"`
+	Y2 float64 `json:"y2"`
+
+	// Analytic Fields (Arc/Circle)
+	Cx         float64 `json:"cx"`
+	Cy         float64 `json:"cy"`
+	Radius     float64 `json:"radius"`
+	StartAngle float64 `json:"startAngle"`
+	Sweep      float64 `json:"sweep"`
+	// ignoring ax, ay, bx, by as they are redundant if we have center/radius/angles
 }
 
 type Settings struct {
 	ToolDiameter float64 `json:"toolDiameter"`
-	StepOver     float64 `json:"stepOver"`
-	StartZ       float64 `json:"startZ"`
-	TargetZ      float64 `json:"targetZ"`
-	StepDown     float64 `json:"stepDown"`
-	ProfileSide  string  `json:"profileSide"`
-	FeedXY       float64 `json:"feedXY"`
-	FeedZ        float64 `json:"feedZ"`
-	SpindleRPM   float64 `json:"spindleRPM"`
+	FeedXY       float64 `json:"feedRate"`
+	FeedZ        float64 `json:"plungeRate"`
 	SafetyHeight float64 `json:"safetyHeight"`
-	Tolerance    float64 `json:"tolerance"`
+	TargetZ      float64 `json:"depth"`
+	StepDown     float64 `json:"stepDown"`
+	StepOver     float64 `json:"stepOver"` // Fraction of tool diameter (optional)
 }
 
-type Input struct {
-	Primitives []Primitive `json:"primitives"`
-	Type       string      `json:"type"` // "pocket" or "profile"
-	Settings   Settings    `json:"settings"`
-}
-
-// Output structures
-type Stats struct {
-	Loops      int   `json:"loops"`
-	Operations int   `json:"operations"`
-	GcodeLines int   `json:"gcodeLines"`
-	ElapsedMs  int64 `json:"elapsedMs"`
-}
-
-type Output struct {
-	Status string `json:"status"`
-	Gcode  string `json:"gcode,omitempty"`
-	Stats  Stats  `json:"stats,omitempty"`
-	Error  string `json:"error,omitempty"`
-}
-
-func log(format string, args ...interface{}) {
-	fmt.Fprintf(os.Stderr, "[CAM] "+format+"\n", args...)
+// Response Structure
+type Response struct {
+	Status    string `json:"status"`
+	GCode     string `json:"gcode,omitempty"`
+	PlcOutput string `json:"plc_output"` // Removed omitempty to debug
+	Error     string `json:"error,omitempty"`
+	Stats     string `json:"stats,omitempty"`
 }
 
 func main() {
 	start := time.Now()
-	log("CAM Engine started")
 
-	// Read JSON from stdin
-	reader := bufio.NewReader(os.Stdin)
+	// 1. Read Input
+	inputBytes, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		fatal("Failed to read stdin: " + err.Error())
+	}
+
+	// DEBUG: Write input to file (Keep for robust debugging)
+	_ = os.WriteFile("last_run_input.json", inputBytes, 0644)
+
 	var input Input
-	decoder := json.NewDecoder(reader)
-	if err := decoder.Decode(&input); err != nil {
-		outputError(fmt.Sprintf("Failed to parse input: %v", err))
-		return
+	if err := json.Unmarshal(inputBytes, &input); err != nil {
+		fatal("Invalid JSON: " + err.Error())
 	}
 
-	log("Received %d primitives, type=%s", len(input.Primitives), input.Type)
+	// 2. Setup Generator
+	gen := gcode.NewGenerator()
+	plcGen := plc.NewGenerator()
 
-	// Apply default settings
-	settings := applyDefaults(input.Settings)
-	log("Effective Tolerance [CLAMPED]: %.4f", settings.Tolerance)
+	gen.Header()
 
-	// Build paths from primitives
-	log("Building paths...")
-	loops, openPaths := buildPaths(input.Primitives, settings.Tolerance)
-	log("Found %d loops, %d open paths", len(loops), len(openPaths))
-
-	// Generate G-code based on operation type
-	var gcode string
-	var opCount int
-
-	switch input.Type {
-	case "pocket":
-		log("Generating pocket toolpaths...")
-		gcode, opCount = generatePockets(loops, settings)
-	case "profile":
-		log("Generating profile toolpaths...")
-		gcode, opCount = generateProfiles(loops, openPaths, settings)
-	default:
-		outputError(fmt.Sprintf("Unknown operation type: %s", input.Type))
-		return
-	}
-
-	elapsed := time.Since(start).Milliseconds()
-	log("Done in %dms", elapsed)
-
-	// Output result
-	output := Output{
-		Status: "ok",
-		Gcode:  gcode,
-		Stats: Stats{
-			Loops:      len(loops),
-			Operations: opCount,
-			GcodeLines: countLines(gcode),
-			ElapsedMs:  elapsed,
-		},
-	}
-
-	encoder := json.NewEncoder(os.Stdout)
-	encoder.Encode(output)
-}
-
-func outputError(msg string) {
-	log("ERROR: %s", msg)
-	output := Output{
-		Status: "error",
-		Error:  msg,
-	}
-	encoder := json.NewEncoder(os.Stdout)
-	encoder.Encode(output)
-}
-
-func applyDefaults(s Settings) Settings {
-	if s.ToolDiameter == 0 {
-		s.ToolDiameter = 3.0
-	}
-	if s.StepOver == 0 {
-		s.StepOver = 40.0
-	}
-	// StartZ defaults to 0 (material surface)
-	// TargetZ MUST be negative for cutting - default to -1mm
-	if s.TargetZ == 0 {
-		s.TargetZ = -1.0
-	}
-	if s.StepDown == 0 {
-		s.StepDown = 1.0
-	}
-	if s.ProfileSide == "" {
-		s.ProfileSide = "outside"
-	}
-	if s.FeedXY == 0 {
-		s.FeedXY = 800.0
-	}
-	if s.FeedZ == 0 {
-		s.FeedZ = 200.0
-	}
-	if s.SpindleRPM == 0 {
-		s.SpindleRPM = 12000.0
-	}
-	if s.SafetyHeight == 0 {
-		s.SafetyHeight = 5.0
-	}
-	// Even 0.05 is too loose for some geometries, causing straight lines to become arcs.
-	if s.Tolerance == 0 || s.Tolerance > 0.01 {
-		s.Tolerance = 0.01
-	}
-	return s
-}
-
-func countLines(s string) int {
-	count := 1
-	for _, c := range s {
-		if c == '\n' {
-			count++
+	// 3. Process Primitives -> Paths
+	var paths []geom.Path
+	for _, prim := range input.Primitives {
+		p := prim.ToPath()
+		if p != nil {
+			paths = append(paths, p)
 		}
 	}
-	return count
+
+	log.Printf("[V2] Processing %d paths via Clipper2...", len(paths))
+
+	// 4. Operation Logic (Switch based on Type)
+	toolRadius := input.Settings.ToolDiameter / 2
+
+	// Default StepOver: 40% of Tool Diameter
+	stepOver := input.Settings.ToolDiameter * 0.4
+
+	if input.Settings.StepOver > 0 {
+		// Treat Input as Percentage (e.g. 40 = 40%)
+		stepOver = (input.Settings.StepOver / 100.0) * input.Settings.ToolDiameter
+	}
+
+	// Pocketing treats ALL closed paths as a single "Region" to clear (Island Support)
+	if input.Type == "pocket" {
+		var closedPaths []geom.Path
+		for _, path := range paths {
+			if path.IsClosed(0.1) {
+				closedPaths = append(closedPaths, path)
+			}
+		}
+
+		if len(closedPaths) > 0 {
+			// Generate Pocket Toolpaths (All closed paths together)
+			pocketPaths := clipper.GeneratePocket(closedPaths, toolRadius, stepOver)
+
+			// Ensure Closure & Output
+			var finalPaths []geom.Path
+			for _, p := range pocketPaths {
+				finalPaths = append(finalPaths, p.EnsureClosed(0.001))
+			}
+
+			// Generate G-Code/PLC for Pocket
+			generateToolpath(gen, plcGen, finalPaths, input.Settings)
+		}
+
+	} else {
+		// Default: PROFILE (Per-Path Offset)
+		for _, path := range paths {
+			// Classify Open vs Closed
+			isClosed := path.IsClosed(0.1) // 0.1mm gap tolerance
+
+			var toolpaths []geom.Path
+
+			if isClosed {
+				// Offset Polygon (Profile Outside)
+				ps := clipper.OffsetPolygon(path, toolRadius)
+
+				// Ensure Clipper output is explicit closed
+				for _, p := range ps {
+					toolpaths = append(toolpaths, p.EnsureClosed(0.001))
+				}
+			} else {
+				// Open Path -> Trace
+				toolpaths = append(toolpaths, path)
+			}
+
+			// Generate Toolpath
+			generateToolpath(gen, plcGen, toolpaths, input.Settings)
+		}
+	}
+
+	gen.Footer()
+
+	plcOut := plcGen.String()
+	log.Printf("[V2] PLC Generation Complete. Length: %d chars", len(plcOut))
+
+	duration := time.Since(start)
+	resp := Response{
+		Status:    "ok",
+		GCode:     gen.String(),
+		PlcOutput: plcOut,
+		Stats:     fmt.Sprintf("Done in %v", duration),
+	}
+
+	json.NewEncoder(os.Stdout).Encode(resp)
+}
+
+func (prim Primitive) ToPath() geom.Path {
+	// Priority 1: Explicit Points (Spline/Polyline)
+	if len(prim.Points) > 0 {
+		return geom.Path(prim.Points)
+	}
+
+	// Priority 2: Analytic Types
+	switch prim.Type {
+	case "line":
+		return geom.Path{
+			{X: prim.X1, Y: prim.Y1},
+			{X: prim.X2, Y: prim.Y2},
+		}
+	case "arc":
+		return sampleArc(prim.Cx, prim.Cy, prim.Radius, prim.StartAngle, prim.Sweep, 100)
+	case "circle":
+		return sampleArc(prim.Cx, prim.Cy, prim.Radius, 0, 2*math.Pi, 100)
+	}
+
+	return nil
+}
+
+func sampleArc(cx, cy, r, startAngle, sweep float64, steps int) geom.Path {
+	path := make(geom.Path, 0, steps+1)
+
+	// Handle full circle case robustness
+	if math.Abs(sweep) >= 2*math.Pi {
+		sweep = 2 * math.Pi
+	}
+
+	for i := 0; i <= steps; i++ {
+		t := float64(i) / float64(steps)
+		angle := startAngle + t*sweep
+		path = append(path, geom.Point{
+			X: cx + r*math.Cos(angle),
+			Y: cy + r*math.Sin(angle),
+		})
+	}
+	return path
+}
+
+func generateToolpath(gen *gcode.Generator, plcGen *plc.Generator, paths []geom.Path, settings Settings) {
+	if len(paths) == 0 {
+		return
+	}
+
+	// Fit Arcs (Greedy JS Logic ported to Go)
+	tolerance := 0.01
+
+	for _, rawPath := range paths {
+		// Curve Fitting creates a mix of Lines and Arcs
+		fitSegments, isArcs := curve.FitSimpleArc(rawPath, tolerance)
+
+		// Z Moves
+		gen.RapidZ(settings.SafetyHeight)
+		plcGen.ZUp()
+
+		if len(fitSegments) == 0 {
+			continue
+		}
+
+		start := fitSegments[0][0] // First point of first segment
+		gen.RapidXY(start.X, start.Y)
+		plcGen.Jump(start.X, start.Y, 1000.0) // Rapid Speed
+
+		gen.FeedZ(settings.TargetZ, settings.FeedZ) // Plunge
+		plcGen.ZDown()
+
+		currentPos := start
+
+		for i, seg := range fitSegments {
+			end := seg[len(seg)-1] // Last point
+
+			if isArcs[i] {
+				// It's an Arc
+				center, _, err := curve.LeastSquaresCircle(seg)
+				if err != nil {
+					// Fallback if circle fit fails conceptually (should not happen if FitSimpleArc returned true)
+					gen.FeedXY(end.X, end.Y, settings.FeedXY)
+					plcGen.Line(end.X, end.Y, settings.FeedXY)
+					currentPos = end
+					continue
+				}
+
+				// Determine Direction (Cross Product)
+				cross := (end.X-seg[0].X)*(center.Y-seg[0].Y) - (end.Y-seg[0].Y)*(center.X-seg[0].X)
+				isCCW := cross > 0
+
+				gen.Arc(end, center, currentPos, !isCCW, settings.FeedXY)
+				// PLC: Arc(end, center, start, isCW, speed)
+				plcGen.Arc(end, center, currentPos, !isCCW, settings.FeedXY)
+
+			} else {
+				// It's a Line
+				gen.FeedXY(end.X, end.Y, settings.FeedXY)
+				plcGen.Line(end.X, end.Y, settings.FeedXY)
+			}
+			currentPos = end
+		}
+
+		gen.RapidZ(settings.SafetyHeight)
+		plcGen.ZUp()
+	}
+}
+
+func fatal(msg string) {
+	resp := Response{Status: "error", Error: msg}
+	json.NewEncoder(os.Stdout).Encode(resp)
+	os.Exit(1)
 }

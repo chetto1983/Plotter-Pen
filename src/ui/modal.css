@@ -1,0 +1,6 @@
+/* UI Modal Styles */
+.modal {
+    display: none;
+    background: white;
+    border: 1px solid #ccc;
+}

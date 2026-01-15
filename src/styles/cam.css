@@ -1,0 +1,188 @@
+/* ============================================
+   CAM UI STYLES (Panel, Tabs, Operations)
+   ============================================ */
+
+.cam-panel-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+.cam-panel-content-flex {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    gap: 8px;
+    overflow: hidden;
+}
+
+/* Operation Tree */
+.cad-cam-tree-container {
+    flex: 1;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    background: var(--bg-input);
+    border-radius: 6px;
+    min-height: 100px;
+}
+
+.cad-cam-ops-list {
+    padding: 0;
+    margin: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.cam-op-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    background: var(--bg-lighter);
+    border: 1px solid var(--border-light);
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.cam-op-item:hover {
+    border-color: var(--accent);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.cam-op-type-badge {
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 700;
+    color: white;
+    text-transform: uppercase;
+}
+
+.cam-op-type-badge.profile {
+    background: rgba(59, 130, 246, 0.8);
+}
+
+.cam-op-type-badge.pocket {
+    background: rgba(245, 158, 11, 0.8);
+}
+
+.cam-op-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--muted);
+    padding: 4px;
+    border-radius: 4px;
+}
+
+.cam-op-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--fg);
+}
+
+.cam-op-btn.delete:hover {
+    color: #ef4444;
+}
+
+/* Tabs (Compact) */
+.cad-tabs-small {
+    display: flex;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 3px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    margin-top: 8px;
+    margin-bottom: 5px;
+}
+
+.cad-tab-sm {
+    flex: 1;
+    padding: 6px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.cad-tab-sm:hover {
+    color: var(--fg);
+}
+
+.cad-tab-sm.active {
+    background: var(--bg-lighter);
+    color: var(--accent);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/* Sub-tabs & Preview */
+.cam-subtab-sm {
+    display: none;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.cam-subtab-sm.active {
+    display: flex;
+}
+
+.cad-cam-preview-container-sm {
+    flex: 1;
+    position: relative;
+    background: #050505;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    min-height: 200px;
+}
+
+.cad-cam-preview-container-sm canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* Wizard */
+.cad-cam-layout {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    gap: 10px;
+    padding: 10px;
+    overflow-y: auto;
+}
+
+.cad-cam-section {
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.cad-cam-section.flex-grow {
+    flex: 1;
+    flex-shrink: 1;
+    min-height: 150px;
+}
+
+.cad-cam-section-header {
+    font-weight: 600;
+    font-size: 0.9rem;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}

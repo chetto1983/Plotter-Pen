@@ -459,7 +459,11 @@ export class CanvasRenderer {
     if (centerX !== undefined && centerY !== undefined) {
       const scale = this.view.zoom / oldZoom;
       this.view.panX = centerX - (centerX - this.view.panX) * scale;
-      this.view.panY = centerY - (centerY - this.view.panY) * scale;
+
+      // Fix for Y-axis flip (PanY is measured from bottom)
+      const height = this.canvas.clientHeight;
+      const centerYFromBottom = height - centerY;
+      this.view.panY = centerYFromBottom - (centerYFromBottom - this.view.panY) * scale;
     }
   }
 

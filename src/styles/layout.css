@@ -1,0 +1,175 @@
+/* ============================================
+   LAYOUT STYLES (Header, Grid, Panels)
+   ============================================ */
+
+/* Main App Container */
+.cad-app {
+    display: grid;
+    grid-template-rows: auto auto 1fr auto auto;
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+}
+
+/* Header */
+.cad-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    background: var(--bg-darker);
+    border-bottom: 1px solid var(--border);
+    z-index: 100;
+    position: relative;
+}
+
+.cad-header-left,
+.cad-header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.cad-brand {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.cad-brand-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--fg);
+}
+
+.cad-brand-version {
+    font-size: 11px;
+    color: var(--muted);
+    background: var(--border);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+/* Nav Link */
+.cad-nav-link {
+    padding: 8px 14px;
+    border-radius: 6px;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+    transition: all 0.2s ease;
+}
+
+.cad-nav-link:hover,
+.cad-nav-link.active {
+    color: var(--fg);
+    background: var(--accent-dim);
+}
+
+/* Main Content Grid */
+.cad-main {
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr) clamp(280px, 30vw, 400px);
+    gap: 0;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* Panels */
+.cad-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+    background: var(--bg-lighter);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+}
+
+.cad-panel-right {
+    border-right: none;
+    border-left: 1px solid var(--border);
+}
+
+.cad-panel-section {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+}
+
+.cad-panel-section.cad-panel-fill {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.cad-panel-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--bg-darker);
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--fg);
+}
+
+.cad-panel-actions {
+    display: flex;
+    gap: 4px;
+    margin-left: auto;
+}
+
+.cad-panel-content {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.cad-panel-section.cad-panel-fill .cad-panel-content {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* Helper for hiding panels */
+#camPanel {
+    display: none;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 1200px) {
+    .cad-main {
+        grid-template-columns: 220px 1fr 260px;
+    }
+}
+
+@media (max-width: 1000px) {
+    .cad-main {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 1fr auto;
+    }
+
+    .cad-panel-left {
+        flex-direction: row;
+        gap: 8px;
+        padding: 8px;
+        border: none;
+        border-bottom: 1px solid var(--border);
+        overflow-x: auto;
+    }
+
+    .cad-panel-right {
+        flex-direction: column;
+        gap: 8px;
+        padding: 8px;
+        border: none;
+        border-top: 1px solid var(--border);
+        max-height: 40vh;
+    }
+}

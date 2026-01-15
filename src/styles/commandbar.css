@@ -1,0 +1,107 @@
+/* ============================================
+   COMMAND BAR (Industrial CAD Style)
+   ============================================ */
+
+.cad-command-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 16px;
+    background: var(--bg-darker);
+    border-top: 1px solid var(--border);
+}
+
+.cad-command-prompt {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    max-width: 500px;
+    padding: 0 12px;
+    background: rgba(11, 14, 22, 0.9);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+
+.cad-prompt-symbol {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+.cad-command-input {
+    flex: 1;
+    padding: 8px 0;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--fg);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 13px;
+}
+
+.cad-command-input::placeholder {
+    color: var(--muted);
+}
+
+.cad-command-hint {
+    font-size: 12px;
+    color: var(--muted);
+}
+
+/* Command Autocomplete Dropdown */
+.cad-command-autocomplete {
+    position: fixed;
+    bottom: 70px;
+    left: 16px;
+    right: 16px;
+    max-width: 500px;
+    max-height: 350px;
+    overflow-y: auto;
+    background: var(--bg-darker);
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.5);
+    display: none;
+    z-index: 9999;
+}
+
+.cad-command-autocomplete.active {
+    display: block;
+}
+
+.cad-autocomplete-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    cursor: pointer;
+    transition: background 0.1s ease;
+    border-bottom: 1px solid var(--border);
+}
+
+.cad-autocomplete-item:last-child {
+    border-bottom: none;
+}
+
+.cad-autocomplete-item:hover,
+.cad-autocomplete-item.selected {
+    background: var(--accent-dim);
+}
+
+.cad-autocomplete-item.selected {
+    border-left: 2px solid var(--accent);
+}
+
+.cad-autocomplete-command {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--fg);
+}
+
+.cad-autocomplete-desc {
+    font-size: 11px;
+    color: var(--muted);
+}

@@ -2,7 +2,7 @@
  * Debug script to test spline evaluation and rendering
  */
 
-import bSpline from './src/geometry/b-spline.js';
+import bSpline from '../src/geometry/b-spline.js';
 import { DxfParser } from 'dxf-parser';
 import fs from 'fs';
 

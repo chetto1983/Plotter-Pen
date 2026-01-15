@@ -1,0 +1,84 @@
+/* ============================================
+   BASE STYLES (Variables, Reset, Typography)
+   ============================================ */
+
+:root {
+    --bg: #0f1115;
+    --bg-darker: #0b0d12;
+    --bg-lighter: #151823;
+    --fg: #e8eaf0;
+    /* Main Text */
+    --fg-dim: #cbd5e1;
+    /* Dimmed Text */
+    --muted: #a9b0c0;
+    --accent: #52a8ff;
+    --accent-hover: #6ab8ff;
+    --accent-dim: rgba(82, 168, 255, 0.15);
+    --border: #1c2130;
+    --border-light: #27324a;
+    --success: #4CAF50;
+    --warning: #FF9800;
+    --error: #F44336;
+    --card: #151823;
+
+    /* Additional vars found in usage */
+    --bg-input: rgba(11, 14, 22, 0.9);
+    --bg-hover: rgba(255, 255, 255, 0.05);
+    --bg-panel: var(--bg-lighter);
+    --bg-canvas: #0b0e16;
+    --text-primary: var(--fg);
+    --text-muted: var(--muted);
+    --primary-color: var(--accent);
+    --border-color: var(--border);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html {
+    height: 100%;
+}
+
+body {
+    margin: 0;
+    font-family: ui-sans-serif, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* ============================================
+   GLOBAL SCROLLBAR STYLING
+   ============================================ */
+@supports (scrollbar-width: thin) {
+    * {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(82, 168, 255, 0.4) rgba(15, 20, 30, 0.5);
+    }
+}
+
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(15, 20, 30, 0.5);
+    border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, rgba(82, 168, 255, 0.5), rgba(54, 122, 255, 0.4));
+    border-radius: 5px;
+    border: 2px solid rgba(15, 20, 30, 0.5);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, rgba(82, 168, 255, 0.7), rgba(54, 122, 255, 0.6));
+}
+
+::-webkit-scrollbar-corner {
+    background: rgba(15, 20, 30, 0.5);
+}

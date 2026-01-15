@@ -546,9 +546,24 @@ class CADApplication {
   // Direct object rendering is now used
 }
 
+import { App } from './ui/App.js';
+import { PLCConfigManager } from './app/PLCConfigManager.js';
+
 // Initialize application when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
+  // 1. Mount Refactored UI
+  const root = document.getElementById('app');
+  if (root) {
+    new App(root);
+  } else {
+    console.error('Root element #app not found!');
+  }
+
+  // 2. Initialize Logic
   window.cadApp = new CADApplication();
+
+  // 3. Initialize Standalone Managers
+  new PLCConfigManager();
 });
 
 export { CADApplication };

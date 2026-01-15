@@ -78,10 +78,15 @@ body {
    CAD APP LAYOUT
    ============================================ */
 
-body.cad-app {
+/* Main App Container */
+.cad-app {
   display: grid;
   grid-template-rows: auto auto 1fr auto auto;
   height: 100vh;
+  width: 100vw;
+  /* Ensure full width */
+  overflow: hidden;
+  /* Prevent body scroll */
 }
 
 /* Header */
@@ -1892,8 +1897,8 @@ label.cad-tool-btn {
     grid-template-rows: auto 1fr auto;
   }
 
-  .cad-panel-left,
-  .cad-panel-right {
+  /* Left Panel: Horizontal Scroll Strip */
+  .cad-panel-left {
     flex-direction: row;
     gap: 8px;
     padding: 8px;
@@ -1903,13 +1908,38 @@ label.cad-tool-btn {
     overflow-y: hidden;
   }
 
-  .cad-panel-section {
+  .cad-panel-left .cad-panel-section {
     min-width: 200px;
     flex-shrink: 0;
   }
 
+  /* Right Panel: Bottom Sheet style (Vertical) */
+  .cad-panel-right {
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px;
+    border: none;
+    border-top: 1px solid var(--border);
+    overflow-y: auto;
+    max-height: 40vh;
+    /* Limit height to 40% of screen */
+    min-height: 200px;
+  }
+
+  .cad-panel-right .cad-panel-section {
+    width: 100%;
+    /* Full width */
+    min-height: 0;
+    flex: 1;
+    /* Expand to fill available height */
+  }
+
+  /* Ensure fill panels work in mobile */
   .cad-panel-section.cad-panel-fill {
-    flex: none;
+    flex: 1;
+    min-height: 250px;
+    display: flex;
+    flex-direction: column;
   }
 }
 
@@ -3763,6 +3793,25 @@ body.config-shell .config-status.error {
   position: relative;
   background-color: #1e1e1e;
   /* Dark for preview */
+  min-height: 200px;
+  /* Ensure visibility */
+}
+
+.cad-cam-preview-container-sm canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.cad-gcode-editor-sm {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  font-family: monospace;
+  font-size: 12px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  padding: 8px;
 }
 
 
@@ -4049,4 +4098,20 @@ body.config-shell .config-status.error {
 
 .gcode-arc .cmd {
   color: #6ee7b7;
+}
+
+/* ============================================
+   REFACTOR: Canvas Container
+   ============================================ */
+.cad-canvas-container {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-darker);
+}
+
+.cad-canvas-container canvas {
+  display: block;
+  outline: none;
 }
