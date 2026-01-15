@@ -315,7 +315,7 @@
         <!-- Selection Group -->
         <div class="cad-toolbar-group">
           <div class="cad-toolbar-buttons">
-            <button type="button" class="cad-tool-btn" id="btnCamSelectAll" title="Seleziona Tutto (Ctrl+A)">
+            <button type="button" class="cad-tool-btn" id="btnCamSelectAll" data-tool="select" title="Seleziona (S)">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="3" y="3" width="18" height="18" rx="2" />
                 <path d="M9 12l2 2 4-4" />
@@ -660,70 +660,32 @@
       </div>
 
       <!-- CAM OUTPUT PANEL -->
-      <div class="cad-panel-section cad-panel-fill" id="camPanel">
+      <div class="cad-panel-section cad-panel-fill cam-panel-container" id="camPanel">
         <div class="cad-panel-header">
-          <!-- Main Header -->
-          <div class="cad-flex-align">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path
-                d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3-3a1 1 0 0 0-1.4-1.4l-2.3 2.3-1-1a1 1 0 0 0-1.3 0.1z" />
-              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-            </svg>
-            <span class="cad-header-label">CAM & G-Code</span>
+          <span class="cad-header-label">CAM Output</span>
+        </div>
+        <div class="cad-panel-content cam-panel-content-flex">
+          <!-- Content injected by CAMManager -->
+
+          <!-- PREVIEW TABS (Moved inside to be hidden together) -->
+          <div class="cad-tabs-small cam-tabs-bottom">
+            <button class="cad-tab-sm active" data-subtab="preview">3D Preview</button>
+            <button class="cad-tab-sm" data-subtab="code">G-Code</button>
+          </div>
+
+          <div id="cam-subtab-preview" class="cam-subtab-sm active">
+            <div class="cad-cam-preview-container-sm">
+              <canvas id="camPreviewCanvas"></canvas>
+            </div>
+          </div>
+          <div id="cam-subtab-code" class="cam-subtab-sm" hidden>
+            <div id="gcodeContainer" class="cad-gcode-editor-sm cad-gcode-fancy-container"></div>
           </div>
         </div>
+      </div>
+      </div>
 
-        <!-- CAM Sub-Tabs -->
-        <div class="cad-tabs">
-          <button class="cad-tab-btn active" data-subtab="ops">Operazioni</button>
-          <button class="cad-tab-btn" data-subtab="preview">Anteprima</button>
-          <button class="cad-tab-btn" data-subtab="code">G-Code</button>
-        </div>
-
-        <div class="cad-cam-content">
-
-          <!-- SUBTAB: OPERATIONS -->
-          <div id="cam-subtab-ops" class="cam-subtab active">
-            <div class="cad-cam-operations">
-              <h4 class="cad-cam-ops-header">Lista Operazioni</h4>
-              <ul id="camOperationsList" class="cad-cam-ops-list">
-                <li class="cad-cam-ops-empty">Nessuna operazione</li>
-              </ul>
-              <div class="cad-actions-row">
-                <!-- Buttons are in ribbon, but maybe add quick actions here? -->
-              </div>
-            </div>
-            <!-- Stats could go here -->
-          </div>
-
-          <!-- SUBTAB: PREVIEW -->
-          <div id="cam-subtab-preview" class="cam-subtab">
-            <div class="cad-cam-preview-container">
-              <canvas id="camPreviewCanvas" class="cad-cam-preview-canvas"></canvas>
-              <div class="cad-cam-preview-label">SIMULATION VIEW</div>
-            </div>
-          </div>
-
-          <!-- SUBTAB: G-CODE -->
-          <div id="cam-subtab-code" class="cam-subtab no-pad" hidden>
-            <div class="cad-gcode-toolbar">
-              <div class="cad-gcode-actions">
-                <button type="button" class="cad-gcode-btn" id="btnGCodeEdit">Modifica</button>
-                <button type="button" class="cad-gcode-btn" id="btnGCodeApply" disabled>Applica</button>
-                <button type="button" class="cad-gcode-btn" id="btnGCodeRevert" disabled>Ripristina</button>
-              </div>
-              <span class="cad-gcode-status" id="gcodeStatus">G-Code: nessun file</span>
-            </div>
-            <div class="cad-gcode-editor-wrap" id="gcodeEditorWrap" hidden>
-              <textarea id="gcodeEditor" class="cad-gcode-editor" spellcheck="false"
-                placeholder="G-Code non ancora generato"></textarea>
-            </div>
-            <div class="cad-output-grid cad-box-flat" id="gcodeOutputList">
-              <div class="cad-output-empty">G-Code non ancora generato</div>
-            </div>
-          </div>
-
-        </div>
+      </div>
       </div>
 
       <div class="cad-panel-section">
@@ -857,15 +819,15 @@
       });
     });
 
-    // CAM Sub-Tabs
-    document.querySelectorAll('.cad-tabs .cad-tab-btn[data-subtab]').forEach(btn => {
+    // CAM Bottom Tabs (Wizard)
+    document.querySelectorAll('.cad-tabs-small .cad-tab-sm[data-subtab]').forEach(btn => {
       btn.addEventListener('click', () => {
         // Remove active from sibling buttons
-        btn.parentElement.querySelectorAll('.cad-tab-btn').forEach(b => b.classList.remove('active'));
+        btn.parentElement.querySelectorAll('.cad-tab-sm').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
 
-        // Hide all subtabs
-        document.querySelectorAll('.cam-subtab').forEach(p => {
+        // Hide all small subtabs
+        document.querySelectorAll('.cam-subtab-sm').forEach(p => {
           p.style.display = 'none';
           p.classList.remove('active');
         });
@@ -880,11 +842,14 @@
           if (btn.dataset.subtab === 'preview') {
             const canvas = document.getElementById('camPreviewCanvas');
             if (canvas) {
-              // Force slight resize or verify size to handle flex layout changes
-              const rect = canvas.parentElement.getBoundingClientRect();
+              const container = canvas.parentElement;
+              const rect = container.getBoundingClientRect();
               if (rect.width > 0 && rect.height > 0) {
+                // Set size matching container
                 canvas.width = rect.width * window.devicePixelRatio;
                 canvas.height = rect.height * window.devicePixelRatio;
+                canvas.style.width = rect.width + 'px';
+                canvas.style.height = rect.height + 'px';
               }
             }
           }
@@ -927,6 +892,19 @@
             </div>
           </div>
 
+          <!-- New Options: StepOver & StepDown -->
+          <div class="cad-modal-cols-2">
+            <div class="cad-input-row cad-col-full">
+              <label for="camStepOver">Step Over (%)</label>
+              <input type="number" id="camStepOver" name="camStepOver" min="1" max="100" step="1" value="40"
+                class="cad-modal-input" />
+            </div>
+            <div class="cad-input-row cad-col-full">
+              <label for="camStepDown">Step Down (mm)</label>
+              <input type="number" id="camStepDown" name="camStepDown" step="0.1" value="1.0" class="cad-modal-input" />
+            </div>
+          </div>
+
           <div class="cad-modal-cols-2">
             <div class="cad-input-row cad-col-full">
               <label for="camProfileSide">Lato profilo</label>
@@ -942,17 +920,103 @@
                 class="cad-modal-input" title="Tolleranza unione segmenti" />
             </div>
           </div>
+          <div class="cad-modal-cols-2">
+            <div class="cad-input-row cad-col-full cam-tool-row">
+              <div class="cam-tool-input-wrapper">
+                <label for="camToolDiameter">Diametro Utensile (mm)</label>
+                <input type="number" id="camToolDiameter" name="camToolDiameter" min="0.1" max="50" step="0.1"
+                  class="cad-modal-input" value="3.0" />
+              </div>
+              <button type="button" class="cad-btn-outline btn-manage-tools" id="btnManageTools"
+                title="Gestisci Libreria Utensili">
+                <span class="icon">&#9881;</span>
+              </button>
+            </div>
+          </div>
 
           <div class="cad-modal-actions-right">
             <button type="button" class="cad-primary-btn cad-btn-outline" id="btnCamSettingsCancel">
               Annulla
             </button>
-            <button type="submit" class="cad-primary-btn" id="btnCamSettingsApply">
+            <button type="button" class="cad-primary-btn" id="btnCamSettingsApply">
               Applica
             </button>
           </div>
         </form>
       </div>
+    </div>
+  </div>
+
+  <!-- Tool Library Modal -->
+  <div class="cad-modal-overlay" id="toolLibraryModal">
+    <div class="cad-modal">
+
+      <!-- Header -->
+      <div class="tool-lib-header">
+        <div class="tool-lib-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path
+              d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z">
+            </path>
+          </svg>
+          Libreria Utensili
+        </div>
+        <button type="button" class="tool-lib-close" id="btnCloseToolLibrary">&times;</button>
+      </div>
+
+      <!-- Body -->
+      <div class="tool-lib-body">
+
+        <!-- Left Sidebar: Tool List -->
+        <div class="tool-lib-sidebar">
+          <div class="tool-lib-list" id="toolListContainer">
+            <!-- Items injected by JS -->
+            <div class="tool-lib-empty">Caricamento...</div>
+          </div>
+        </div>
+
+        <!-- Main Content: Form -->
+        <div class="tool-lib-main">
+
+          <div>
+            <div class="tool-lib-section-title">Dettagli Utensile</div>
+            <div class="tool-form-grid">
+
+              <div class="tool-input-group full-width">
+                <label for="toolName">Nome Utensile</label>
+                <input type="text" id="toolName" class="tool-input" placeholder="Es. 0.5mm Endmill">
+              </div>
+
+              <div class="tool-input-group">
+                <label for="toolType">Tipo</label>
+                <select id="toolType" class="tool-input tool-select">
+                  <option value="endmill">Fresa Piana (Endmill)</option>
+                  <option value="ballnose">Fresa Sferica (Ballnose)</option>
+                  <option value="vbit">Bulino (V-Bit)</option>
+                </select>
+              </div>
+
+              <div class="tool-input-group">
+                <label for="toolDiameter">Diametro (mm)</label>
+                <input type="number" id="toolDiameter" class="tool-input" step="0.1" value="3.0">
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="tool-actions">
+            <button type="button" class="btn-tool-delete" id="btnDeleteTool" disabled>Elimina</button>
+            <button type="button" class="btn-tool-save" id="btnSaveTool">Salva Modifiche</button>
+          </div>
+
+          <button type="button" class="btn-tool-use" id="btnSelectToolFromLib">
+            Usa Utensile Selezionato
+          </button>
+
+        </div>
+      </div>
+
     </div>
   </div>
   <!-- PLC Config Modal -->

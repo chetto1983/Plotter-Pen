@@ -10,20 +10,20 @@ import (
 
 // Input structures
 type Primitive struct {
-	Type       string  `json:"type"`
-	X1         float64 `json:"x1,omitempty"`
-	Y1         float64 `json:"y1,omitempty"`
-	X2         float64 `json:"x2,omitempty"`
-	Y2         float64 `json:"y2,omitempty"`
-	Cx         float64 `json:"cx,omitempty"`
-	Cy         float64 `json:"cy,omitempty"`
-	Radius     float64 `json:"radius,omitempty"`
-	StartAngle float64 `json:"startAngle,omitempty"`
-	Sweep      float64 `json:"sweep,omitempty"`
-	X          float64 `json:"x,omitempty"`
-	Y          float64 `json:"y,omitempty"`
-	Width      float64 `json:"width,omitempty"`
-	Height     float64 `json:"height,omitempty"`
+	Type          string    `json:"type"`
+	X1            float64   `json:"x1,omitempty"`
+	Y1            float64   `json:"y1,omitempty"`
+	X2            float64   `json:"x2,omitempty"`
+	Y2            float64   `json:"y2,omitempty"`
+	Cx            float64   `json:"cx,omitempty"`
+	Cy            float64   `json:"cy,omitempty"`
+	Radius        float64   `json:"radius,omitempty"`
+	StartAngle    float64   `json:"startAngle,omitempty"`
+	Sweep         float64   `json:"sweep,omitempty"`
+	X             float64   `json:"x,omitempty"`
+	Y             float64   `json:"y,omitempty"`
+	Width         float64   `json:"width,omitempty"`
+	Height        float64   `json:"height,omitempty"`
 	Points        []Point   `json:"points,omitempty"`
 	Center        *Point    `json:"center,omitempty"`
 	ControlPoints []Point   `json:"controlPoints,omitempty"`
@@ -93,6 +93,7 @@ func main() {
 
 	// Apply default settings
 	settings := applyDefaults(input.Settings)
+	log("Effective Tolerance [CLAMPED]: %.4f", settings.Tolerance)
 
 	// Build paths from primitives
 	log("Building paths...")
@@ -174,8 +175,9 @@ func applyDefaults(s Settings) Settings {
 	if s.SafetyHeight == 0 {
 		s.SafetyHeight = 5.0
 	}
-	if s.Tolerance == 0 {
-		s.Tolerance = 0.5
+	// Even 0.05 is too loose for some geometries, causing straight lines to become arcs.
+	if s.Tolerance == 0 || s.Tolerance > 0.01 {
+		s.Tolerance = 0.01
 	}
 	return s
 }

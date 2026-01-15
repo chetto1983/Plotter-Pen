@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"math"
 	"strings"
 )
@@ -98,12 +99,37 @@ func writeProfileOp(gen *GCodeGenerator, loop Loop, toolRadius float64, side str
 
 	offsetPaths := OffsetPolygon(loop.Points, offsetDelta)
 	if len(offsetPaths) == 0 {
-		offsetPaths = [][]Point{loop.Points}
+		return
 	}
 
-	for _, path := range offsetPaths {
-		writeClosedPath(gen, path, settings, false)
+	for _, p := range offsetPaths {
+		// Densify path to prevent false circular fits on long straight segments
+		// p = DensifyPath(p, 5.0) // Not needed for G1 mode
+		writeClosedPath(gen, p, settings, true) // ENABLE ARC FIT
 	}
+}
+
+func getBounds(pts []Point) string {
+	if len(pts) == 0 {
+		return "empty"
+	}
+	minx, miny := pts[0].X, pts[0].Y
+	maxx, maxy := minx, miny
+	for _, p := range pts {
+		if p.X < minx {
+			minx = p.X
+		}
+		if p.Y < miny {
+			miny = p.Y
+		}
+		if p.X > maxx {
+			maxx = p.X
+		}
+		if p.Y > maxy {
+			maxy = p.Y
+		}
+	}
+	return fmt.Sprintf("[%.2f,%.2f] -> [%.2f,%.2f]", minx, miny, maxx, maxy)
 }
 
 // writeCircleArc writes circle profile using G2/G3 arcs
@@ -140,7 +166,7 @@ func writeClosedPath(gen *GCodeGenerator, path []Point, settings Settings, allow
 
 	var segments []FitSegment
 	if allowArcFit {
-		segments = FitArcsAndLines(points, FitOptions{Tolerance: 0.5, AllowFullCircle: false})
+		segments = FitArcsAndLines(points, FitOptions{Tolerance: settings.Tolerance, AllowFullCircle: false})
 	}
 	if len(segments) == 0 {
 		currentZ := settings.StartZ
@@ -191,7 +217,7 @@ func writeOpenPath(gen *GCodeGenerator, path []Point, settings Settings) {
 		return
 	}
 
-	segments := FitArcsAndLines(points, FitOptions{Tolerance: 0.5, AllowFullCircle: false})
+	segments := FitArcsAndLines(points, FitOptions{Tolerance: settings.Tolerance, AllowFullCircle: false})
 	if len(segments) == 0 {
 		currentZ := settings.StartZ
 		for currentZ > settings.TargetZ {

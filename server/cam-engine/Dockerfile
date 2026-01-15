@@ -1,6 +1,6 @@
 # Multi-stage build for Go CAM Engine
 # Stage 1: Build the binary
-FROM golang:1.21-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 WORKDIR /build
 

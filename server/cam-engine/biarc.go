@@ -1,15 +1,18 @@
 package main
 
-import "math"
+import (
+	"fmt"
+	"math"
+)
 
 const (
-	fitPointEpsilon     = 1e-6
-	defaultFitTolerance = 1.0
-	defaultMinRadius    = 0.5
-	defaultMaxRadius    = 50000
-	defaultMaxArcPoints = 80
-	defaultMaxLinePoints = 50
-	defaultMinArcPoints = 6
+	fitPointEpsilon      = 1e-6
+	defaultFitTolerance  = 0.5
+	defaultMinRadius     = 0.05
+	defaultMaxRadius     = 1000.0 // 1m max radius, otherwise it's a line
+	defaultMaxArcPoints  = 100
+	defaultMaxLinePoints = 100
+	defaultMinArcPoints  = 4
 )
 
 const (
@@ -18,11 +21,11 @@ const (
 )
 
 type FitOptions struct {
-	Tolerance     float64
-	MinRadius     float64
-	MaxRadius     float64
-	MaxArcPoints  int
-	MaxLinePoints int
+	Tolerance       float64
+	MinRadius       float64
+	MaxRadius       float64
+	MaxArcPoints    int
+	MaxLinePoints   int
 	AllowFullCircle bool
 }
 
@@ -36,6 +39,11 @@ type FitSegment struct {
 }
 
 type circleFit struct {
+	center Point
+	radius float64
+}
+
+type Circle struct {
 	center Point
 	radius float64
 }
@@ -103,98 +111,217 @@ func FitArcsAndLines(points []Point, options FitOptions) []FitSegment {
 	}
 
 	opts := options.withDefaults()
+
+	// 1. Try Full Circle (for Clocks)
 	if opts.AllowFullCircle {
 		if circleSeg := tryFullCircle(points, opts); circleSeg != nil {
 			return []FitSegment{*circleSeg}
 		}
 	}
-	result := make([]FitSegment, 0, len(points))
 
-	for i := 0; i < len(points)-1; {
-		bestArcEnd := -1
-		var bestCircle circleFit
+	var segments []FitSegment
+	startIdx := 0
 
-		if i+defaultMinArcPoints-1 < len(points) {
-			maxJ := i + opts.MaxArcPoints
-			if maxJ > len(points)-1 {
-				maxJ = len(points) - 1
-			}
+	// 2. Greedy Linear Scan
+	for startIdx < len(points)-1 {
+		// We want to find the longest segment starting at startIdx
+		// that fits either a Line or an Arc within Tolerance.
 
-			for j := i + defaultMinArcPoints - 1; j <= maxJ; j++ {
-				if !opts.AllowFullCircle && pointsNearlyEqual(points[i], points[j], fitPointEpsilon) {
-					continue
-				}
-				mid := (i + j) / 2
-				circle, ok := circleFrom3Points(points[i], points[mid], points[j])
-				if !ok || circle.radius < opts.MinRadius || circle.radius > opts.MaxRadius {
-					continue
-				}
-
-				fits := true
-				for k := i; k <= j; k++ {
-					dist := distance(points[k], circle.center)
-					if math.Abs(dist-circle.radius) > opts.Tolerance {
-						fits = false
-						break
-					}
-				}
-
-				if fits {
-					bestArcEnd = j
-					bestCircle = circle
-				}
-			}
-		}
-
-		if bestArcEnd > i+1 {
-			midIndex := (i + bestArcEnd) / 2
-			clockwise, ok := arcClockwise(points[i], points[midIndex], bestCircle.center)
-			if ok {
-				result = append(result, FitSegment{
-					Kind:      fitSegmentArc,
-					Start:     points[i],
-					End:       points[bestArcEnd],
-					Center:    bestCircle.center,
-					Radius:    bestCircle.radius,
-					Clockwise: clockwise,
-				})
-				i = bestArcEnd
-				continue
-			}
-		}
-
-		lineEnd := i + 1
-		maxJ := i + opts.MaxLinePoints
-		if maxJ > len(points)-1 {
-			maxJ = len(points) - 1
-		}
-		for j := i + 2; j <= maxJ; j++ {
-			fits := true
-			start := points[i]
-			end := points[j]
-			for k := i + 1; k < j; k++ {
-				if pointToSegmentDistance(points[k], start, end) > opts.Tolerance {
-					fits = false
-					break
-				}
-			}
-			if fits {
-				lineEnd = j
+		// A. Try Line
+		maxLineIdx := startIdx + 1
+		for j := startIdx + 2; j < len(points); j++ {
+			// Optimization: Check collinearity
+			if isLine(points[startIdx:j+1], opts.Tolerance) {
+				maxLineIdx = j
 			} else {
 				break
 			}
 		}
 
-		result = append(result, FitSegment{
-			Kind:  fitSegmentLine,
-			Start: points[i],
-			End:   points[lineEnd],
-		})
-		i = lineEnd
+		// B. Try Arc
+		maxArcIdx := startIdx + 1
+		var bestCircle *Circle
+
+		// Look ahead constraint
+		maxLookahead := startIdx + 200 // Don't scan forever
+		if maxLookahead > len(points) {
+			maxLookahead = len(points)
+		}
+
+		for j := startIdx + 2; j < maxLookahead; j++ {
+			// detailed check
+			segment := points[startIdx : j+1]
+
+			// Fit 3 points: Start, Mid, End
+			midIdx := (startIdx + j) / 2
+
+			// Rejection 0: Points too close
+			if distance(points[startIdx], points[midIdx]) < 0.1 || distance(points[midIdx], points[j]) < 0.1 {
+				continue // Skip this lookahead
+			}
+
+			circle, err := fitCircle3Points(points[startIdx], points[midIdx], points[j])
+
+			if err == nil {
+				// 1. Radius check
+				if circle.radius >= opts.MinRadius && circle.radius <= opts.MaxRadius {
+					// 2. Tolerance check (all points)
+					valid := true
+					for _, p := range segment {
+						d := math.Abs(distance(p, circle.center) - circle.radius)
+						if d > opts.Tolerance {
+							valid = false
+							break
+						}
+					}
+
+					// 3. Accumulated Sweep check (Prevent loop-the-loop on open paths)
+					if valid && !opts.AllowFullCircle {
+						totalSweep := getAccumulatedSweep(segment, circle.center)
+						// allow up to ~230 degrees (4.0 rad) for caps/hairpins, but reject full loops (2PI)
+						if totalSweep > 4.0 {
+							valid = false
+						}
+					}
+
+					if valid {
+						maxArcIdx = j
+						bestCircle = &circle
+					} else {
+						// Once it fails, it usually doesn't get better for this arc
+						break
+					}
+				} else {
+					break // Invalid radius
+				}
+			} else {
+				break // Collinear points (Line wins)
+			}
+		}
+
+		// Compare winners
+		// Prefer Arc only if it is significantly longer or valid
+		// Actually, prefer Line if lengths are equal for stability.
+
+		if maxArcIdx > maxLineIdx && bestCircle != nil {
+			// Arc Wins
+			sPt := points[startIdx]
+			ePt := points[maxArcIdx]
+
+			// Determine direction
+			clockwise := crossProduct(sPt, ePt, bestCircle.center) < 0
+			// Sanity check
+			if isClockwise(sPt, points[(startIdx+maxArcIdx)/2], ePt) != clockwise {
+				clockwise = !clockwise
+			}
+
+			segments = append(segments, FitSegment{
+				Kind:      fitSegmentArc,
+				Start:     sPt,
+				End:       ePt,
+				Center:    bestCircle.center,
+				Radius:    bestCircle.radius,
+				Clockwise: clockwise,
+			})
+			startIdx = maxArcIdx
+		} else {
+			// Line Wins
+			segments = append(segments, FitSegment{
+				Kind:  fitSegmentLine,
+				Start: points[startIdx],
+				End:   points[maxLineIdx],
+			})
+			startIdx = maxLineIdx
+		}
 	}
 
-	return result
+	return segments
 }
+
+// Helpers for Greedy Fitter
+
+func isLine(points []Point, tolerance float64) bool {
+	if len(points) < 3 {
+		return true
+	}
+	p1 := points[0]
+	p2 := points[len(points)-1]
+
+	// A = y1-y2, B = x2-x1, C = -Ax1 - By1
+	A := p1.Y - p2.Y
+	B := p2.X - p1.X
+	C := -A*p1.X - B*p1.Y
+	norm := math.Hypot(A, B)
+
+	if norm < 1e-9 {
+		// p1 == p2
+		for _, p := range points {
+			if distance(p, p1) > tolerance {
+				return false
+			}
+		}
+		return true
+	}
+
+	for _, p := range points {
+		d := math.Abs(A*p.X+B*p.Y+C) / norm
+		if d > tolerance {
+			return false
+		}
+	}
+	return true
+}
+
+func fitCircle3Points(p1, p2, p3 Point) (Circle, error) {
+	x1, y1 := p1.X, p1.Y
+	x2, y2 := p2.X, p2.Y
+	x3, y3 := p3.X, p3.Y
+
+	D := 2 * (x1*(y2-y3) + x2*(y3-y1) + x3*(y1-y2))
+	if math.Abs(D) < 1e-7 {
+		return Circle{}, fmt.Errorf("collinear")
+	}
+
+	Ux := ((x1*x1+y1*y1)*(y2-y3) + (x2*x2+y2*y2)*(y3-y1) + (x3*x3+y3*y3)*(y1-y2)) / D
+	Uy := ((x1*x1+y1*y1)*(x3-x2) + (x2*x2+y2*y2)*(x1-x3) + (x3*x3+y3*y3)*(x2-x1)) / D
+
+	c := Point{Ux, Uy}
+	r := distance(c, p1)
+	return Circle{center: c, radius: r}, nil
+}
+
+func isClockwise(p1, p2, p3 Point) bool {
+	return (p2.X-p1.X)*(p3.Y-p1.Y)-(p2.Y-p1.Y)*(p3.X-p1.X) < 0
+}
+
+func crossProduct(a, b, c Point) float64 {
+	return (b.X-a.X)*(c.Y-a.Y) - (b.Y-a.Y)*(c.X-a.X)
+}
+
+func getAccumulatedSweep(points []Point, center Point) float64 {
+	if len(points) < 2 {
+		return 0
+	}
+	totalSweep := 0.0
+	prevAngle := math.Atan2(points[0].Y-center.Y, points[0].X-center.X)
+
+	for i := 1; i < len(points); i++ {
+		currAngle := math.Atan2(points[i].Y-center.Y, points[i].X-center.X)
+		diff := currAngle - prevAngle
+		// Normalize to [-PI, PI]
+		for diff <= -math.Pi {
+			diff += 2 * math.Pi
+		}
+		for diff > math.Pi {
+			diff -= 2 * math.Pi
+		}
+		totalSweep += math.Abs(diff)
+		prevAngle = currAngle
+	}
+	return totalSweep
+}
+
+// End of Greedy Fitter
 
 func tryFullCircle(points []Point, opts FitOptions) *FitSegment {
 	if len(points) < 3 {
@@ -266,13 +393,20 @@ func emitSegments(gen *GCodeGenerator, segments []FitSegment, feed float64) {
 
 		switch seg.Kind {
 		case fitSegmentArc:
-			i := seg.Center.X - seg.Start.X
-			j := seg.Center.Y - seg.Start.Y
-			f := feed
-			if seg.Clockwise {
-				gen.G2(seg.End.X, seg.End.Y, nil, &i, &j, &f)
+			// Safety: If arc is tiny (start ~= end), output as Line to prevent
+			// G-code rounding errors making it look like a Full Circle (Start==End).
+			dist := math.Hypot(seg.End.X-seg.Start.X, seg.End.Y-seg.Start.Y)
+			if dist < 0.01 {
+				gen.LinearXY(seg.End.X, seg.End.Y, feed)
 			} else {
-				gen.G3(seg.End.X, seg.End.Y, nil, &i, &j, &f)
+				i := seg.Center.X - seg.Start.X
+				j := seg.Center.Y - seg.Start.Y
+				f := feed
+				if seg.Clockwise {
+					gen.G2(seg.End.X, seg.End.Y, nil, &i, &j, &f)
+				} else {
+					gen.G3(seg.End.X, seg.End.Y, nil, &i, &j, &f)
+				}
 			}
 		default:
 			gen.LinearXY(seg.End.X, seg.End.Y, feed)

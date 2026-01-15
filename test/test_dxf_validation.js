@@ -2,8 +2,7 @@
 import fs from 'fs';
 import DxfParser from 'dxf-parser';
 import { PrimitiveExtractor } from '../src/plc/PrimitiveExtractor.js';
-import { runCamGo, getCamEngineInfo } from '../server/workers/cam-go-bridge.js';
-import interpolate from '../src/geometry/b-spline.js';
+import { runCamGo } from '../server/workers/cam-go-bridge.js';
 
 const DXF_PATH = 'c:/Users/Davide/OneDrive - Sonepar/Documenti/Plotter-Pen/DXF/Laser Cut Wooden Earring Blanks Dangle Charms .dxf';
 
@@ -51,7 +50,6 @@ async function testDXFValidation() {
             const stroke = [];
             stroke.tool = 'polygon';
             ent.vertices.forEach(v => stroke.push({ x: v.x, y: v.y }));
-            stroke.length = stroke.length;
             // Add Iterator
             stroke[Symbol.iterator] = function* () { for (let p of this) yield p; };
             return stroke;
@@ -103,12 +101,12 @@ async function testDXFValidation() {
     console.log(`Sending ${camPrimitives.length} primitives to CAM...`);
 
     const camSettings = {
+        profileSide: 'outside',
         toolDiameter: 3.0,
         stepOver: 40,
         startZ: 0,
         targetZ: -1,
         stepDown: 1,
-        profileSide: 'outside',
         tolerance: 0.5 // Validating robust stitching
     };
 

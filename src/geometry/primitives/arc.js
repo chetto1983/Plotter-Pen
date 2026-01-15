@@ -433,6 +433,9 @@ export class Arc extends Primitive {
       by: this.b.y,
       cx: this.c.x,
       cy: this.c.y,
+      radius: this.radius,
+      startAngle: this.startAngle,
+      sweep: this.sweep,
       throughPoint: this._throughPoint
     };
   }

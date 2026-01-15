@@ -112,6 +112,14 @@ export class UIController {
    */
   updateFloatingToolbar() {
     if (!this.floatToolbar) return;
+
+    // User Request: Do NOT show floating toolbar if we are in CAM mode
+    const camTabActive = document.querySelector('.ribbon-tab[data-tab="cam"].active');
+    if (camTabActive) {
+      this.floatToolbar.classList.remove('visible');
+      return;
+    }
+
     if (this.app.selectedPrimitives.size > 0) {
       this.floatToolbar.classList.add('visible');
     } else {
@@ -378,8 +386,8 @@ export class UIController {
    * Update statistics display
    */
   updateStats() {
-    const lines = this.app.primitives.filter(p => p.type === 'line').length;
-    const arcs = this.app.primitives.filter(p => p.type === 'arc' || p.type === 'circle').length;
+    const lines = this.app.primitives.filter(p => ['line', 'polyline', 'rectangle', 'polygon'].includes(p.type)).length;
+    const arcs = this.app.primitives.filter(p => ['arc', 'circle', 'ellipse', 'spline'].includes(p.type)).length;
 
     const statLines = document.getElementById('statLines');
     const statArcs = document.getElementById('statArcs');

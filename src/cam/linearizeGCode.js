@@ -38,9 +38,11 @@ function rToIJ(dx, dy, r, isCW) {
 
     let h_x2_div_d = Math.sqrt(h_x2_div_d_sq) / Math.sqrt(d2);
 
-    // For G2 (CW), the sign is positive; for G3 (CCW), negative
-    // This determines which of the two possible arc centers to use
-    if (isCW) {
+    // For G2 (CW), we want the center to be on the right side of the path start->end.
+    // The offset vector calculated below is derived from (-dy, dx).
+    // If factor is positive, it points Right.
+    // So for G2 (CW), we keep it positive. For G3 (CCW), we negate it.
+    if (!isCW) {
         h_x2_div_d = -h_x2_div_d;
     }
 

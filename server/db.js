@@ -13,6 +13,7 @@ const dbPath = configuredPath
         ? configuredPath
         : path.resolve(__dirname, '..', configuredPath))
     : path.resolve(__dirname, '../database.sqlite');
+
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
         console.error('Error opening database', err);
@@ -40,6 +41,23 @@ function initDb() {
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`);
+
+        // Tools Library
+        db.run(`CREATE TABLE IF NOT EXISTS tools (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            type TEXT DEFAULT 'endmill',
+            diameter REAL NOT NULL,
+            description TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
+
+        // CAM Settings - Singleton row (id=1)
+        db.run(`CREATE TABLE IF NOT EXISTS cam_settings (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            data TEXT NOT NULL,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
     });
 }
 
@@ -64,6 +82,33 @@ export function saveAppState(data) {
 export function loadAppState() {
     return new Promise((resolve, reject) => {
         db.get(`SELECT data FROM app_state WHERE id = 1`, (err, row) => {
+            if (err) reject(err);
+            else resolve(row ? JSON.parse(row.data) : null);
+        });
+    });
+}
+
+// === CAM Settings Operations ===
+
+export function saveCamSettings(data) {
+    return new Promise((resolve, reject) => {
+        const json = JSON.stringify(data);
+        db.run(`INSERT INTO cam_settings (id, data, updated_at) 
+                VALUES (1, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(id) DO UPDATE SET 
+                data = excluded.data, 
+                updated_at = CURRENT_TIMESTAMP`,
+            [json],
+            function (err) {
+                if (err) reject(err);
+                else resolve(this.lastID);
+            });
+    });
+}
+
+export function loadCamSettings() {
+    return new Promise((resolve, reject) => {
+        db.get(`SELECT data FROM cam_settings WHERE id = 1`, (err, row) => {
             if (err) reject(err);
             else resolve(row ? JSON.parse(row.data) : null);
         });
@@ -116,11 +161,60 @@ export function deleteDrawing(name) {
     });
 }
 
+// === Tools Operations ===
+
+export function saveTool(tool) {
+    return new Promise((resolve, reject) => {
+        const { id, name, type, diameter, description } = tool;
+
+        if (id) {
+            // Update existing
+            db.run(`UPDATE tools SET name = ?, type = ?, diameter = ?, description = ? WHERE id = ?`,
+                [name, type || 'endmill', diameter, description || null, id],
+                function (err) {
+                    if (err) reject(err);
+                    else resolve(id); // Return existing ID
+                });
+        } else {
+            // Insert new
+            db.run(`INSERT INTO tools (name, type, diameter, description) VALUES (?, ?, ?, ?)`,
+                [name, type || 'endmill', diameter, description || null],
+                function (err) {
+                    if (err) reject(err);
+                    else resolve(this.lastID);
+                });
+        }
+    });
+}
+
+export function listTools() {
+    return new Promise((resolve, reject) => {
+        db.all(`SELECT * FROM tools ORDER BY name ASC`, (err, rows) => {
+            if (err) reject(err);
+            else resolve(rows);
+        });
+    });
+}
+
+export function deleteTool(id) {
+    return new Promise((resolve, reject) => {
+        db.run(`DELETE FROM tools WHERE id = ?`, [id], function (err) {
+            if (err) reject(err);
+            else resolve(this.changes);
+        });
+    });
+}
+
 export default {
     saveAppState,
     loadAppState,
+    saveCamSettings,
+    loadCamSettings,
     saveDrawing,
     loadDrawing,
     listDrawings,
-    deleteDrawing
+    deleteDrawing,
+    saveTool,
+    listTools,
+    deleteTool
 };

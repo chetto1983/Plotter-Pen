@@ -1,6 +1,6 @@
 
-import { PrimitiveExtractor, PLC_TYPES } from '../src/plc/PrimitiveExtractor.js';
-import { runCamGo, isCamGoAvailable, getCamEngineInfo } from '../server/workers/cam-go-bridge.js';
+import { PrimitiveExtractor } from '../src/plc/PrimitiveExtractor.js';
+import { runCamGo, getCamEngineInfo } from '../server/workers/cam-go-bridge.js';
 import assert from 'assert';
 
 async function testComparison() {
@@ -19,7 +19,7 @@ async function testComparison() {
     console.log('\n--- 1. Testing PLC Extraction ---');
     // Convert to "strokes" as expected by PrimitiveExtractor
     // Since PrimitiveExtractor handles "tool" strokes specifically:
-    const plcStrokes = lines.map((l, i) => ({
+    const plcStrokes = lines.map(l => ({
         tool: 'line',
         length: 2,
         0: { x: l.x1, y: l.y1 },

@@ -21,7 +21,11 @@ func NewGCodeGenerator(settings Settings) *GCodeGenerator {
 func (g *GCodeGenerator) String() string { return g.builder.String() }
 
 func (g *GCodeGenerator) Write(format string, args ...any) {
-	g.builder.WriteString(fmt.Sprintf(format, args...))
+	if len(args) > 0 {
+		g.builder.WriteString(fmt.Sprintf(format, args...))
+	} else {
+		g.builder.WriteString(format)
+	}
 	g.builder.WriteString("\n")
 }
 
@@ -119,18 +123,18 @@ func (g *GCodeGenerator) G21() { g.Write("G21") } // Millimeters
 
 // ==================== COORDINATE SYSTEM ====================
 
-func (g *GCodeGenerator) G28()            { g.Write("G28") }               // Return to home
+func (g *GCodeGenerator) G28()                   { g.Write("G28") } // Return to home
 func (g *GCodeGenerator) G28XYZ(x, y, z float64) { g.Write("G28 X%.3f Y%.3f Z%.3f", x, y, z) }
-func (g *GCodeGenerator) G30()            { g.Write("G30") }               // Return to secondary home
+func (g *GCodeGenerator) G30()                   { g.Write("G30") } // Return to secondary home
 
 // ==================== CUTTER COMPENSATION ====================
 
-func (g *GCodeGenerator) G40() { g.Write("G40") } // Cancel cutter compensation
-func (g *GCodeGenerator) G41() { g.Write("G41") } // Cutter compensation left
-func (g *GCodeGenerator) G42() { g.Write("G42") } // Cutter compensation right
+func (g *GCodeGenerator) G40()      { g.Write("G40") }        // Cancel cutter compensation
+func (g *GCodeGenerator) G41()      { g.Write("G41") }        // Cutter compensation left
+func (g *GCodeGenerator) G42()      { g.Write("G42") }        // Cutter compensation right
 func (g *GCodeGenerator) G43(h int) { g.Write("G43 H%d", h) } // Tool length compensation +
 func (g *GCodeGenerator) G44(h int) { g.Write("G44 H%d", h) } // Tool length compensation -
-func (g *GCodeGenerator) G49() { g.Write("G49") } // Cancel tool length compensation
+func (g *GCodeGenerator) G49()      { g.Write("G49") }        // Cancel tool length compensation
 
 // ==================== CANNED CYCLES ====================
 
@@ -161,9 +165,15 @@ func (g *GCodeGenerator) G59() { g.Write("G59") } // Work offset 6
 
 func (g *GCodeGenerator) G92(x, y, z *float64) { // Set position
 	parts := []string{"G92"}
-	if x != nil { parts = append(parts, fmt.Sprintf("X%.3f", *x)) }
-	if y != nil { parts = append(parts, fmt.Sprintf("Y%.3f", *y)) }
-	if z != nil { parts = append(parts, fmt.Sprintf("Z%.3f", *z)) }
+	if x != nil {
+		parts = append(parts, fmt.Sprintf("X%.3f", *x))
+	}
+	if y != nil {
+		parts = append(parts, fmt.Sprintf("Y%.3f", *y))
+	}
+	if z != nil {
+		parts = append(parts, fmt.Sprintf("Z%.3f", *z))
+	}
 	g.Write(strings.Join(parts, " "))
 }
 
@@ -171,13 +181,13 @@ func (g *GCodeGenerator) G92(x, y, z *float64) { // Set position
 
 func (g *GCodeGenerator) M3(rpm float64) { g.Write("M3 S%.0f", rpm) } // Spindle CW
 func (g *GCodeGenerator) M4(rpm float64) { g.Write("M4 S%.0f", rpm) } // Spindle CCW
-func (g *GCodeGenerator) M5()            { g.Write("M5") }           // Spindle stop
+func (g *GCodeGenerator) M5()            { g.Write("M5") }            // Spindle stop
 
 // ==================== COOLANT ====================
 
-func (g *GCodeGenerator) M7()  { g.Write("M7") }  // Mist coolant on
-func (g *GCodeGenerator) M8()  { g.Write("M8") }  // Flood coolant on
-func (g *GCodeGenerator) M9()  { g.Write("M9") }  // Coolant off
+func (g *GCodeGenerator) M7() { g.Write("M7") } // Mist coolant on
+func (g *GCodeGenerator) M8() { g.Write("M8") } // Flood coolant on
+func (g *GCodeGenerator) M9() { g.Write("M9") } // Coolant off
 
 // ==================== TOOL ====================
 
@@ -227,12 +237,12 @@ func (g *GCodeGenerator) WriteFooter() {
 }
 
 // Convenience methods for common operations
-func (g *GCodeGenerator) RapidZ(z float64)           { g.G0(nil, nil, &z) }
-func (g *GCodeGenerator) RapidXY(x, y float64)       { g.G0(&x, &y, nil) }
-func (g *GCodeGenerator) LinearZ(z, f float64)       { g.G1(nil, nil, &z, &f) }
-func (g *GCodeGenerator) LinearXY(x, y, f float64)   { g.G1(&x, &y, nil, &f) }
-func (g *GCodeGenerator) ArcCW(x, y, r, f float64)   { g.G2(x, y, &r, nil, nil, &f) }
-func (g *GCodeGenerator) ArcCCW(x, y, r, f float64)  { g.G3(x, y, &r, nil, nil, &f) }
+func (g *GCodeGenerator) RapidZ(z float64)          { g.G0(nil, nil, &z) }
+func (g *GCodeGenerator) RapidXY(x, y float64)      { g.G0(&x, &y, nil) }
+func (g *GCodeGenerator) LinearZ(z, f float64)      { g.G1(nil, nil, &z, &f) }
+func (g *GCodeGenerator) LinearXY(x, y, f float64)  { g.G1(&x, &y, nil, &f) }
+func (g *GCodeGenerator) ArcCW(x, y, r, f float64)  { g.G2(x, y, &r, nil, nil, &f) }
+func (g *GCodeGenerator) ArcCCW(x, y, r, f float64) { g.G3(x, y, &r, nil, nil, &f) }
 
 // FullCircle generates a complete 360° circle using I/J format
 // Must be at starting position (cx+radius, cy) before calling

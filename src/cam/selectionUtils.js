@@ -167,7 +167,6 @@ const connectSegmentsOptimized = (segments) => {
     };
 
     // Build loops
-    let loopCount = 0;
     for (let i = 0; i < segments.length; i++) {
         if (used[i]) continue;
 
@@ -183,7 +182,6 @@ const connectSegmentsOptimized = (segments) => {
             // Check if closed (minimum 3 points for valid polygon)
             if (pointsClose(end, start) && pathPoints.length >= 3) {
                 loops.push(pathPoints);
-                loopCount++;
                 break;
             }
 

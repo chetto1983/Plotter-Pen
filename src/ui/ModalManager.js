@@ -470,6 +470,46 @@ export class ModalManager {
         this.activeModal = null;
         document.body.style.overflow = '';
     }
+    /**
+     * Show a non-blocking toast notification
+     * @param {string} title - Title
+     * @param {string} message - Message to display
+     * @param {number} duration - Duration in ms (default 3000)
+     */
+    toast(title, message, duration = 3000) {
+        let container = document.getElementById('cad-toast-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'cad-toast-container';
+            container.className = 'cad-toast-container';
+            document.body.appendChild(container);
+        }
+
+        const toast = document.createElement('div');
+        toast.className = 'cad-toast';
+        toast.innerHTML = `
+            <div class="cad-toast-content">
+                <strong>${title}</strong>: ${message}
+            </div>
+        `;
+
+        container.appendChild(toast);
+
+        // Animate in
+        requestAnimationFrame(() => {
+            toast.classList.add('show');
+        });
+
+        setTimeout(() => {
+            toast.classList.remove('show');
+            toast.addEventListener('transitionend', () => {
+                toast.remove();
+                if (container.children.length === 0) {
+                    container.remove();
+                }
+            });
+        }, duration);
+    }
 }
 
 // Singleton instance

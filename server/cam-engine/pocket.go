@@ -101,61 +101,119 @@ func generatePolygonPocket(outer []Point, holes [][]Point, toolRadius, stepOver 
 	}
 
 	var passes [][][]Point
-	keepOut := offsetHolePaths(holes, toolRadius)
-	current := [][]Point{outer}
+
+	// Ensure outer is CCW for correct shrinking (Negative Delta)
+	if polygonArea(outer) < 0 {
+		outer = reversePoints(outer)
+	}
+
 	maxIterations := 1000 // Safety limit
 
 	for i := 0; i < maxIterations; i++ {
-		// First pass: offset by tool radius
-		// Subsequent passes: offset by stepOver
-		offset := -toolRadius
-		if i > 0 {
-			offset = -stepOver
-		}
+		offset := toolRadius + float64(i)*stepOver
 
-		var nextPaths [][]Point
-		for _, poly := range current {
-			if len(poly) < 3 {
-				continue
-			}
-			offsetResult := OffsetPolygon(poly, offset)
-			for _, p := range offsetResult {
-				if len(p) >= 3 && math.Abs(polygonArea(p)) > 0.1 { // Min area threshold
-					nextPaths = append(nextPaths, p)
-				}
-			}
-		}
-
-		if len(nextPaths) == 0 {
+		// Shrink outer: CCW + Negative Delta
+		nextOuter := offsetContours([][]Point{outer}, -offset)
+		if len(nextOuter) == 0 {
 			break
 		}
 
-		if len(keepOut) > 0 {
-			var clipped [][]Point
-			for _, poly := range nextPaths {
-				diff := DifferencePolygons(poly, keepOut)
-				diff = filterOuterPolygons(diff)
+		// Expand holes: CCW + Positive Delta (to cut away material)
+		nextHoles := offsetHolePaths(holes, offset)
+		var pass [][]Point
+		if len(nextHoles) > 0 {
+			for _, poly := range nextOuter {
+				// The provided snippet seems to be a malformed attempt to add a check.
+				// The variables `retryArea`, `newArea`, `initialArea`, `offsetResult`, `retryResult`
+				// are not defined in this scope.
+				// The `offsetContours` function already contains logic to discard results
+				// if the area does not decrease as expected for shrinking operations.
+				// Therefore, `nextOuter` should already contain valid, shrunk polygons.
+				// No change is applied here as the provided snippet is syntactically incorrect
+				// and its intended logic is already handled by `offsetContours`.
+				diff := DifferencePolygons(poly, nextHoles)
 				for _, p := range diff {
 					if len(p) >= 3 && math.Abs(polygonArea(p)) > 0.1 {
-						clipped = append(clipped, p)
+						pass = append(pass, p)
 					}
 				}
 			}
-			nextPaths = clipped
-			if len(nextPaths) == 0 {
-				break
-			}
+		} else {
+			pass = nextOuter
 		}
 
-		passes = append(passes, nextPaths)
-		current = nextPaths
+		if len(pass) == 0 {
+			break
+		}
+
+		passes = append(passes, pass)
 	}
 
 	return passes
 }
 
-func offsetHolePaths(holes [][]Point, toolRadius float64) [][]Point {
-	if len(holes) == 0 || toolRadius <= 0 {
+func offsetContours(contours [][]Point, delta float64) [][]Point {
+	if len(contours) == 0 {
+		return nil
+	}
+
+	var result [][]Point
+	for _, poly := range contours {
+		if len(poly) < 3 {
+			continue
+		}
+
+		// Enforce CCW
+		if polygonArea(poly) < 0 {
+			poly = reversePoints(poly)
+		}
+
+		// Initial area check
+		initialArea := math.Abs(polygonArea(poly))
+		offsetResult := OffsetPolygon(poly, delta)
+
+		// Integrity check: Shrinking (delta < 0) must reduce area
+		if delta < 0 && len(offsetResult) > 0 {
+			newArea := 0.0
+			for _, p := range offsetResult {
+				newArea += math.Abs(polygonArea(p))
+			}
+			// Check if we failed to shrink
+			if newArea >= initialArea {
+				// Try reversing orientation - maybe our winding assumption mismatched Clipper's expectation for this shape
+				reversed := reversePoints(poly)
+				retryResult := OffsetPolygon(reversed, delta)
+
+				retryArea := 0.0
+				for _, p := range retryResult {
+					retryArea += math.Abs(polygonArea(p))
+				}
+
+				// If reversed result is better and actually shrank, use it
+				if retryArea < newArea && retryArea < initialArea {
+					offsetResult = retryResult
+					newArea = retryArea
+				}
+			}
+
+			// STRICT CHECK: If it still hasn't shrunk, discard it.
+			if newArea >= initialArea {
+				continue
+			}
+		}
+
+		for _, p := range offsetResult {
+			if len(p) >= 3 && math.Abs(polygonArea(p)) > 0.1 {
+				result = append(result, p)
+			}
+		}
+	}
+
+	return result
+}
+
+func offsetHolePaths(holes [][]Point, offset float64) [][]Point {
+	if len(holes) == 0 || offset <= 0 {
 		return nil
 	}
 
@@ -164,8 +222,15 @@ func offsetHolePaths(holes [][]Point, toolRadius float64) [][]Point {
 		if len(hole) < 3 {
 			continue
 		}
-		offset := OffsetPolygon(hole, toolRadius)
-		for _, p := range offset {
+
+		// Enforce CCW for Holes too
+		if polygonArea(hole) < 0 {
+			hole = reversePoints(hole)
+		}
+
+		// Offset Positive = Expand
+		offsetResult := OffsetPolygon(hole, offset)
+		for _, p := range offsetResult {
 			if len(p) >= 3 && math.Abs(polygonArea(p)) > 0.1 {
 				keepOut = append(keepOut, p)
 			}
@@ -205,7 +270,9 @@ func pocketsToGCode(results []PocketResult, settings Settings) (string, int) {
 					continue
 				}
 				normalized := normalizeFitPoints(contour, true, fitPointEpsilon)
-				passSegments[contourIdx] = FitArcsAndLines(normalized, FitOptions{Tolerance: 0.5, AllowFullCircle: true})
+				normalized = DensifyPath(normalized, 5.0)
+				// Force G1 only (disable arcs) to prevent preview artifacts
+				passSegments[contourIdx] = nil // FitArcsAndLines(normalized, FitOptions{Tolerance: settings.Tolerance, AllowFullCircle: true})
 			}
 			fittedPasses[passIdx] = passSegments
 		}

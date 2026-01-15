@@ -8,7 +8,7 @@ export const TOLERANCE = {
     ARC_FIT: 0.0001,         // mm - arc fitting precision
     AREA_EPSILON: 0.0001,    // mm² - polygon area check
     SEGMENT_CONNECT: 0.01,   // mm - segment chaining tolerance
-    ARC_LINEARIZE: 0.002     // mm - arc linearization chord error
+    ARC_LINEARIZE: 0.05      // mm - arc linearization chord error (relaxed for performance)
 };
 
 export const SCALE = {

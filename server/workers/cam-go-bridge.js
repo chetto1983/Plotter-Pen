@@ -101,8 +101,7 @@ export async function runCamGo(params, timeout = 60000) {
 
         proc.stderr.on('data', (data) => {
             stderr += data.toString();
-            // Log stderr for debugging
-            process.stderr.write(data);
+            process.stderr.write(data); // STREAM LIVE
         });
 
         proc.on('close', (code) => {
@@ -140,6 +139,8 @@ export async function runCamGo(params, timeout = 60000) {
             type: params.type || 'profile',
             settings: params.settings || {}
         });
+
+
 
         proc.stdin.write(input);
         proc.stdin.end();

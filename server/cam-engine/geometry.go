@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math"
+	"os"
 )
 
 const (
@@ -243,6 +244,8 @@ func connectSegments(segments []Segment, tolerance float64) ([][]Point, [][]Poin
 		return nil, nil
 	}
 
+	fmt.Fprintf(os.Stderr, "DEBUG: connectSegments called with %d segments\n", len(segments))
+
 	var loops [][]Point
 	var openPaths [][]Point
 	used := make([]bool, len(segments))
@@ -263,6 +266,11 @@ func connectSegments(segments []Segment, tolerance float64) ([][]Point, [][]Poin
 			if !used[entry.index] && entry.index != excludeIdx {
 				if pointsClose(end, segments[entry.index].Start, tolerance) {
 					return entry.index, false, true
+				} else {
+					d := distance(end, segments[entry.index].Start)
+					if d < 5.0 { // log near misses
+						fmt.Fprintf(os.Stderr, "DEBUG: Gap check Start[%d]: %.4f > tol %.4f\n", entry.index, d, tolerance)
+					}
 				}
 			}
 		}
@@ -271,6 +279,11 @@ func connectSegments(segments []Segment, tolerance float64) ([][]Point, [][]Poin
 			if !used[entry.index] && entry.index != excludeIdx {
 				if pointsClose(end, segments[entry.index].End, tolerance) {
 					return entry.index, true, true
+				} else {
+					d := distance(end, segments[entry.index].End)
+					if d < 5.0 {
+						fmt.Fprintf(os.Stderr, "DEBUG: Gap check End[%d]: %.4f > tol %.4f\n", entry.index, d, tolerance)
+					}
 				}
 			}
 		}
@@ -321,6 +334,35 @@ func connectSegments(segments []Segment, tolerance float64) ([][]Point, [][]Poin
 	}
 
 	return loops, openPaths
+}
+
+// DensifyPath adds intermediate points to long segments to ensure correct arc fitting
+func DensifyPath(points []Point, maxDist float64) []Point {
+	if len(points) < 2 || maxDist <= 0 {
+		return points
+	}
+
+	out := make([]Point, 0, len(points)*2)
+	for i := 0; i < len(points)-1; i++ {
+		p1 := points[i]
+		p2 := points[i+1]
+		dist := distance(p1, p2)
+		out = append(out, p1)
+
+		if dist > maxDist {
+			steps := int(math.Ceil(dist / maxDist))
+			stepX := (p2.X - p1.X) / float64(steps)
+			stepY := (p2.Y - p1.Y) / float64(steps)
+			for j := 1; j < steps; j++ {
+				out = append(out, Point{
+					X: p1.X + float64(j)*stepX,
+					Y: p1.Y + float64(j)*stepY,
+				})
+			}
+		}
+	}
+	out = append(out, points[len(points)-1])
+	return out
 }
 
 func pointsClose(a, b Point, tol float64) bool {
