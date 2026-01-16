@@ -87,6 +87,7 @@ func (wc *WSClient) writePump() {
 func (wc *WSClient) readPump(h *OpcuaHandler) {
 	defer func() {
 		wc.stopStream()
+		wc.cancelTransfer()
 		close(wc.send)
 		wc.conn.Close()
 	}()
@@ -232,6 +233,16 @@ func (wc *WSClient) stopStream() {
 	}
 }
 
+// cancelTransfer cancels any ongoing transfer
+func (wc *WSClient) cancelTransfer() {
+	wc.mu.Lock()
+	defer wc.mu.Unlock()
+	if wc.transfer != nil && wc.transfer.IsRunning() {
+		wc.transfer.Cancel()
+		wc.transfer = nil
+	}
+}
+
 // TransferRequest represents a chunked transfer request
 type TransferRequest struct {
 	Commands []string `json:"commands"`
@@ -284,13 +295,21 @@ func (wc *WSClient) handleTransfer(h *OpcuaHandler, data json.RawMessage) {
 	})
 
 	// Start async transfer with progress callback
+	// Use safeSend to prevent panic on closed channel if client disconnects
 	err := wc.transfer.SendAsync(ctx, req.Commands, func(progress opcua.TransferProgress) {
+		var msg opcua.WSMessage
 		if progress.Error != "" {
-			wc.send <- opcua.NewWSMessage("transfer_error", progress)
+			msg = opcua.NewWSMessage("transfer_error", progress)
 		} else if progress.Done {
-			wc.send <- opcua.NewWSMessage("transfer_complete", progress)
+			msg = opcua.NewWSMessage("transfer_complete", progress)
 		} else {
-			wc.send <- opcua.NewWSMessage("transfer_progress", progress)
+			msg = opcua.NewWSMessage("transfer_progress", progress)
+		}
+		// Non-blocking send to avoid panic on closed channel
+		select {
+		case wc.send <- msg:
+		default:
+			// Channel closed or full, ignore
 		}
 	})
 

@@ -185,7 +185,7 @@ export class PLCOutputManager {
 
     // Use WebSocket if connected, otherwise fall back to HTTP
     if (ws && ws.isConnected()) {
-      this.sendViawWebSocket(ws);
+      this.sendViaWebSocket(ws);
     } else {
       this.sendViaHTTP();
     }
@@ -194,7 +194,7 @@ export class PLCOutputManager {
   /**
    * Send via WebSocket chunked transfer (preferred)
    */
-  sendViawWebSocket(ws) {
+  sendViaWebSocket(ws) {
     this.app.ui.updateOPCUAStatus("Avvio trasferimento...", "info");
 
     const success = ws.transfer(this.app.plcOutput);
