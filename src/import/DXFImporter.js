@@ -8,6 +8,7 @@ import bSpline from '../geometry/b-spline.js';
 import { Line, Arc, Circle, Polygon, Polyline } from '../geometry/primitives.js';
 import { ArcBuilder } from '../geometry/arcBuilder.js';
 import { pointToSegmentDistance } from '../geometry/core.js';
+import { log } from '../lib/logger.js';
 
 // Polyfill DxfParser for Node environment if not present
 if (typeof DxfParser === 'undefined') {
@@ -67,7 +68,7 @@ export class DXFImporter {
                 case 6: this.scaleFactor = 1000.0; break;
                 default: this.scaleFactor = 1.0; break;
             }
-            console.log(`DXF Units: ${units}, Scale Factor: ${this.scaleFactor}`);
+            log(`DXF Units: ${units}, Scale Factor: ${this.scaleFactor}`);
         }
 
         // Process entities in chunks to keep UI responsive

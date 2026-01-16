@@ -1,6 +1,7 @@
 import { Tool } from './baseTool.js';
 import { findLineIntersection, isPointOnSegment } from '../geometry/intersection.js';
 import { distance } from '../geometry/core.js';
+import { debug } from '../lib/logger.js';
 
 export class TrimTool extends Tool {
     constructor(manager) {
@@ -73,28 +74,28 @@ export class TrimTool extends Tool {
 
     onMouseDown(point, _event) {
         // Debug Log
-        console.log('TrimTool.onMouseDown', { point, step: this.step, mode: this.mode });
+        debug('TrimTool.onMouseDown', { point, step: this.step, mode: this.mode });
 
         const app = this.manager.app;
         const prim = this.findPrimitiveAt(point);
-        console.log('Found primitive:', prim ? prim.id : 'none');
+        debug('Found primitive:', prim ? prim.id : 'none');
 
         if (!prim) return;
 
         if (this.step === 'SELECT_CUTTING_EDGE') {
             if (prim.type !== 'line') {
-                console.log('Not a line:', prim.type);
+                debug('Not a line:', prim.type);
                 app.ui.updateStatus('Al momento supportato solo taglio con LINEA');
                 return;
             }
 
             this.boundary = prim;
             this.step = 'SELECT_OBJECT';
-            console.log('Boundary selected:', this.boundary.id);
+            debug('Boundary selected:', this.boundary.id);
             app.ui.updateStatus(this.getHint());
         } else if (this.step === 'SELECT_OBJECT') {
             if (prim === this.boundary) {
-                console.log('Clicked boundary, ignore');
+                debug('Clicked boundary, ignore');
                 return;
             }
             if (prim.type !== 'line') {
@@ -102,7 +103,7 @@ export class TrimTool extends Tool {
                 return;
             }
 
-            console.log('Target selected:', prim.id, 'Mode:', this.mode);
+            debug('Target selected:', prim.id, 'Mode:', this.mode);
 
             if (this.mode === 'TRIM') {
                 this.trimObject(prim, point);
@@ -118,14 +119,14 @@ export class TrimTool extends Tool {
         let bestDist = 10 / scale;
         let bestPrim = null;
 
-        console.log('findPrimitiveAt', { point, primitiveCount: primitives.length, scale, threshold: bestDist });
+        debug('findPrimitiveAt', { point, primitiveCount: primitives.length, scale, threshold: bestDist });
 
         for (const p of primitives) {
             // Removed restricted type check to see what we find
             // if (p.type !== 'line') continue; 
 
             const d = p.distanceToPoint(point);
-            // console.log(`Check ${p.id} (${p.type}): dist=${d}`); // Verbose but useful if stuck
+            // debug(`Check ${p.id} (${p.type}): dist=${d}`); // Verbose but useful if stuck
 
             if (d < bestDist) {
                 bestDist = d;
@@ -136,9 +137,9 @@ export class TrimTool extends Tool {
     }
 
     trimObject(target, pickPoint) {
-        console.log('Trimming object', target.id);
+        debug('Trimming object', target.id);
         const intersection = findLineIntersection(this.boundary, target);
-        console.log('Intersection result:', intersection);
+        debug('Intersection result:', intersection);
 
         if (!intersection) {
             this.manager.app.ui.updateStatus('Righe parallele - nessuna intersezione');
@@ -146,7 +147,7 @@ export class TrimTool extends Tool {
         }
 
         if (!isPointOnSegment(intersection, target)) {
-            console.log('Intersection not on segment');
+            debug('Intersection not on segment');
             this.manager.app.ui.updateStatus('Intersezione fuori dal segmento');
             return;
         }
@@ -166,7 +167,7 @@ export class TrimTool extends Tool {
         const dy1 = target.y1 - intersection.y;
 
         const dot1 = dxPick * dx1 + dyPick * dy1;
-        console.log('Dot product:', dot1);
+        debug('Dot product:', dot1);
 
         if (dot1 > 0) {
             target.x1 = intersection.x;
@@ -184,9 +185,9 @@ export class TrimTool extends Tool {
     }
 
     extendObject(target, _pickPoint) {
-        console.log('Extending object', target.id);
+        debug('Extending object', target.id);
         const intersection = findLineIntersection(this.boundary, target);
-        console.log('Intersection result:', intersection);
+        debug('Intersection result:', intersection);
 
         if (!intersection) {
             this.manager.app.ui.updateStatus('Righe parallele - nessuna intersezione');
@@ -197,7 +198,7 @@ export class TrimTool extends Tool {
 
         const d1 = distance(target.x1, target.y1, intersection.x, intersection.y);
         const d2 = distance(target.x2, target.y2, intersection.x, intersection.y);
-        console.log('Distances:', d1, d2);
+        debug('Distances:', d1, d2);
 
         // Pick the end that is closer to the intersection (that's the one we extend)
         // Usually extend works by clicking near the end you want to extend.

@@ -4,8 +4,8 @@ import { SidebarLeft } from './components/SidebarLeft.js';
 import { SidebarRight } from './components/SidebarRight.js';
 import { CanvasArea } from './components/CanvasArea.js';
 import { Footer } from './components/Footer.js';
-
 import { Modals } from './modals/Modals.js'; // We will put all static modals here for now
+import { log } from '../lib/logger.js';
 
 export class App {
     constructor(root) {
@@ -14,7 +14,7 @@ export class App {
     }
 
     init() {
-        console.log('App: Initializing Refactored UI...');
+        log('App: Initializing Refactored UI...');
         this.root.className = 'cad-app';
         this.root.innerHTML = ''; // Clear loading message
 

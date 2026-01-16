@@ -8,10 +8,11 @@ import { ToolService } from './ToolService.js';
 import { CAMService } from './CAMService.js';
 import { CAMSettingsManager } from './CAMSettingsManager.js';
 import { ToolLibraryManager } from './ToolLibraryManager.js';
+import { log } from '../lib/logger.js';
 
 export class CAMManager {
     constructor(app) {
-        console.log('CAMManager: Initializing...');
+        log('CAMManager: Initializing...');
         this.app = app;
         this.machine = new MachineConfig();
 

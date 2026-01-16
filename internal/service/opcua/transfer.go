@@ -38,6 +38,7 @@ type ChunkedTransfer struct {
 	progressFunc func(TransferProgress)
 	mu           sync.Mutex
 	startTime    time.Time
+	closeOnce    sync.Once // Prevents double-close panic
 }
 
 // NewChunkedTransfer creates a new chunked transfer service
@@ -65,12 +66,12 @@ func (t *ChunkedTransfer) IsRunning() bool {
 	return t.state == TransferRunning
 }
 
-// Cancel stops an ongoing transfer
+// Cancel stops an ongoing transfer (safe to call multiple times)
 func (t *ChunkedTransfer) Cancel() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.state == TransferRunning && t.stopCh != nil {
-		close(t.stopCh)
+		t.closeOnce.Do(func() { close(t.stopCh) })
 		t.state = TransferCancelled
 	}
 }
@@ -84,6 +85,7 @@ func (t *ChunkedTransfer) SendAsync(ctx context.Context, data []string, progress
 	}
 	t.state = TransferRunning
 	t.stopCh = make(chan struct{})
+	t.closeOnce = sync.Once{} // Reset for new transfer
 	t.progressFunc = progressFunc
 	t.startTime = time.Now()
 	t.mu.Unlock()

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -13,11 +15,37 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// WebSocket connection rate limiting
+var (
+	wsConnections   = make(map[string]int) // IP -> connection count
+	wsConnectionsMu sync.Mutex
+	wsMaxPerIP      = 5 // Max WebSocket connections per IP
+)
+
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
-		return true // Allow all origins for industrial use
+		// Allow localhost and same-origin by default
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return true // No origin header = same-origin
+		}
+		// Allow localhost variants
+		if strings.Contains(origin, "localhost") || strings.Contains(origin, "127.0.0.1") {
+			return true
+		}
+		// Allow configured origins via ALLOWED_ORIGINS env var
+		allowed := os.Getenv("ALLOWED_ORIGINS")
+		if allowed != "" {
+			for _, a := range strings.Split(allowed, ",") {
+				if strings.TrimSpace(a) == origin {
+					return true
+				}
+			}
+		}
+		// Industrial use: allow if not explicitly restricted
+		return os.Getenv("WS_STRICT_ORIGIN") == ""
 	},
 }
 
@@ -38,8 +66,22 @@ type InboundMessage struct {
 
 // WebSocket handles WebSocket connections for real-time position updates
 func (h *OpcuaHandler) WebSocket(c *gin.Context) {
+	// Rate limiting: check connection count per IP
+	clientIP := c.ClientIP()
+	wsConnectionsMu.Lock()
+	if wsConnections[clientIP] >= wsMaxPerIP {
+		wsConnectionsMu.Unlock()
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "too many WebSocket connections"})
+		return
+	}
+	wsConnections[clientIP]++
+	wsConnectionsMu.Unlock()
+
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
+		wsConnectionsMu.Lock()
+		wsConnections[clientIP]--
+		wsConnectionsMu.Unlock()
 		return
 	}
 
@@ -52,6 +94,15 @@ func (h *OpcuaHandler) WebSocket(c *gin.Context) {
 	go client.writePump()
 
 	// Handle incoming messages and position streaming
+	// Decrement connection count on disconnect
+	defer func() {
+		wsConnectionsMu.Lock()
+		wsConnections[clientIP]--
+		if wsConnections[clientIP] <= 0 {
+			delete(wsConnections, clientIP)
+		}
+		wsConnectionsMu.Unlock()
+	}()
 	client.readPump(h)
 }
 

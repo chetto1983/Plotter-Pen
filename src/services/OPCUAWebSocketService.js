@@ -3,6 +3,8 @@
  * Real-time communication with PLC via WebSocket
  */
 
+import { log, warn, error } from '../lib/logger.js';
+
 export class OPCUAWebSocketService {
   constructor() {
     this.ws = null;
@@ -34,7 +36,7 @@ export class OPCUAWebSocketService {
       this.ws.onclose = (e) => this.handleClose(e);
       this.ws.onerror = (e) => this.handleError(e);
     } catch (err) {
-      console.error('[WS] Connection failed:', err);
+      error('[WS] Connection failed:', err);
       this.isConnecting = false;
       this.scheduleReconnect();
     }
@@ -56,7 +58,7 @@ export class OPCUAWebSocketService {
    * Handle WebSocket open event
    */
   handleOpen() {
-    console.log('[WS] Connected to OPC UA WebSocket');
+    log('[WS] Connected to OPC UA WebSocket');
     this.isConnecting = false;
     this.reconnectAttempts = 0;
     this.wasConnected = true;
@@ -71,7 +73,7 @@ export class OPCUAWebSocketService {
       const msg = JSON.parse(event.data);
       this.emit(msg.type, msg.data);
     } catch (err) {
-      console.error('[WS] Failed to parse message:', err);
+      error('[WS] Failed to parse message:', err);
     }
   }
 
@@ -79,7 +81,7 @@ export class OPCUAWebSocketService {
    * Handle WebSocket close event
    */
   handleClose(event) {
-    console.log('[WS] Connection closed:', event.code, event.reason);
+    log('[WS] Connection closed:', event.code, event.reason);
     this.isConnecting = false;
     this.ws = null;
     this.emit('disconnected', { code: event.code, reason: event.reason });
@@ -94,7 +96,7 @@ export class OPCUAWebSocketService {
    * Handle WebSocket error
    */
   handleError(error) {
-    console.error('[WS] WebSocket error:', error);
+    error('[WS] WebSocket error:', error);
     this.isConnecting = false;
     this.emit('error', { message: 'WebSocket error' });
   }
@@ -104,7 +106,7 @@ export class OPCUAWebSocketService {
    */
   scheduleReconnect() {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.warn('[WS] Max reconnect attempts reached');
+      warn('[WS] Max reconnect attempts reached');
       this.emit('reconnect_failed', { attempts: this.reconnectAttempts });
       return;
     }
@@ -113,7 +115,7 @@ export class OPCUAWebSocketService {
     const delay = this.reconnectDelay * Math.pow(1.5, this.reconnectAttempts);
     this.reconnectAttempts++;
 
-    console.log(`[WS] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
+    log(`[WS] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
     this.emit('reconnecting', { attempt: this.reconnectAttempts, delay });
 
     this.reconnectTimer = setTimeout(() => {
@@ -136,7 +138,7 @@ export class OPCUAWebSocketService {
    */
   send(type, data = null) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      console.warn('[WS] Cannot send - not connected');
+      warn('[WS] Cannot send - not connected');
       return false;
     }
 
@@ -148,7 +150,7 @@ export class OPCUAWebSocketService {
       this.ws.send(JSON.stringify(msg));
       return true;
     } catch (err) {
-      console.error('[WS] Send failed:', err);
+      error('[WS] Send failed:', err);
       return false;
     }
   }
@@ -185,7 +187,7 @@ export class OPCUAWebSocketService {
    */
   transfer(commands) {
     if (!commands || commands.length === 0) {
-      console.warn('[WS] No commands to transfer');
+      warn('[WS] No commands to transfer');
       return false;
     }
     return this.send('transfer', { commands });

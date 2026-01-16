@@ -3,6 +3,7 @@ package opcua
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -108,15 +109,22 @@ func (c *Client) buildConnectionOptions(cfg Config, ep *ua.EndpointDescription) 
 	// Generate self-signed certificates for secure connections if no cert provided
 	if ep != nil && ep.SecurityMode != ua.MessageSecurityModeNone {
 		if cfg.CertFile == "" || cfg.KeyFile == "" {
-			// Use persistent certificates saved to disk (in certs/ subdirectory)
-			certPath := "certs/client.pem"
-			keyPath := "certs/client.key"
+			// Use persistent certificates saved to disk
+			// Configurable via environment variables for production deployment
+			certPath := os.Getenv("OPCUA_CERT_PATH")
+			if certPath == "" {
+				certPath = "certs/client.pem"
+			}
+			keyPath := os.Getenv("OPCUA_KEY_PATH")
+			if keyPath == "" {
+				keyPath = "certs/client.key"
+			}
 			cert, key, err := LoadOrGenerateCert(certPath, keyPath)
 			if err != nil {
 				// Log error but continue - connection may fail later
 				fmt.Printf("OPC UA: failed to load/generate certificate: %v\n", err)
 			} else {
-				fmt.Printf("OPC UA: using certificate from certs/client.der (import this into PLC trusted certs)\n")
+				fmt.Printf("OPC UA: using certificate from %s (import DER into PLC trusted certs)\n", certPath)
 				opts = append(opts, opcua.Certificate(cert))
 				opts = append(opts, opcua.PrivateKey(key))
 			}

@@ -18,9 +18,10 @@ import { ToolController } from './app/ToolController.js';
 import { LayerPanel } from './ui/LayerPanel.js';
 import { PersistenceManager } from './app/PersistenceManager.js';
 import { OPCUAWebSocketService } from './services/OPCUAWebSocketService.js';
+import { log } from './lib/logger.js';
 // import { CAMManager } from './cam/CAMManager.js'; // Converted to dynamic
 
-console.log('MAIN: Loading main.js...');
+log('MAIN: Loading main.js...');
 
 /**
  * Main CAD Application Class
@@ -85,7 +86,7 @@ class CADApplication {
    * Initialize the application
    */
   init() {
-    console.log('MAIN: init() called');
+    log('MAIN: init() called');
     // Get canvas element
     this.canvas = document.getElementById('cadCanvas');
     if (!this.canvas) {
@@ -111,6 +112,13 @@ class CADApplication {
     this.wsService = new OPCUAWebSocketService();
     this.wsService.connect();
 
+    // Cleanup WebSocket on page unload to prevent zombie connections
+    window.addEventListener('beforeunload', () => {
+      if (this.wsService) {
+        this.wsService.disconnect();
+      }
+    });
+
     // Initialize handlers
     this.input = new InputHandler(this);
     this.ui = new UIController(this);
@@ -124,15 +132,15 @@ class CADApplication {
     this.toolController = new ToolController(this);
     this.persistenceManager = new PersistenceManager(this);
 
-    console.log('MAIN: DynImporting CAMManager...');
+    log('MAIN: DynImporting CAMManager...');
     import('./cam/CAMManager.js')
       .then(module => {
-        console.log('MAIN: CAMManager module loaded.');
+        log('MAIN: CAMManager module loaded.');
         this.camManager = new module.CAMManager(this);
-        console.log('MAIN: CAMManager instantiated.');
+        log('MAIN: CAMManager instantiated.');
       })
       .catch(err => {
-        console.error('MAIN: Failed to load CAMManager!', err);
+        log('MAIN: Failed to load CAMManager!', err);
       });
 
     // Initialize layer panel UI
