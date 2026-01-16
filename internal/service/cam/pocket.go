@@ -79,19 +79,19 @@ func GeneratePocket(paths []geom.Path, settings PocketSettings) PocketResult {
 			gc.RapidXY(path[0].X, path[0].Y)
 			gc.FeedZ(currentZ, settings.FeedZ)
 
-			// PLC: Jump to start, then Z down
-			pc.Jump(path[0].X, path[0].Y, settings.FeedXY)
-			pc.ZDown()
+			// PLC: 3D interpolation - Jump to start at safe Z, then plunge
+			pc.Jump(path[0].X, path[0].Y, settings.SafeZ, settings.FeedXY*2) // Rapid at safe Z
+			pc.Line(path[0].X, path[0].Y, currentZ, settings.FeedZ)          // Plunge to work depth
 
-			// Cut path
+			// Cut path at work depth
 			for i := 1; i < len(path); i++ {
 				gc.FeedXY(path[i].X, path[i].Y, settings.FeedXY)
-				pc.Line(path[i].X, path[i].Y, settings.FeedXY)
+				pc.Line(path[i].X, path[i].Y, currentZ, settings.FeedXY)
 			}
 
-			// Retract
+			// Retract to safe Z
 			gc.RapidZ(settings.SafeZ)
-			pc.ZUp()
+			pc.Jump(path[len(path)-1].X, path[len(path)-1].Y, settings.SafeZ, settings.FeedXY*2)
 		}
 	}
 

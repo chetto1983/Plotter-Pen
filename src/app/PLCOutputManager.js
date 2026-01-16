@@ -1,5 +1,3 @@
-import { PLCOutputGenerator, PathOptimizer } from "../plc/extraction.js";
-
 export class PLCOutputManager {
   constructor(app) {
     this.app = app;
@@ -16,72 +14,91 @@ export class PLCOutputManager {
     this.app.ui.displayPLCOutput([], this.app);
   }
 
-  extractPLC() {
+  async extractPLC() {
     if (this.app.primitives.length === 0) {
       this.app.ui.updateStatus("Nessuna primitiva da estrarre");
       return;
     }
 
-    const supportedTypes = new Set(["line", "arc", "circle", "rectangle", "polygon", "polyline"]);
-    const primitivesWithData = this.app.primitives
-      .filter((p) => supportedTypes.has(p.type))
-      .map((p) => {
-        const copy = p.clone();
-        copy.sourcePrimitive = p;
-
-        if (copy.type === "line") {
-          copy.plcData = { type: 1, x1: copy.x1, y1: copy.y1, x2: copy.x2, y2: copy.y2 };
-        } else if (copy.type === "arc") {
-          copy.plcData = {
-            type: copy.isClockwise ? 2 : 3,
-            x1: copy.x1, y1: copy.y1, x2: copy.x2, y2: copy.y2, cx: copy.cx, cy: copy.cy,
-          };
-        } else if (copy.type === "circle") {
-          const cx = copy.center?.x ?? copy.cx;
-          const cy = copy.center?.y ?? copy.cy;
-          const r = copy.radius ?? copy._radius;
-          copy.plcData = {
-            type: 3,
-            x1: cx + r, y1: cy,
-            x2: cx + r, y2: cy,
-            cx: cx, cy: cy,
-          };
-        } else if (copy.type === "rectangle") {
-          copy.plcData = { type: "rectangle", x: copy.x, y: copy.y, width: copy.width, height: copy.height };
-        } else if (copy.type === "polygon" || copy.type === "polyline") {
-          copy.plcData = { type: copy.type, points: copy.points, closed: copy.closed };
-        }
-
-        return copy;
-      });
-
-    // Use primitives directly, do NOT expand polygons/rectangles into thousands of lines
-    // This optimization prevents O(N^2) path finding on huge datasets
-    const optimizedPrimitives = PathOptimizer.optimizeOrder(primitivesWithData);
-    // Get speed from UI or default to 100
+    // Get config from UI
     const speedInput = document.getElementById('simWorkSpeed');
     const rapidInput = document.getElementById('simRapidSpeed');
+    const safeZInput = document.getElementById('simSafeZ');
+    const workZInput = document.getElementById('simWorkZ');
+
     const defaultSpeed = speedInput ? parseFloat(speedInput.value) : 100.0;
     const rapidSpeed = rapidInput ? parseFloat(rapidInput.value) : 1000.0;
+    const safeZ = safeZInput ? parseFloat(safeZInput.value) : 5.0;
+    const workZ = workZInput ? parseFloat(workZInput.value) : -2.0;
 
-    const generator = new PLCOutputGenerator({ defaultSpeed, rapidSpeed });
-    const commands = generator.generate(optimizedPrimitives);
-    for (const cmd of commands) {
-      if (cmd.primitive?.sourcePrimitive) {
-        cmd.primitive = cmd.primitive.sourcePrimitive;
+    // Convert primitives to API format
+    const supportedTypes = new Set(["line", "arc", "circle", "rectangle", "polygon", "polyline"]);
+    const primitives = this.app.primitives
+      .filter((p) => supportedTypes.has(p.type))
+      .map((p) => this.primitiveToRequest(p));
+
+    try {
+      const response = await fetch("/api/plc/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ primitives, defaultSpeed, rapidSpeed, safeZ, workZ })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
       }
+
+      const result = await response.json();
+
+      // Map commands back to source primitives for UI highlighting
+      const primMap = new Map(this.app.primitives.map(p => [p.id, p]));
+      this.app.plcCommands = result.commands.map(cmd => ({
+        command: cmd.command,
+        primitive: primMap.get(cmd.primitiveId) || null
+      }));
+      this.app.plcOutput = result.output;
+
+      // Limit UI display to avoid DOM freeze
+      const displayCommands = this.app.plcCommands.length > 2000
+        ? this.app.plcCommands.slice(0, 2000).concat([{ command: `... (${this.app.plcCommands.length - 2000} more commands)` }])
+        : this.app.plcCommands;
+
+      this.app.ui.displayPLCOutput(displayCommands, this.app);
+      this.app.ui.updateStats();
+      this.app.ui.updateStatus(`Estratte ${this.app.plcOutput.length} istruzioni PLC`);
+    } catch (err) {
+      console.error("PLC extraction failed:", err);
+      this.app.ui.updateStatus(`Errore estrazione PLC: ${err.message}`);
     }
-    this.app.plcCommands = commands;
-    this.app.plcOutput = commands.map((c) => c.command);
+  }
 
-    // Limit UI display to avoid DOM freeze with massive outputs
-    const displayCommands = this.app.plcCommands.length > 2000
-      ? this.app.plcCommands.slice(0, 2000).concat([{ command: `... (${this.app.plcCommands.length - 2000} more commands)` }])
-      : this.app.plcCommands;
+  // Convert frontend primitive to API request format
+  primitiveToRequest(p) {
+    const req = { type: p.type, id: p.id };
 
-    this.app.ui.displayPLCOutput(displayCommands, this.app);
-    this.app.ui.updateStats();
-    this.app.ui.updateStatus(`Estratte ${this.app.plcOutput.length} istruzioni PLC`);
+    if (p.type === "line") {
+      req.x1 = p.x1; req.y1 = p.y1;
+      req.x2 = p.x2; req.y2 = p.y2;
+    } else if (p.type === "arc") {
+      req.x1 = p.x1; req.y1 = p.y1;
+      req.x2 = p.x2; req.y2 = p.y2;
+      req.cx = p.cx; req.cy = p.cy;
+      req.isClockwise = p.isClockwise || false;
+      req.sweep = p.sweep;
+    } else if (p.type === "circle") {
+      req.cx = p.center?.x ?? p.cx;
+      req.cy = p.center?.y ?? p.cy;
+      req.radius = p.radius ?? p._radius;
+      req.center = { x: req.cx, y: req.cy };
+    } else if (p.type === "rectangle") {
+      req.x = p.x; req.y = p.y;
+      req.width = p.width; req.height = p.height;
+    } else if (p.type === "polygon" || p.type === "polyline") {
+      req.points = p.points;
+      req.closed = p.closed;
+    }
+
+    return req;
   }
 
   async copyOutput() {

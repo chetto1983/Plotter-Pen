@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// Generator produces PLC commands (L, A, J, Z_UP, Z_DW)
+// Generator produces PLC commands (L, A, J with 3D interpolation, WAIT)
 type Generator struct {
 	commands []string
 }
@@ -19,30 +19,27 @@ func NewGenerator() *Generator {
 	}
 }
 
-// ZUp adds a Z_UP command
-func (g *Generator) ZUp() {
-	g.commands = append(g.commands, "Z_UP")
+// Wait adds delay command in milliseconds
+func (g *Generator) Wait(ms int) {
+	if ms > 0 {
+		g.commands = append(g.commands, fmt.Sprintf("WAIT %d", ms))
+	}
 }
 
-// ZDown adds a Z_DW command
-func (g *Generator) ZDown() {
-	g.commands = append(g.commands, "Z_DW")
-}
-
-// Jump (Rapid) to X,Y
-func (g *Generator) Jump(x, y, speed float64) {
-	cmd := fmt.Sprintf("J X %.3f, Y %.3f, V %.3f", x, y, speed)
+// Jump (Rapid) to X,Y,Z - 3D interpolation
+func (g *Generator) Jump(x, y, z, speed float64) {
+	cmd := fmt.Sprintf("J X %.3f, Y %.3f, Z %.3f, V %.3f", x, y, z, speed)
 	g.commands = append(g.commands, cmd)
 }
 
-// Line (Feed) to X,Y
-func (g *Generator) Line(x, y, speed float64) {
-	cmd := fmt.Sprintf("L X %.3f, Y %.3f, V %.3f", x, y, speed)
+// Line (Feed) to X,Y,Z - 3D interpolation
+func (g *Generator) Line(x, y, z, speed float64) {
+	cmd := fmt.Sprintf("L X %.3f, Y %.3f, Z %.3f, V %.3f", x, y, z, speed)
 	g.commands = append(g.commands, cmd)
 }
 
-// Arc (Feed) to X,Y via MidPoint (I,J)
-func (g *Generator) Arc(end geom.Point, center geom.Point, start geom.Point, isCW bool, speed float64) {
+// Arc (Feed) to X,Y,Z via MidPoint (I,J) - 3D interpolation
+func (g *Generator) Arc(end geom.Point, center geom.Point, start geom.Point, isCW bool, z, speed float64) {
 	// Calculate MidPoint (Through-Point)
 	radius := center.Distance(start)
 
@@ -72,8 +69,8 @@ func (g *Generator) Arc(end geom.Point, center geom.Point, start geom.Point, isC
 	midX := center.X + radius*math.Cos(midAngle)
 	midY := center.Y + radius*math.Sin(midAngle)
 
-	// A X ... Y ... I ... J ... V ...
-	cmd := fmt.Sprintf("A X %.3f, Y %.3f, I %.3f, J %.3f, V %.3f", end.X, end.Y, midX, midY, speed)
+	// A X ... Y ... Z ... I ... J ... V ...
+	cmd := fmt.Sprintf("A X %.3f, Y %.3f, Z %.3f, I %.3f, J %.3f, V %.3f", end.X, end.Y, z, midX, midY, speed)
 	g.commands = append(g.commands, cmd)
 }
 

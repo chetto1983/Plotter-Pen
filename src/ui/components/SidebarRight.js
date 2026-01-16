@@ -31,9 +31,17 @@ export class SidebarRight {
               <label for="simWorkSpeed" class="cad-speed-label">Work:</label>
               <input type="number" id="simWorkSpeed" class="cad-number-input" min="10" max="1000" step="10" value="100" placeholder="100"><span class="cad-speed-unit">mm/s</span>
             </div>
-             <div class="cad-speed-group">
+            <div class="cad-speed-group">
               <label for="simRapidSpeed" class="cad-speed-label">Rapid:</label>
               <input type="number" id="simRapidSpeed" class="cad-number-input" min="10" max="5000" step="100" value="1000" placeholder="1000"><span class="cad-speed-unit">mm/s</span>
+            </div>
+            <div class="cad-speed-group">
+              <label for="simSafeZ" class="cad-speed-label">SafeZ:</label>
+              <input type="number" id="simSafeZ" class="cad-number-input" min="0" max="100" step="1" value="5" placeholder="5"><span class="cad-speed-unit">mm</span>
+            </div>
+            <div class="cad-speed-group">
+              <label for="simWorkZ" class="cad-speed-label">WorkZ:</label>
+              <input type="number" id="simWorkZ" class="cad-number-input" min="-50" max="0" step="0.5" value="-2" placeholder="-2"><span class="cad-speed-unit">mm</span>
             </div>
           </div>
         </div>
