@@ -411,3 +411,108 @@ func TestDeleteMachine_InvalidID(t *testing.T) {
 		t.Errorf("Status = %d, want 400", w.Code)
 	}
 }
+
+// === DB Error Tests for Machine Handler ===
+
+func setupClosedMachineDB(t *testing.T) (*gin.Engine, func()) {
+	tmpFile := filepath.Join(os.TempDir(), fmt.Sprintf("test_machine_closed_%s_%d.db", t.Name(), time.Now().UnixNano()))
+	db, err := persistence.InitDB(tmpFile)
+	if err != nil {
+		t.Fatalf("InitDB error: %v", err)
+	}
+
+	r := gin.New()
+	api := r.Group("/api")
+	mh := NewMachineHandler(db)
+	mh.RegisterRoutes(api)
+
+	// Close the underlying SQL connection to simulate DB errors
+	sqlDB, _ := db.DB()
+	sqlDB.Close()
+
+	return r, func() { os.Remove(tmpFile) }
+}
+
+func TestListMachines_DBError(t *testing.T) {
+	r, cleanup := setupClosedMachineDB(t)
+	defer cleanup()
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/machines", nil)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("Status = %d, want 500", w.Code)
+	}
+}
+
+func TestGetActiveMachine_DBError(t *testing.T) {
+	r, cleanup := setupClosedMachineDB(t)
+	defer cleanup()
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/machines/active", nil)
+	r.ServeHTTP(w, req)
+
+	// DB error when finding active machine should return 404 (not found)
+	if w.Code != http.StatusNotFound && w.Code != http.StatusInternalServerError {
+		t.Errorf("Status = %d, want 404 or 500", w.Code)
+	}
+}
+
+func TestCreateMachine_DBError(t *testing.T) {
+	r, cleanup := setupClosedMachineDB(t)
+	defer cleanup()
+
+	body := `{"name": "Test", "type": "plotter", "data": "{}"}`
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/machines", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("Status = %d, want 500", w.Code)
+	}
+}
+
+func TestGetMachine_DBError(t *testing.T) {
+	r, cleanup := setupClosedMachineDB(t)
+	defer cleanup()
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/machines/1", nil)
+	r.ServeHTTP(w, req)
+
+	// DB error when fetching machine - returns 404 since record not found
+	if w.Code != http.StatusNotFound {
+		t.Errorf("Status = %d, want 404", w.Code)
+	}
+}
+
+func TestUpdateMachine_DBError(t *testing.T) {
+	r, cleanup := setupClosedMachineDB(t)
+	defer cleanup()
+
+	body := `{"name": "Updated"}`
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("PUT", "/api/machines/1", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("Status = %d, want 500", w.Code)
+	}
+}
+
+func TestDeleteMachine_DBError(t *testing.T) {
+	r, cleanup := setupClosedMachineDB(t)
+	defer cleanup()
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("DELETE", "/api/machines/1", nil)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("Status = %d, want 500", w.Code)
+	}
+}

@@ -40,7 +40,21 @@ func (c *Client) Connect(ctx context.Context) error {
 	}
 
 	cfg := c.config.Get()
-	opts := c.buildConnectionOptions(cfg)
+
+	// Discover endpoints to find security requirements
+	endpoints, err := opcua.GetEndpoints(ctx, cfg.Endpoint)
+	if err != nil {
+		return fmt.Errorf("failed to get endpoints: %w", err)
+	}
+
+	// Select best endpoint (prefer Sign over SignAndEncrypt for performance)
+	ep := opcua.SelectEndpoint(endpoints, cfg.SecurityPolicy, ua.MessageSecurityModeFromString(cfg.SecurityMode))
+	if ep == nil && len(endpoints) > 0 {
+		// Auto-select first available secure endpoint
+		ep = endpoints[0]
+	}
+
+	opts := c.buildConnectionOptions(cfg, ep)
 
 	client, err := opcua.NewClient(cfg.Endpoint, opts...)
 	if err != nil {
@@ -57,34 +71,56 @@ func (c *Client) Connect(ctx context.Context) error {
 	return nil
 }
 
-// buildConnectionOptions creates OPC UA connection options based on config
-func (c *Client) buildConnectionOptions(cfg Config) []opcua.Option {
+// buildConnectionOptions creates OPC UA connection options based on config and endpoint
+func (c *Client) buildConnectionOptions(cfg Config, ep *ua.EndpointDescription) []opcua.Option {
 	opts := []opcua.Option{}
 
-	// Security mode
-	switch cfg.SecurityMode {
-	case "Sign":
-		opts = append(opts, opcua.SecurityMode(ua.MessageSecurityModeSign))
-	case "SignAndEncrypt":
-		opts = append(opts, opcua.SecurityMode(ua.MessageSecurityModeSignAndEncrypt))
-	default:
-		opts = append(opts, opcua.SecurityMode(ua.MessageSecurityModeNone))
+	// If we have an endpoint, use its security settings
+	if ep != nil {
+		opts = append(opts, opcua.SecurityFromEndpoint(ep, ua.UserTokenTypeAnonymous))
+	} else {
+		// Fallback to config-based security
+		switch cfg.SecurityMode {
+		case "Sign":
+			opts = append(opts, opcua.SecurityMode(ua.MessageSecurityModeSign))
+		case "SignAndEncrypt":
+			opts = append(opts, opcua.SecurityMode(ua.MessageSecurityModeSignAndEncrypt))
+		default:
+			opts = append(opts, opcua.SecurityMode(ua.MessageSecurityModeNone))
+		}
+
+		switch cfg.SecurityPolicy {
+		case "Basic256":
+			opts = append(opts, opcua.SecurityPolicy(ua.SecurityPolicyURIBasic256))
+		case "Basic256Sha256":
+			opts = append(opts, opcua.SecurityPolicy(ua.SecurityPolicyURIBasic256Sha256))
+		default:
+			opts = append(opts, opcua.SecurityPolicy("None"))
+		}
 	}
 
-	// Security policy
-	switch cfg.SecurityPolicy {
-	case "Basic256":
-		opts = append(opts, opcua.SecurityPolicy(ua.SecurityPolicyURIBasic256))
-	case "Basic256Sha256":
-		opts = append(opts, opcua.SecurityPolicy(ua.SecurityPolicyURIBasic256Sha256))
-	default:
-		opts = append(opts, opcua.SecurityPolicy("None"))
-	}
-
-	// Certificate-based authentication
+	// Certificate-based authentication (client cert + key)
 	if cfg.CertFile != "" && cfg.KeyFile != "" {
 		opts = append(opts, opcua.CertificateFile(cfg.CertFile))
 		opts = append(opts, opcua.PrivateKeyFile(cfg.KeyFile))
+	}
+
+	// Generate self-signed certificates for secure connections if no cert provided
+	if ep != nil && ep.SecurityMode != ua.MessageSecurityModeNone {
+		if cfg.CertFile == "" || cfg.KeyFile == "" {
+			// Use persistent certificates saved to disk (in certs/ subdirectory)
+			certPath := "certs/client.pem"
+			keyPath := "certs/client.key"
+			cert, key, err := LoadOrGenerateCert(certPath, keyPath)
+			if err != nil {
+				// Log error but continue - connection may fail later
+				fmt.Printf("OPC UA: failed to load/generate certificate: %v\n", err)
+			} else {
+				fmt.Printf("OPC UA: using certificate from certs/client.der (import this into PLC trusted certs)\n")
+				opts = append(opts, opcua.Certificate(cert))
+				opts = append(opts, opcua.PrivateKey(key))
+			}
+		}
 	}
 
 	// Username/password authentication

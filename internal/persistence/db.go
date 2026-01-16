@@ -53,14 +53,48 @@ type MachineConfig struct {
 	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
 }
 
+// DBConfig holds database configuration
+type DBConfig struct {
+	MaxOpenConns    int
+	MaxIdleConns    int
+	ConnMaxLifetime time.Duration
+	ConnMaxIdleTime time.Duration
+}
+
+// DefaultDBConfig returns default database configuration
+func DefaultDBConfig() DBConfig {
+	return DBConfig{
+		MaxOpenConns:    25,
+		MaxIdleConns:    5,
+		ConnMaxLifetime: 5 * time.Minute,
+		ConnMaxIdleTime: 5 * time.Minute,
+	}
+}
+
 // InitDB initializes the SQLite database with GORM
 func InitDB(dbPath string) (*gorm.DB, error) {
+	return InitDBWithConfig(dbPath, DefaultDBConfig())
+}
+
+// InitDBWithConfig initializes the database with custom configuration
+func InitDBWithConfig(dbPath string, cfg DBConfig) (*gorm.DB, error) {
 	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Warn),
 	})
 	if err != nil {
 		return nil, err
 	}
+
+	// Configure connection pool
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, err
+	}
+
+	sqlDB.SetMaxOpenConns(cfg.MaxOpenConns)
+	sqlDB.SetMaxIdleConns(cfg.MaxIdleConns)
+	sqlDB.SetConnMaxLifetime(cfg.ConnMaxLifetime)
+	sqlDB.SetConnMaxIdleTime(cfg.ConnMaxIdleTime)
 
 	// Auto-migrate schema
 	err = db.AutoMigrate(

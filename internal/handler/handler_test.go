@@ -579,3 +579,206 @@ func TestCreateTool_Invalid(t *testing.T) {
 		t.Errorf("Status = %d, want 400", w.Code)
 	}
 }
+
+// === DB Error Tests (using closed DB) ===
+
+func setupClosedDB(t *testing.T) (*gin.Engine, func()) {
+	tmpFile := filepath.Join(os.TempDir(), fmt.Sprintf("test_closed_%s_%d.db", t.Name(), time.Now().UnixNano()))
+	db, err := persistence.InitDB(tmpFile)
+	if err != nil {
+		t.Fatalf("InitDB error: %v", err)
+	}
+
+	r := gin.New()
+	api := r.Group("/api")
+	ph := NewPersistenceHandler(db)
+	ph.RegisterRoutes(api)
+
+	// Close the underlying SQL connection to simulate DB errors
+	sqlDB, _ := db.DB()
+	sqlDB.Close()
+
+	return r, func() { os.Remove(tmpFile) }
+}
+
+func TestGetState_DBError(t *testing.T) {
+	r, cleanup := setupClosedDB(t)
+	defer cleanup()
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/state", nil)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("Status = %d, want 500", w.Code)
+	}
+}
+
+func TestSaveState_DBError(t *testing.T) {
+	r, cleanup := setupClosedDB(t)
+	defer cleanup()
+
+	body := `{"data": "{}"}`
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/state", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("Status = %d, want 500", w.Code)
+	}
+}
+
+func TestListDrawings_DBError(t *testing.T) {
+	r, cleanup := setupClosedDB(t)
+	defer cleanup()
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/drawings", nil)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("Status = %d, want 500", w.Code)
+	}
+}
+
+func TestGetDrawing_DBError(t *testing.T) {
+	r, cleanup := setupClosedDB(t)
+	defer cleanup()
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/drawings/1", nil)
+	r.ServeHTTP(w, req)
+
+	// DB error results in not found since record isn't found
+	if w.Code != http.StatusNotFound {
+		t.Errorf("Status = %d, want 404", w.Code)
+	}
+}
+
+func TestCreateDrawing_DBError(t *testing.T) {
+	r, cleanup := setupClosedDB(t)
+	defer cleanup()
+
+	body := `{"name": "Test", "data": "{}"}`
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/drawings", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("Status = %d, want 500", w.Code)
+	}
+}
+
+func TestUpdateDrawing_DBError(t *testing.T) {
+	r, cleanup := setupClosedDB(t)
+	defer cleanup()
+
+	body := `{"name": "Updated"}`
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("PUT", "/api/drawings/1", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("Status = %d, want 500", w.Code)
+	}
+}
+
+func TestDeleteDrawing_DBError(t *testing.T) {
+	r, cleanup := setupClosedDB(t)
+	defer cleanup()
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("DELETE", "/api/drawings/1", nil)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("Status = %d, want 500", w.Code)
+	}
+}
+
+func TestListTools_DBError(t *testing.T) {
+	r, cleanup := setupClosedDB(t)
+	defer cleanup()
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/tools", nil)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("Status = %d, want 500", w.Code)
+	}
+}
+
+func TestCreateTool_DBError(t *testing.T) {
+	r, cleanup := setupClosedDB(t)
+	defer cleanup()
+
+	body := `{"name": "Test", "diameter": 5.0}`
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/tools", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("Status = %d, want 500", w.Code)
+	}
+}
+
+func TestUpdateTool_DBError(t *testing.T) {
+	r, cleanup := setupClosedDB(t)
+	defer cleanup()
+
+	body := `{"name": "Updated"}`
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("PUT", "/api/tools/1", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("Status = %d, want 500", w.Code)
+	}
+}
+
+func TestDeleteTool_DBError(t *testing.T) {
+	r, cleanup := setupClosedDB(t)
+	defer cleanup()
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("DELETE", "/api/tools/1", nil)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("Status = %d, want 500", w.Code)
+	}
+}
+
+func TestGetCAMSettings_DBError(t *testing.T) {
+	r, cleanup := setupClosedDB(t)
+	defer cleanup()
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/cam/settings", nil)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("Status = %d, want 500", w.Code)
+	}
+}
+
+func TestSaveCAMSettings_DBError(t *testing.T) {
+	r, cleanup := setupClosedDB(t)
+	defer cleanup()
+
+	body := `{"data": "{}"}`
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/cam/settings", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("Status = %d, want 500", w.Code)
+	}
+}

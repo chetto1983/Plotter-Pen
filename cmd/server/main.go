@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	"plotter-pen/internal/handler"
+	"plotter-pen/internal/middleware"
 	"plotter-pen/internal/persistence"
 	"plotter-pen/internal/system"
 )
@@ -18,14 +19,25 @@ func main() {
 	// Set Gin mode
 	gin.SetMode(cfg.GinMode)
 
-	// Initialize database
+	// Initialize database with connection pooling
 	db, err := persistence.InitDB(cfg.DBPath)
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
-	// Create Gin router
-	r := gin.Default()
+	// Create Gin router without default middleware
+	r := gin.New()
+
+	// Add production middleware
+	r.Use(middleware.Recovery())  // Panic recovery
+	r.Use(middleware.Logger())    // Structured logging
+	r.Use(middleware.CORS())      // CORS headers
+	r.Use(middleware.Security())  // Security headers
+	r.Use(middleware.RateLimit()) // Rate limiting
+
+	// Health check endpoints (no /api prefix)
+	healthHandler := handler.NewHealthHandler(db)
+	healthHandler.RegisterRoutes(r)
 
 	// Serve static files
 	r.Static("/src", cfg.StaticDir+"/src")
