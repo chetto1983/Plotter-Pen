@@ -17,6 +17,7 @@ import { ViewManager } from './app/ViewManager.js';
 import { ToolController } from './app/ToolController.js';
 import { LayerPanel } from './ui/LayerPanel.js';
 import { PersistenceManager } from './app/PersistenceManager.js';
+import { OPCUAWebSocketService } from './services/OPCUAWebSocketService.js';
 // import { CAMManager } from './cam/CAMManager.js'; // Converted to dynamic
 
 console.log('MAIN: Loading main.js...');
@@ -50,6 +51,7 @@ class CADApplication {
     this.viewManager = null;
     this.toolController = null;
     this.persistenceManager = null;
+    this.wsService = null;
 
     // Settings
     this.workspaceWidth = 600;
@@ -104,6 +106,10 @@ class CADApplication {
       objectSnapEnabled: this.snapToObjects
     });
     this.snapManager.setPrimitives(this.primitives);
+
+    // Initialize WebSocket service
+    this.wsService = new OPCUAWebSocketService();
+    this.wsService.connect();
 
     // Initialize handlers
     this.input = new InputHandler(this);

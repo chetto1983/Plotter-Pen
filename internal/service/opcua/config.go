@@ -25,6 +25,17 @@ type Config struct {
 	AlarmNode    string `json:"alarmNode"`
 	ProgressNode string `json:"progressNode"`
 
+	// Chunked transfer nodes (Db_Punti interface)
+	PointArrayNode   string `json:"pointArrayNode"`   // ns=2;i=45 - STRING[21] array
+	TriggerWriteNode string `json:"triggerWriteNode"` // ns=2;i=12 - PC triggers PLC
+	ReadDoneNode     string `json:"readDoneNode"`     // ns=2;i=23 - PLC ack (Trirrer_Read_Dn)
+	EndOfFileNode    string `json:"endOfFileNode"`    // ns=2;i=34 - Transfer complete
+
+	// Chunked transfer settings
+	ChunkSize    int `json:"chunkSize"`    // Default 21
+	AckTimeout   int `json:"ackTimeout"`   // ms, default 5000
+	PollInterval int `json:"pollInterval"` // ms, default 100
+
 	// Subscription settings
 	SubscriptionInterval int `json:"subscriptionInterval"` // milliseconds
 
@@ -64,6 +75,14 @@ func NewConfigManager(configFile string) *ConfigManager {
 			StatusNode:   "ns=2;s=Status",
 			AlarmNode:    "ns=2;s=Alarm",
 			ProgressNode: "ns=2;s=Progress",
+			// Chunked transfer defaults (Db_Punti)
+			PointArrayNode:   "ns=2;i=45",
+			TriggerWriteNode: "ns=2;i=12",
+			ReadDoneNode:     "ns=2;i=23",
+			EndOfFileNode:    "ns=2;i=34",
+			ChunkSize:        20,
+			AckTimeout:       5000,
+			PollInterval:     100,
 			// Subscription default: 100ms
 			SubscriptionInterval: 100,
 			// Security defaults (None = no encryption)
@@ -186,6 +205,28 @@ func (cm *ConfigManager) Update(updates Config) {
 	}
 	if updates.SubscriptionInterval > 0 {
 		cm.config.SubscriptionInterval = updates.SubscriptionInterval
+	}
+	// Chunked transfer nodes
+	if updates.PointArrayNode != "" {
+		cm.config.PointArrayNode = updates.PointArrayNode
+	}
+	if updates.TriggerWriteNode != "" {
+		cm.config.TriggerWriteNode = updates.TriggerWriteNode
+	}
+	if updates.ReadDoneNode != "" {
+		cm.config.ReadDoneNode = updates.ReadDoneNode
+	}
+	if updates.EndOfFileNode != "" {
+		cm.config.EndOfFileNode = updates.EndOfFileNode
+	}
+	if updates.ChunkSize > 0 {
+		cm.config.ChunkSize = updates.ChunkSize
+	}
+	if updates.AckTimeout > 0 {
+		cm.config.AckTimeout = updates.AckTimeout
+	}
+	if updates.PollInterval > 0 {
+		cm.config.PollInterval = updates.PollInterval
 	}
 	// Security settings
 	if updates.SecurityMode != "" {

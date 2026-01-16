@@ -39,6 +39,7 @@ func (h *OpcuaHandler) RegisterRoutes(r *gin.RouterGroup) {
 		opcuaGroup.POST("/disconnect", h.Disconnect)
 		opcuaGroup.GET("/position", h.GetPosition)
 		opcuaGroup.GET("/machine-status", h.GetMachineStatus)
+		opcuaGroup.GET("/ws", h.WebSocket) // Real-time WebSocket endpoint
 	}
 }
 

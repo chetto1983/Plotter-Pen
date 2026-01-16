@@ -97,7 +97,24 @@ export class SidebarLeft {
         </div>
       </div>
 
-      <div class="cad-opcua-status" id="opcuaStatus"></div>
+      <!-- OPC UA Status -->
+      <div class="cad-panel-section cad-opcua-section">
+        <div class="cad-panel-header">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/></svg>
+          <span>OPC UA / PLC</span>
+        </div>
+        <div class="cad-panel-content">
+          <div class="cad-opcua-status" id="opcuaStatus">Disconnesso</div>
+          <div class="cad-plc-position" id="plcPosition">X: 0.00 Y: 0.00 Z: 0.00</div>
+          <div id="transferProgress" class="transfer-progress hidden">
+            <div class="progress-bar">
+              <div class="progress-fill"></div>
+            </div>
+            <span class="progress-text">0%</span>
+            <button id="cancelTransfer" class="btn-cancel" title="Annulla trasferimento">✕</button>
+          </div>
+        </div>
+      </div>
         `;
         return aside;
     }

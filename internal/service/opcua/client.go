@@ -364,3 +364,368 @@ func (c *Client) ReadNode(ctx context.Context, nodeIDStr string) (interface{}, e
 
 	return resp.Results[0].Value.Value(), nil
 }
+
+// WriteString writes a single string to a node
+func (c *Client) WriteString(ctx context.Context, nodeIDStr string, value string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if !c.connected || c.client == nil {
+		return fmt.Errorf("not connected to OPC UA server")
+	}
+
+	nodeID, err := ua.ParseNodeID(nodeIDStr)
+	if err != nil {
+		return fmt.Errorf("invalid node ID: %w", err)
+	}
+
+	variant, err := ua.NewVariant(value)
+	if err != nil {
+		return fmt.Errorf("failed to create variant: %w", err)
+	}
+
+	req := &ua.WriteRequest{
+		NodesToWrite: []*ua.WriteValue{
+			{
+				NodeID:      nodeID,
+				AttributeID: ua.AttributeIDValue,
+				Value:       &ua.DataValue{Value: variant},
+			},
+		},
+	}
+
+	resp, err := c.client.Write(ctx, req)
+	if err != nil {
+		return fmt.Errorf("write failed: %w", err)
+	}
+
+	if resp.Results[0] != ua.StatusOK {
+		return fmt.Errorf("write status: %v", resp.Results[0])
+	}
+
+	return nil
+}
+
+// WriteStringArray writes a string array to a node
+// For Siemens S7-1500: reads current value first to match encoding
+func (c *Client) WriteStringArray(ctx context.Context, nodeIDStr string, data []string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if !c.connected || c.client == nil {
+		return fmt.Errorf("not connected to OPC UA server")
+	}
+
+	nodeID, err := ua.ParseNodeID(nodeIDStr)
+	if err != nil {
+		return fmt.Errorf("invalid node ID: %w", err)
+	}
+
+	// First read to get exact Siemens variant encoding
+	readReq := &ua.ReadRequest{
+		NodesToRead: []*ua.ReadValueID{
+			{NodeID: nodeID, AttributeID: ua.AttributeIDValue},
+		},
+	}
+
+	readResp, err := c.client.Read(ctx, readReq)
+	if err != nil {
+		return fmt.Errorf("read for encoding failed: %w", err)
+	}
+
+	if readResp.Results[0].Status != ua.StatusOK {
+		return fmt.Errorf("read status: %v", readResp.Results[0].Status)
+	}
+
+	// Get the original DataValue and modify only the value
+	originalDV := readResp.Results[0]
+	variant, err := ua.NewVariant(data)
+	if err != nil {
+		return fmt.Errorf("failed to create variant: %w", err)
+	}
+	originalDV.Value = variant
+
+	req := &ua.WriteRequest{
+		NodesToWrite: []*ua.WriteValue{
+			{
+				NodeID:      nodeID,
+				AttributeID: ua.AttributeIDValue,
+				Value:       originalDV,
+			},
+		},
+	}
+
+	resp, err := c.client.Write(ctx, req)
+	if err != nil {
+		return fmt.Errorf("write failed: %w", err)
+	}
+
+	if resp.Results[0] != ua.StatusOK {
+		return fmt.Errorf("write status: %v", resp.Results[0])
+	}
+
+	return nil
+}
+
+// WriteBoolNode writes a boolean value to a node
+// For Siemens S7-1500: reads current value first to match encoding
+func (c *Client) WriteBoolNode(ctx context.Context, nodeIDStr string, value bool) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if !c.connected || c.client == nil {
+		return fmt.Errorf("not connected to OPC UA server")
+	}
+
+	nodeID, err := ua.ParseNodeID(nodeIDStr)
+	if err != nil {
+		return fmt.Errorf("invalid node ID: %w", err)
+	}
+
+	// First read to get exact Siemens variant encoding
+	readReq := &ua.ReadRequest{
+		NodesToRead: []*ua.ReadValueID{
+			{NodeID: nodeID, AttributeID: ua.AttributeIDValue},
+		},
+	}
+
+	readResp, err := c.client.Read(ctx, readReq)
+	if err != nil {
+		return fmt.Errorf("read for encoding failed: %w", err)
+	}
+
+	if readResp.Results[0].Status != ua.StatusOK {
+		return fmt.Errorf("read status: %v", readResp.Results[0].Status)
+	}
+
+	// Get the original DataValue and modify only the value
+	originalDV := readResp.Results[0]
+	originalDV.Value = ua.MustVariant(value)
+
+	req := &ua.WriteRequest{
+		NodesToWrite: []*ua.WriteValue{
+			{
+				NodeID:      nodeID,
+				AttributeID: ua.AttributeIDValue,
+				Value:       originalDV,
+			},
+		},
+	}
+
+	resp, err := c.client.Write(ctx, req)
+	if err != nil {
+		return fmt.Errorf("write failed: %w", err)
+	}
+
+	if resp.Results[0] != ua.StatusOK {
+		return fmt.Errorf("write status: %v", resp.Results[0])
+	}
+
+	return nil
+}
+
+// ReadBoolNode reads a boolean value from a node
+func (c *Client) ReadBoolNode(ctx context.Context, nodeIDStr string) (bool, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if !c.connected || c.client == nil {
+		return false, fmt.Errorf("not connected to OPC UA server")
+	}
+
+	nodeID, err := ua.ParseNodeID(nodeIDStr)
+	if err != nil {
+		return false, fmt.Errorf("invalid node ID: %w", err)
+	}
+
+	req := &ua.ReadRequest{
+		NodesToRead: []*ua.ReadValueID{
+			{NodeID: nodeID, AttributeID: ua.AttributeIDValue},
+		},
+	}
+
+	resp, err := c.client.Read(ctx, req)
+	if err != nil {
+		return false, fmt.Errorf("read failed: %w", err)
+	}
+
+	if resp.Results[0].Status != ua.StatusOK {
+		return false, fmt.Errorf("read status: %v", resp.Results[0].Status)
+	}
+
+	val := resp.Results[0].Value.Value()
+	if b, ok := val.(bool); ok {
+		return b, nil
+	}
+	return false, fmt.Errorf("expected bool, got %T", val)
+}
+
+// BrowseResult represents a browse result node
+type BrowseResult struct {
+	NodeID      string
+	DisplayName string
+	NodeClass   string
+}
+
+// ReadNodeDataType reads the DataType attribute of a node
+func (c *Client) ReadNodeDataType(ctx context.Context, nodeIDStr string) (*ua.NodeID, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if !c.connected || c.client == nil {
+		return nil, fmt.Errorf("not connected to OPC UA server")
+	}
+
+	nodeID, err := ua.ParseNodeID(nodeIDStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid node ID: %w", err)
+	}
+
+	req := &ua.ReadRequest{
+		NodesToRead: []*ua.ReadValueID{
+			{NodeID: nodeID, AttributeID: ua.AttributeIDDataType},
+		},
+	}
+
+	resp, err := c.client.Read(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("read failed: %w", err)
+	}
+
+	if resp.Results[0].Status != ua.StatusOK {
+		return nil, fmt.Errorf("read status: %v", resp.Results[0].Status)
+	}
+
+	dataType, ok := resp.Results[0].Value.Value().(*ua.NodeID)
+	if !ok {
+		return nil, fmt.Errorf("expected NodeID, got %T", resp.Results[0].Value.Value())
+	}
+
+	return dataType, nil
+}
+
+// ReadNodeAccessLevel reads the AccessLevel attribute of a node
+func (c *Client) ReadNodeAccessLevel(ctx context.Context, nodeIDStr string) (uint8, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if !c.connected || c.client == nil {
+		return 0, fmt.Errorf("not connected to OPC UA server")
+	}
+
+	nodeID, err := ua.ParseNodeID(nodeIDStr)
+	if err != nil {
+		return 0, fmt.Errorf("invalid node ID: %w", err)
+	}
+
+	req := &ua.ReadRequest{
+		NodesToRead: []*ua.ReadValueID{
+			{NodeID: nodeID, AttributeID: ua.AttributeIDAccessLevel},
+		},
+	}
+
+	resp, err := c.client.Read(ctx, req)
+	if err != nil {
+		return 0, fmt.Errorf("read failed: %w", err)
+	}
+
+	if resp.Results[0].Status != ua.StatusOK {
+		return 0, fmt.Errorf("read status: %v", resp.Results[0].Status)
+	}
+
+	level, ok := resp.Results[0].Value.Value().(uint8)
+	if !ok {
+		return 0, fmt.Errorf("expected uint8, got %T", resp.Results[0].Value.Value())
+	}
+
+	return level, nil
+}
+
+// ReadNodeUserAccessLevel reads the UserAccessLevel attribute (actual user permissions)
+func (c *Client) ReadNodeUserAccessLevel(ctx context.Context, nodeIDStr string) (uint8, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if !c.connected || c.client == nil {
+		return 0, fmt.Errorf("not connected to OPC UA server")
+	}
+
+	nodeID, err := ua.ParseNodeID(nodeIDStr)
+	if err != nil {
+		return 0, fmt.Errorf("invalid node ID: %w", err)
+	}
+
+	req := &ua.ReadRequest{
+		NodesToRead: []*ua.ReadValueID{
+			{NodeID: nodeID, AttributeID: ua.AttributeIDUserAccessLevel},
+		},
+	}
+
+	resp, err := c.client.Read(ctx, req)
+	if err != nil {
+		return 0, fmt.Errorf("read failed: %w", err)
+	}
+
+	if resp.Results[0].Status != ua.StatusOK {
+		return 0, fmt.Errorf("read status: %v", resp.Results[0].Status)
+	}
+
+	level, ok := resp.Results[0].Value.Value().(uint8)
+	if !ok {
+		return 0, fmt.Errorf("expected uint8, got %T", resp.Results[0].Value.Value())
+	}
+
+	return level, nil
+}
+
+// BrowseNode browses child nodes of a given node
+func (c *Client) BrowseNode(ctx context.Context, nodeIDStr string) ([]BrowseResult, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if !c.connected || c.client == nil {
+		return nil, fmt.Errorf("not connected to OPC UA server")
+	}
+
+	nodeID, err := ua.ParseNodeID(nodeIDStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid node ID: %w", err)
+	}
+
+	req := &ua.BrowseRequest{
+		NodesToBrowse: []*ua.BrowseDescription{
+			{
+				NodeID:          nodeID,
+				BrowseDirection: ua.BrowseDirectionForward,
+				ReferenceTypeID: ua.NewNumericNodeID(0, 33), // HierarchicalReferences
+				IncludeSubtypes: true,
+				NodeClassMask:   0xFF,                       // All node classes
+				ResultMask:      uint32(ua.BrowseResultMaskAll),
+			},
+		},
+	}
+
+	resp, err := c.client.Browse(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("browse failed: %w", err)
+	}
+
+	if len(resp.Results) == 0 {
+		return nil, fmt.Errorf("no browse results")
+	}
+
+	if resp.Results[0].StatusCode != ua.StatusOK {
+		return nil, fmt.Errorf("browse status: %v", resp.Results[0].StatusCode)
+	}
+
+	var results []BrowseResult
+	for _, ref := range resp.Results[0].References {
+		results = append(results, BrowseResult{
+			NodeID:      ref.NodeID.NodeID.String(),
+			DisplayName: ref.DisplayName.Text,
+			NodeClass:   fmt.Sprintf("%d", ref.NodeClass),
+		})
+	}
+
+	return results, nil
+}

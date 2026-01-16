@@ -244,6 +244,60 @@ plotter-pen-server (Go)
 4. **Send Workflow** - Send G-code/PLC commands to machine
 5. **Error Handling** - User-friendly error messages
 
+### Phase 10: WebSocket Real-Time Position Updates ✅ COMPLETE
+
+- `internal/service/opcua/stream.go` - Position streaming service
+- `internal/handler/opcua_ws.go` - WebSocket handler
+- `internal/handler/opcua_ws_test.go` - WebSocket tests
+- Route: `WS /api/opcua/ws`
+
+**Status:** Fully implemented with test coverage
+
+**WebSocket Message Types:**
+
+| Type | Direction | Purpose |
+|------|-----------|---------|
+| `position` | Server→Client | Real-time X/Y/Z coordinates |
+| `status` | Server→Client | Connection status |
+| `alarm` | Server→Client | PLC alarm notifications |
+| `ack` | Server→Client | Command acknowledgment |
+| `error` | Server→Client | Error messages |
+| `subscribe` | Client→Server | Start position streaming |
+| `unsubscribe` | Client→Server | Stop position streaming |
+| `command` | Client→Server | Send commands (connect/disconnect/send) |
+| `ping` | Client→Server | Keep-alive |
+| `pong` | Server→Client | Keep-alive response |
+
+**WebSocket Protocol:**
+
+```javascript
+// Connect to WebSocket
+const ws = new WebSocket('ws://localhost:8000/api/opcua/ws');
+
+// Subscribe to position updates (100ms interval)
+ws.send(JSON.stringify({type: 'subscribe', data: {interval: 100}}));
+
+// Receive position updates
+ws.onmessage = (event) => {
+    const msg = JSON.parse(event.data);
+    if (msg.type === 'position') {
+        console.log(`X: ${msg.data.x}, Y: ${msg.data.y}, Z: ${msg.data.z}`);
+    }
+};
+
+// Unsubscribe
+ws.send(JSON.stringify({type: 'unsubscribe'}));
+```
+
+**Benefits over HTTP Polling:**
+
+| Metric | HTTP Polling | WebSocket |
+|--------|--------------|-----------|
+| Latency | 100-500ms | <10ms |
+| Bandwidth | Higher (headers) | Lower (frames) |
+| Server Load | Higher (connections) | Lower (persistent) |
+| Real-time | Simulated | True |
+
 **API Integration:**
 
 | Frontend Action | Backend Endpoint |
@@ -251,7 +305,7 @@ plotter-pen-server (Go)
 | Load config | `GET /api/opcua/config` |
 | Save config | `PUT /api/opcua/config` |
 | Send to PLC | `POST /api/opcua/send` |
-| Get position | WebSocket subscription (future) |
+| Get position | `WS /api/opcua/ws` (Phase 10) |
 
 ## API Endpoints
 
@@ -277,6 +331,7 @@ plotter-pen-server (Go)
 | `/api/machines` | GET | ListMachines |
 | `/api/machines/:id` | GET/PUT | MachineConfig |
 | `/api/machines/active` | GET/PUT | ActiveMachine |
+| `/api/opcua/ws` | WS | WebSocket (real-time position) |
 
 ## Database Schema
 

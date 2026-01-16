@@ -171,14 +171,45 @@ export class PLCOutputManager {
     });
   }
 
+  /**
+   * Send output to PLC via WebSocket chunked transfer
+   * Falls back to HTTP if WebSocket is not connected
+   */
   async sendToPLC() {
-
     if (this.app.plcOutput.length === 0) {
       this.app.ui.updateStatus("Nessun output da inviare");
       return;
     }
 
-    this.app.ui.updateOPCUAStatus("Invio in corso...", "info");
+    const ws = this.app.wsService;
+
+    // Use WebSocket if connected, otherwise fall back to HTTP
+    if (ws && ws.isConnected()) {
+      this.sendViawWebSocket(ws);
+    } else {
+      this.sendViaHTTP();
+    }
+  }
+
+  /**
+   * Send via WebSocket chunked transfer (preferred)
+   */
+  sendViawWebSocket(ws) {
+    this.app.ui.updateOPCUAStatus("Avvio trasferimento...", "info");
+
+    const success = ws.transfer(this.app.plcOutput);
+    if (!success) {
+      this.app.ui.updateOPCUAStatus("WebSocket non pronto", "error");
+      // Fall back to HTTP
+      this.sendViaHTTP();
+    }
+  }
+
+  /**
+   * Send via HTTP POST (fallback)
+   */
+  async sendViaHTTP() {
+    this.app.ui.updateOPCUAStatus("Invio HTTP...", "info");
 
     try {
       const response = await fetch("/api/opcua/send", {

@@ -30,6 +30,22 @@ export class UIController {
     this.setupCommandInput();
     this.setupModals();
     this.setupFloatingToolbar();
+    this.initWebSocket();
+    this.setupTransferCancelButton();
+  }
+
+  /**
+   * Setup cancel button for transfer progress
+   */
+  setupTransferCancelButton() {
+    const cancelBtn = document.getElementById('cancelTransfer');
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', () => {
+        if (this.app.wsService) {
+          this.app.wsService.cancelTransfer();
+        }
+      });
+    }
   }
 
   /**
@@ -469,6 +485,125 @@ export class UIController {
       statusEl.className = 'cad-opcua-status';
       if (type === 'success') statusEl.classList.add('connected');
       if (type === 'error') statusEl.classList.add('error');
+    }
+  }
+
+  /**
+   * Initialize WebSocket event handlers
+   */
+  initWebSocket() {
+    const ws = this.app.wsService;
+    if (!ws) return;
+
+    // Connection status
+    ws.on('status', (data) => {
+      if (data && data.connected) {
+        this.updateOPCUAStatus('Connesso', 'success');
+      } else {
+        this.updateOPCUAStatus('Disconnesso', 'error');
+      }
+    });
+
+    ws.on('connected', () => {
+      this.updateOPCUAStatus('WebSocket connesso', 'success');
+    });
+
+    ws.on('disconnected', () => {
+      this.updateOPCUAStatus('WebSocket disconnesso', 'error');
+    });
+
+    ws.on('reconnecting', (data) => {
+      this.updateOPCUAStatus(`Riconnessione... (${data.attempt})`, 'info');
+    });
+
+    ws.on('error', () => {
+      this.updateOPCUAStatus('Errore connessione', 'error');
+    });
+
+    // Position updates
+    ws.on('position', (data) => {
+      this.updatePositionDisplay(data.x, data.y, data.z);
+    });
+
+    // Transfer progress
+    ws.on('transfer_start', (data) => {
+      this.showTransferProgress(data.totalChunks, data.totalLines);
+    });
+
+    ws.on('transfer_progress', (data) => {
+      this.updateTransferProgress(data.chunk, data.total, data.percent);
+    });
+
+    ws.on('transfer_complete', () => {
+      this.hideTransferProgress();
+      this.updateOPCUAStatus('Trasferimento completato', 'success');
+    });
+
+    ws.on('transfer_error', (data) => {
+      this.hideTransferProgress();
+      this.updateOPCUAStatus(`Errore: ${data.error}`, 'error');
+    });
+
+    ws.on('transfer_cancelled', () => {
+      this.hideTransferProgress();
+      this.updateOPCUAStatus('Trasferimento annullato', 'info');
+    });
+
+    // ACK messages
+    ws.on('ack', (data) => {
+      if (data.success) {
+        this.updateOPCUAStatus(data.message || 'OK', 'success');
+      } else {
+        this.updateOPCUAStatus(data.message || 'Errore', 'error');
+      }
+    });
+  }
+
+  /**
+   * Update position display (X/Y/Z from PLC)
+   */
+  updatePositionDisplay(x, y, z) {
+    const posEl = document.getElementById('plcPosition');
+    if (posEl) {
+      posEl.textContent = `X: ${x?.toFixed(2) || '0.00'} Y: ${y?.toFixed(2) || '0.00'} Z: ${z?.toFixed(2) || '0.00'}`;
+    }
+  }
+
+  /**
+   * Show transfer progress bar
+   */
+  showTransferProgress(totalChunks, totalLines) {
+    const container = document.getElementById('transferProgress');
+    if (container) {
+      container.classList.remove('hidden');
+      const text = container.querySelector('.progress-text');
+      if (text) text.textContent = `0% (0/${totalChunks})`;
+    }
+    this.updateOPCUAStatus(`Trasferimento: ${totalLines} righe`, 'info');
+  }
+
+  /**
+   * Update transfer progress bar
+   */
+  updateTransferProgress(chunk, total, percent) {
+    const container = document.getElementById('transferProgress');
+    if (container) {
+      const fill = container.querySelector('.progress-fill');
+      const text = container.querySelector('.progress-text');
+      if (fill) fill.style.width = `${percent}%`;
+      if (text) text.textContent = `${percent}% (${chunk}/${total})`;
+    }
+  }
+
+  /**
+   * Hide transfer progress bar
+   */
+  hideTransferProgress() {
+    const container = document.getElementById('transferProgress');
+    if (container) {
+      container.classList.add('hidden');
+      const fill = container.querySelector('.progress-fill');
+      if (fill) fill.style.width = '0%';
     }
   }
 }

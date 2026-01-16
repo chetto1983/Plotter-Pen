@@ -24,6 +24,7 @@ require (
 	github.com/go-playground/validator/v10 v10.20.0 // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/google/uuid v1.3.0 // indirect
+	github.com/gorilla/websocket v1.5.1 // indirect
 	github.com/govalues/decimal v0.1.36 // indirect
 	github.com/hschendel/stl v1.0.4 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
