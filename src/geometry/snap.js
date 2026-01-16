@@ -95,28 +95,34 @@ export class SnapManager {
   }
 
   /**
-   * Get all snap anchors from primitives
+   * Get snap anchors near a point (lazy computation on hover)
+   * Much faster than pre-computing all anchors
    */
-  getAnchors() {
-    if (!this._anchorsDirty && this._anchorCache.length > 0) {
-      return this._anchorCache;
-    }
-
-    this._anchorCache = [];
+  getAnchorsNear(point, searchRadius = 50) {
+    const anchors = [];
+    const r2 = searchRadius * searchRadius;
 
     for (const prim of this.primitives) {
       if (!prim.visible) continue;
       if (this.layerManager && !this.layerManager.isPrimitiveVisible(prim)) continue;
 
+      // Quick bounding box check first
+      if (prim.bounds) {
+        const b = prim.bounds;
+        if (point.x < b.minX - searchRadius || point.x > b.maxX + searchRadius ||
+            point.y < b.minY - searchRadius || point.y > b.maxY + searchRadius) {
+          continue;
+        }
+      }
+
+      // Get snap points for this primitive
       const snapPoints = prim.getSnapPoints();
       for (const sp of snapPoints) {
-        // Map the type first, then check if enabled
-        const mappedType = this.mapSnapType(sp.type);
-        // Accept common snap types: endpoint, midpoint, center, corner (vertex), quadrant
-        const isCommonType = ['endpoint', 'midpoint', 'center', 'vertex', 'corner', 'quadrant'].includes(sp.type);
-
-        if (this.enabledSnapTypes.has(mappedType) || isCommonType) {
-          this._anchorCache.push({
+        const dx = sp.point.x - point.x;
+        const dy = sp.point.y - point.y;
+        if (dx * dx + dy * dy <= r2) {
+          const mappedType = this.mapSnapType(sp.type);
+          anchors.push({
             point: sp.point,
             type: mappedType,
             source: prim,
@@ -126,8 +132,43 @@ export class SnapManager {
       }
     }
 
-    // Add intersection points between primitives
-    this.addIntersectionAnchors();
+    return anchors;
+  }
+
+  /**
+   * Get all snap anchors (legacy - kept for compatibility but avoided)
+   */
+  getAnchors() {
+    // Use lazy computation instead when possible
+    if (!this._anchorsDirty && this._anchorCache.length > 0) {
+      return this._anchorCache;
+    }
+
+    this._anchorCache = [];
+    const MAX_ANCHORS = 2000;
+
+    for (const prim of this.primitives) {
+      if (!prim.visible) continue;
+      if (this.layerManager && !this.layerManager.isPrimitiveVisible(prim)) continue;
+      if (this._anchorCache.length >= MAX_ANCHORS) break;
+
+      // Skip polylines with many points
+      if ((prim.type === 'polyline' || prim.type === 'polygon') &&
+          prim.points && prim.points.length > 20) {
+        continue;
+      }
+
+      const snapPoints = prim.getSnapPoints();
+      for (const sp of snapPoints) {
+        if (this._anchorCache.length >= MAX_ANCHORS) break;
+        this._anchorCache.push({
+          point: sp.point,
+          type: this.mapSnapType(sp.type),
+          source: prim,
+          label: sp.label
+        });
+      }
+    }
 
     this._anchorsDirty = false;
     return this._anchorCache;
@@ -472,15 +513,17 @@ export class SnapManager {
     return new SnapResult();
   }
   /**
-   * Snap to object anchors
+   * Snap to object anchors (lazy computation on hover)
    */
   snapToObjects(point, exclude = []) {
-    const anchors = this.getAnchors();
+    // Use lazy snap computation - only check nearby primitives
+    const searchRadius = this.snapDistance * 3; // Small search area
+    const anchors = this.getAnchorsNear(point, searchRadius);
+
     let bestResult = new SnapResult();
     let bestDist = this.snapDistance;
 
     for (const anchor of anchors) {
-      // Skip excluded sources
       if (exclude.includes(anchor.source)) continue;
 
       const dist = distance(point.x, point.y, anchor.point.x, anchor.point.y);

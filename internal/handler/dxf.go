@@ -92,10 +92,11 @@ func (h *DXFHandler) SmartImport(c *gin.Context) {
 		}
 		content = string(body)
 		// Use default options for raw text - NO normalization to preserve mm units
+		// ExtractPLC disabled for performance (can be enabled later when needed)
 		opts = importservice.ImportOptions{
 			Normalize:    false,
 			CenterOrigin: true,
-			ExtractPLC:   true,
+			ExtractPLC:   false,
 		}
 	} else {
 		// Handle JSON body

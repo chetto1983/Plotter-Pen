@@ -122,22 +122,25 @@ func calculateSplineSamplesWithScale(controls [][]float64, scaleFactor float64) 
 	}
 
 	// Estimate curve length from control polygon IN FINAL UNITS (mm)
+	// Actual spline is ~1.3x longer than control polygon
 	length := 0.0
 	for i := 1; i < len(controls); i++ {
 		dx := (controls[i][0] - controls[i-1][0]) * scaleFactor
 		dy := (controls[i][1] - controls[i-1][1]) * scaleFactor
 		length += math.Sqrt(dx*dx + dy*dy)
 	}
+	length *= 1.3 // Spline correction factor
 
-	// Sample based on length: ~1 point per 1mm - balanced quality vs performance
-	samples := int(length)
+	// Sample based on length: ~2 points per mm for smooth visual curves
+	// Balance: quality vs JSON size (79 splines in LOVE clock)
+	samples := int(length * 2)
 
 	// Clamp to reasonable range
-	if samples < 50 {
-		samples = 50
+	if samples < 80 {
+		samples = 80
 	}
-	if samples > 300 {
-		samples = 300
+	if samples > 400 {
+		samples = 400
 	}
 	return samples
 }

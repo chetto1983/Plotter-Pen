@@ -201,11 +201,8 @@ export class FileManager {
       this.app.renderer.resetView();
       this.app.ui.updateStatus(`DXF importato: ${primitives.length} primitive`);
 
-      // REGENERATE PLC OUTPUT with correct origin
-      // This ensures that the generated G-code matches the centered drawing on screen
-      this.app.ui.updateStatus('Rigenerazione percorso PLC...');
-      await new Promise(r => setTimeout(r, 0));
-      this.app.plcOutputManager.refreshPLCOutput();
+      // PLC regeneration disabled for performance - call manually when needed
+      // this.app.plcOutputManager.refreshPLCOutput();
 
     } catch (error) {
       console.error('DXF import error:', error);

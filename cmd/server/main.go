@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	"plotter-pen/internal/handler"
@@ -49,7 +50,7 @@ func main() {
 
 	// API routes with Gzip compression (70-90% payload reduction)
 	api := r.Group("/api")
-	api.Use(middleware.Gzip())
+	api.Use(gzip.Gzip(gzip.BestSpeed))
 	registerHandlers(api, db)
 
 	// Find available port
