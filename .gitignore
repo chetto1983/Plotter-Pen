@@ -53,3 +53,4 @@ database.*
 STL/*
 Svg/*
 certs/*
+internal/handler/opcua_config.json
