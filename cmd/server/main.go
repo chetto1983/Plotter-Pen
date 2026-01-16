@@ -47,8 +47,9 @@ func main() {
 	r.StaticFile("/", cfg.StaticDir+"/plotter_pen.html")
 	r.StaticFile("/plotter_pen.html", cfg.StaticDir+"/plotter_pen.html")
 
-	// API routes
+	// API routes with Gzip compression (70-90% payload reduction)
 	api := r.Group("/api")
+	api.Use(middleware.Gzip())
 	registerHandlers(api, db)
 
 	// Find available port

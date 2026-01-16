@@ -13,28 +13,41 @@ import (
 )
 
 // Primitive represents a CAD primitive for JSON output
+// Note: Coordinate fields must NOT use omitempty - 0.0 is a valid coordinate!
 type Primitive struct {
-	Type       string  `json:"type"`
-	ID         string  `json:"id,omitempty"`
-	Layer      string  `json:"layer,omitempty"`
-	StartX     float64 `json:"startX,omitempty"`
-	StartY     float64 `json:"startY,omitempty"`
-	EndX       float64 `json:"endX,omitempty"`
-	EndY       float64 `json:"endY,omitempty"`
-	CenterX    float64 `json:"centerX,omitempty"`
-	CenterY    float64 `json:"centerY,omitempty"`
-	Radius     float64 `json:"radius,omitempty"`
-	StartAngle float64 `json:"startAngle,omitempty"`
-	EndAngle   float64 `json:"endAngle,omitempty"`
-	Points     []Point `json:"points,omitempty"`
-	Closed     bool    `json:"closed,omitempty"`
-	Stroke     string  `json:"stroke,omitempty"`
+	Type                string  `json:"type"`
+	ID                  string  `json:"id,omitempty"`
+	Layer               string  `json:"layer,omitempty"`
+	StartX              float64 `json:"startX"`
+	StartY              float64 `json:"startY"`
+	EndX                float64 `json:"endX"`
+	EndY                float64 `json:"endY"`
+	CenterX             float64 `json:"centerX"`
+	CenterY             float64 `json:"centerY"`
+	Radius              float64 `json:"radius"`
+	StartAngle          float64 `json:"startAngle"`
+	EndAngle            float64 `json:"endAngle"`
+	Points              []Point `json:"points,omitempty"`
+	Closed              bool    `json:"closed,omitempty"`
+	Stroke              string  `json:"stroke,omitempty"`
+	ScaledDuringExtract bool    `json:"-"` // Internal flag, not serialized
 }
 
-// Point represents a 2D point
+// Point represents a 2D point with optimized JSON output
 type Point struct {
 	X float64 `json:"x"`
 	Y float64 `json:"y"`
+}
+
+// round2 rounds to 2 decimal places (0.01mm precision - sufficient for CAD)
+// Reduces JSON size significantly: 123.45678901234567 -> 123.46
+func round2(v float64) float64 {
+	return math.Round(v*100) / 100
+}
+
+// newPoint creates a point with rounded coordinates
+func newPoint(x, y float64) Point {
+	return Point{X: round2(x), Y: round2(y)}
 }
 
 // Bounds represents bounding box
@@ -89,6 +102,9 @@ func ParseDXF(content string) (*ParseResult, error) {
 		return nil, fmt.Errorf("failed to parse DXF: %w", err)
 	}
 
+	// Detect units and get scale factor to convert to mm
+	scaleFactor := detectUnitsScale(content)
+
 	result := &ParseResult{
 		Primitives: make([]Primitive, 0),
 		Stats:      ParseStats{ByType: make(map[string]int)},
@@ -103,8 +119,12 @@ func ParseDXF(content string) (*ParseResult, error) {
 	idx := 0
 
 	for _, e := range d.Entities() {
-		prims := extractEntity(e, &idx)
+		prims := extractEntity(e, &idx, scaleFactor)
 		for _, p := range prims {
+			// Apply unit conversion (except polylines from splines - already scaled)
+			if scaleFactor != 1.0 && !p.ScaledDuringExtract {
+				scalePrimitiveInPlace(&p, scaleFactor)
+			}
 			result.Primitives = append(result.Primitives, p)
 			result.Stats.ByType[p.Type]++
 			layers[p.Layer] = true
@@ -222,7 +242,7 @@ func addPolylineToDrawing(d *drawing.Drawing, p Primitive) {
 }
 
 // extractEntity converts DXF entity to primitives
-func extractEntity(e entity.Entity, idx *int) []Primitive {
+func extractEntity(e entity.Entity, idx *int, scaleFactor float64) []Primitive {
 	var prims []Primitive
 
 	switch ent := e.(type) {
@@ -230,30 +250,30 @@ func extractEntity(e entity.Entity, idx *int) []Primitive {
 		*idx++
 		prims = append(prims, Primitive{
 			Type: "line", ID: fmt.Sprintf("dxf_%d", *idx), Layer: ent.Layer().Name(),
-			StartX: ent.Start[0], StartY: ent.Start[1],
-			EndX: ent.End[0], EndY: ent.End[1],
+			StartX: round2(ent.Start[0]), StartY: round2(ent.Start[1]),
+			EndX: round2(ent.End[0]), EndY: round2(ent.End[1]),
 		})
 
 	case *entity.Circle:
 		*idx++
 		prims = append(prims, Primitive{
 			Type: "circle", ID: fmt.Sprintf("dxf_%d", *idx), Layer: ent.Layer().Name(),
-			CenterX: ent.Center[0], CenterY: ent.Center[1], Radius: ent.Radius,
+			CenterX: round2(ent.Center[0]), CenterY: round2(ent.Center[1]), Radius: round2(ent.Radius),
 		})
 
 	case *entity.Arc:
 		*idx++
 		prims = append(prims, Primitive{
 			Type: "arc", ID: fmt.Sprintf("dxf_%d", *idx), Layer: ent.Layer().Name(),
-			CenterX: ent.Center[0], CenterY: ent.Center[1], Radius: ent.Radius,
-			StartAngle: ent.Angle[0], EndAngle: ent.Angle[1],
+			CenterX: round2(ent.Center[0]), CenterY: round2(ent.Center[1]), Radius: round2(ent.Radius),
+			StartAngle: round2(ent.Angle[0]), EndAngle: round2(ent.Angle[1]),
 		})
 
 	case *entity.LwPolyline:
 		*idx++
 		points := make([]Point, len(ent.Vertices))
 		for i, v := range ent.Vertices {
-			points[i] = Point{X: v[0], Y: v[1]}
+			points[i] = newPoint(v[0], v[1])
 		}
 		prims = append(prims, Primitive{
 			Type: "polyline", ID: fmt.Sprintf("dxf_%d", *idx), Layer: ent.Layer().Name(),
@@ -264,13 +284,39 @@ func extractEntity(e entity.Entity, idx *int) []Primitive {
 		*idx++
 		points := make([]Point, len(ent.Vertices))
 		for i, v := range ent.Vertices {
-			points[i] = Point{X: v.Coord[0], Y: v.Coord[1]}
+			points[i] = newPoint(v.Coord[0], v.Coord[1])
 		}
 		closed := (ent.Flag & 1) != 0
 		prims = append(prims, Primitive{
 			Type: "polyline", ID: fmt.Sprintf("dxf_%d", *idx), Layer: ent.Layer().Name(),
 			Points: points, Closed: closed,
 		})
+
+	case *entity.Spline:
+		*idx++
+		// Evaluate B-spline curve with scale-aware sampling
+		var points []Point
+		if len(ent.Controls) >= 2 {
+			numSamples := calculateSplineSamplesWithScale(ent.Controls, scaleFactor)
+			rawPoints := evaluateBSpline(ent.Controls, ent.Knots, ent.Degree, numSamples)
+			// Scale and round points to mm with 0.01mm precision
+			points = make([]Point, len(rawPoints))
+			for i, p := range rawPoints {
+				points[i] = newPoint(p.X*scaleFactor, p.Y*scaleFactor)
+			}
+		} else if len(ent.Fits) >= 2 {
+			points = make([]Point, len(ent.Fits))
+			for i, f := range ent.Fits {
+				points[i] = newPoint(f[0]*scaleFactor, f[1]*scaleFactor)
+			}
+		}
+		if len(points) >= 2 {
+			closed := (ent.Flag & 1) != 0
+			prims = append(prims, Primitive{
+				Type: "polyline", ID: fmt.Sprintf("dxf_%d", *idx), Layer: ent.Layer().Name(),
+				Points: points, Closed: closed, ScaledDuringExtract: true,
+			})
+		}
 	}
 
 	return prims
@@ -327,4 +373,61 @@ func GetLayerNames(prims []Primitive) []string {
 // GetSupportedFormats returns supported DXF versions
 func GetSupportedFormats() []string {
 	return []string{"AC2000"}
+}
+
+// detectUnitsScale parses DXF content to detect units and returns scale factor to mm
+func detectUnitsScale(content string) float64 {
+	// Look for $INSUNITS in the header
+	// $INSUNITS values: 0=Unitless, 1=Inches, 2=Feet, 3=Miles, 4=Millimeters, 5=Centimeters, 6=Meters
+	idx := strings.Index(content, "$INSUNITS")
+	if idx == -1 {
+		return 1.0 // Default: assume mm
+	}
+
+	// Find the 70 code value after $INSUNITS
+	sub := content[idx:]
+	lines := strings.Split(sub, "\n")
+	for i, line := range lines {
+		if strings.TrimSpace(line) == "70" && i+1 < len(lines) {
+			var units int
+			if _, err := fmt.Sscanf(strings.TrimSpace(lines[i+1]), "%d", &units); err == nil {
+				switch units {
+				case 1: // Inches
+					return 25.4
+				case 2: // Feet
+					return 304.8
+				case 5: // Centimeters
+					return 10.0
+				case 6: // Meters
+					return 1000.0
+				case 4: // Millimeters
+					return 1.0
+				default:
+					return 1.0
+				}
+			}
+			break
+		}
+	}
+	return 1.0
+}
+
+// scalePrimitiveInPlace scales a primitive's coordinates in place with rounding
+func scalePrimitiveInPlace(p *Primitive, factor float64) {
+	switch p.Type {
+	case "line":
+		p.StartX = round2(p.StartX * factor)
+		p.StartY = round2(p.StartY * factor)
+		p.EndX = round2(p.EndX * factor)
+		p.EndY = round2(p.EndY * factor)
+	case "circle", "arc":
+		p.CenterX = round2(p.CenterX * factor)
+		p.CenterY = round2(p.CenterY * factor)
+		p.Radius = round2(p.Radius * factor)
+	case "polyline":
+		for i := range p.Points {
+			p.Points[i].X = round2(p.Points[i].X * factor)
+			p.Points[i].Y = round2(p.Points[i].Y * factor)
+		}
+	}
 }

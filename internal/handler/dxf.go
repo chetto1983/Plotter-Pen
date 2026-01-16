@@ -91,9 +91,9 @@ func (h *DXFHandler) SmartImport(c *gin.Context) {
 			return
 		}
 		content = string(body)
-		// Use default options for raw text
+		// Use default options for raw text - NO normalization to preserve mm units
 		opts = importservice.ImportOptions{
-			Normalize:    true,
+			Normalize:    false,
 			CenterOrigin: true,
 			ExtractPLC:   true,
 		}
@@ -119,7 +119,7 @@ func (h *DXFHandler) SmartImport(c *gin.Context) {
 		return
 	}
 
-	result, err := importservice.SmartImport(content, opts)
+	result, err := importservice.SmartImportCached(content, opts)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "smart import failed",

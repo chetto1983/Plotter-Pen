@@ -181,6 +181,231 @@ export class StateManager {
   }
 
   /**
+   * Async version of restoreState using Web Worker + Progressive Rendering
+   * Industrial-grade: requestIdleCallback + progressive render for touch panels
+   */
+  async restoreStateAsync(jsonString, restoreView = false) {
+    if (typeof jsonString !== 'string') {
+      return this.restoreStateFromData(jsonString, restoreView);
+    }
+
+    return new Promise((resolve, reject) => {
+      const worker = new Worker(
+        new URL('../workers/jsonParseWorker.js', import.meta.url),
+        { type: 'module' }
+      );
+
+      const messageQueue = [];
+      let processing = false;
+      let completed = false;
+      let lastRenderTime = 0;
+      const RENDER_INTERVAL = 200; // Progressive render every 200ms
+
+      // Adaptive yield: use requestIdleCallback when available
+      const idleYield = () => new Promise(resolve => {
+        if (typeof requestIdleCallback !== 'undefined') {
+          requestIdleCallback(() => resolve(), { timeout: 50 });
+        } else {
+          setTimeout(resolve, 0);
+        }
+      });
+
+      // Progressive render during load
+      const progressiveRender = () => {
+        const now = performance.now();
+        if (now - lastRenderTime > RENDER_INTERVAL && this.app.primitives.length > 0) {
+          lastRenderTime = now;
+          if (this.app.renderer) {
+            this.app.renderer.invalidateCache();
+            this.app.render();
+          }
+        }
+      };
+
+      const processQueue = async () => {
+        if (processing || messageQueue.length === 0) return;
+        processing = true;
+
+        while (messageQueue.length > 0) {
+          const msg = messageQueue.shift();
+
+          if (msg.type === 'metadata') {
+            if (msg.layers && this.app.layerManager) {
+              this.app.layerManager.deserialize(msg.layers);
+            }
+            if (restoreView && this.app.renderer) {
+              this.applyViewSettings(msg);
+            }
+            if (this.app.ui) {
+              this.app.ui.updateStatus(`Caricamento ${msg.totalPrimitives} primitive...`);
+            }
+          }
+
+          if (msg.type === 'chunk') {
+            const items = msg.data;
+            // Process entire chunk synchronously (chunks are pre-sized for efficiency)
+            for (let i = 0; i < items.length; i++) {
+              const prim = this.deserializeSinglePrimitive(items[i]);
+              if (prim) this.app.primitives.push(prim);
+            }
+            // Progressive render every 10% to show loading progress
+            if (msg.percent % 10 === 0) {
+              progressiveRender();
+            }
+            // Update status every chunk
+            if (this.app.ui) {
+              this.app.ui.updateStatus(`Caricamento ${msg.percent}%...`);
+            }
+            // Single yield per chunk instead of every 10 primitives
+            await idleYield();
+          }
+
+          if (msg.type === 'complete') {
+            completed = true;
+          }
+        }
+
+        processing = false;
+
+        if (completed) {
+          worker.terminate();
+          this.app.selectedPrimitives.clear();
+          // Final render
+          if (this.app.renderer) {
+            this.app.renderer.invalidateCache();
+          }
+          setTimeout(() => {
+            if (this.app.plcOutputManager) {
+              this.app.plcOutputManager.refreshPLCOutput();
+            }
+          }, 200);
+          resolve();
+        }
+      };
+
+      // Initialize empty primitives array for progressive loading
+      this.app.primitives = [];
+
+      worker.onmessage = (e) => {
+        const msg = e.data;
+        if (msg.type === 'error') {
+          console.error('Worker parse error:', msg.error);
+          worker.terminate();
+          reject(new Error(msg.error));
+          return;
+        }
+        messageQueue.push(msg);
+        processQueue();
+      };
+
+      worker.onerror = (err) => {
+        console.error('Worker error:', err);
+        worker.terminate();
+        this.restoreStateFromData(JSON.parse(jsonString), restoreView)
+          .then(resolve).catch(reject);
+      };
+
+      worker.postMessage({ jsonString, chunkSize: 100 });
+    });
+  }
+
+  /**
+   * Restore state from already-parsed data object
+   */
+  async restoreStateFromData(data, restoreView = false) {
+    if (data.layers && this.app.layerManager) {
+      this.app.layerManager.deserialize(data.layers);
+    }
+    const primitivesData = data.primitives || data;
+    this.app.primitives = await this.deserializePrimitivesAsync(primitivesData);
+    this.app.selectedPrimitives.clear();
+    if (restoreView && this.app.renderer) {
+      this.applyViewSettings(data);
+    }
+    setTimeout(() => {
+      if (this.app.plcOutputManager) {
+        this.app.plcOutputManager.refreshPLCOutput();
+      }
+    }, 200);
+  }
+
+  /**
+   * Apply view/workspace/grid settings
+   */
+  applyViewSettings(data) {
+    if (data.workspace) {
+      this.app.renderer.workspace = { ...data.workspace };
+      this.app.workspaceWidth = data.workspace.width;
+      this.app.workspaceHeight = data.workspace.height;
+      this.app.renderer.resizeCanvas();
+      const widthInput = document.getElementById('workspaceWidth');
+      const heightInput = document.getElementById('workspaceHeight');
+      if (widthInput) widthInput.value = this.app.workspaceWidth;
+      if (heightInput) heightInput.value = this.app.workspaceHeight;
+    }
+    if (data.grid) {
+      this.app.renderer.setGridOptions(data.grid);
+      this.app.gridSpacing = data.grid.spacing ?? 10;
+      this.app.showGrid = data.grid.show ?? true;
+      this.app.snapToGrid = data.grid.snapToGrid ?? false;
+      const gridInput = document.getElementById('gridSpacing');
+      if (gridInput) gridInput.value = this.app.gridSpacing;
+    }
+    if (data.view) {
+      this.app.renderer.view = { ...data.view };
+      this.app.renderer.isCacheDirty = true;
+    }
+  }
+
+  /**
+   * Async chunked deserialization to prevent UI freeze
+   * Uses setTimeout(0) to truly yield to browser event loop
+   */
+  async deserializePrimitivesAsync(data) {
+    const items = typeof data === 'string' ? JSON.parse(data) : data;
+    if (!Array.isArray(items)) return [];
+
+    const primitives = [];
+    const CHUNK_SIZE = 10; // Very small chunks for responsive UI
+    const yieldToMain = () => new Promise(r => setTimeout(r, 0));
+
+    for (let i = 0; i < items.length; i += CHUNK_SIZE) {
+      const end = Math.min(i + CHUNK_SIZE, items.length);
+
+      for (let j = i; j < end; j++) {
+        const prim = this.deserializeSinglePrimitive(items[j]);
+        if (prim) primitives.push(prim);
+      }
+
+      // Yield to browser event loop - truly non-blocking
+      await yieldToMain();
+    }
+
+    return primitives;
+  }
+
+  /**
+   * Deserialize a single primitive
+   */
+  deserializeSinglePrimitive(item) {
+    if (!item || !item.type) return null;
+    switch (item.type) {
+      case 'line': return Line.fromJSON(item);
+      case 'arc': return Arc.fromJSON(item);
+      case 'circle': return Circle.fromJSON(item);
+      case 'rectangle': return Rectangle.fromJSON(item);
+      case 'polygon': return Polygon.fromJSON(item);
+      case 'polyline': return Polyline.fromJSON(item);
+      case 'dimension': return Dimension.fromJSON(item);
+      case 'angularDimension': return AngularDimension.fromJSON(item);
+      case 'radiusDimension': return RadiusDimension.fromJSON(item);
+      default:
+        console.warn('Unknown primitive type:', item.type);
+        return null;
+    }
+  }
+
+  /**
    * Deserialize primitives from JSON string or object
    * Uses static fromJSON methods from primitive classes
    */

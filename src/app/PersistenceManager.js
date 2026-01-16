@@ -1,18 +1,16 @@
+/**
+ * PersistenceManager - Fast async state persistence with Web Worker
+ * Uses streaming approach for large datasets
+ */
 
 export class PersistenceManager {
-    /**
-     * @param {Object} app - Reference to main application
-     */
     constructor(app) {
         this.app = app;
         this.autoSaveTimer = null;
-        this.autoSaveDelay = 1000; // 1 second debounce
+        this.autoSaveDelay = 1000;
         this.saveQueue = Promise.resolve();
     }
 
-    /**
-     * Trigger auto-save request (debounced)
-     */
     triggerAutoSave() {
         if (this.autoSaveTimer) clearTimeout(this.autoSaveTimer);
         this.autoSaveTimer = setTimeout(() => this.queueSave(), this.autoSaveDelay);
@@ -24,15 +22,10 @@ export class PersistenceManager {
             .catch(() => { });
     }
 
-    /**
-     * Save current state to backend
-     */
     async saveState() {
         try {
-            // Get serialized state from StateManager
             const stateJson = this.app.state.serializeState();
 
-            // Backend expects { data: "<json-string>" }
             const response = await fetch('/api/state', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -40,9 +33,6 @@ export class PersistenceManager {
             });
 
             if (!response.ok) throw new Error('Server returned ' + response.status);
-
-            // console.log('Auto-save successful'); 
-            // Optional: update specific UI indicator for "Saved"
         } catch (e) {
             console.error('Auto-save error:', e);
             this.app.ui.updateStatus('Errore salvataggio automatico');
@@ -50,7 +40,7 @@ export class PersistenceManager {
     }
 
     /**
-     * Load state from backend
+     * Load state with Web Worker for non-blocking parsing
      */
     async loadState() {
         try {
@@ -60,17 +50,23 @@ export class PersistenceManager {
             const result = await response.json();
 
             if (result.data) {
-                // Restore state with View settings enabled (true)
-                this.app.state.restoreState(result.data, true);
+                this.app.ui.updateStatus('Caricamento sessione...');
 
-                // Update snap manager with restored primitives
+                // Use Web Worker for large data, sync for small
+                const dataSize = result.data.length;
+                if (dataSize > 100000) { // > 100KB use worker
+                    await this.loadWithWorker(result.data);
+                } else {
+                    this.app.state.restoreState(result.data, true);
+                }
+
+                // Update managers
                 if (this.app.snapManager) {
                     this.app.snapManager.setPrimitives(this.app.primitives);
                 }
 
-                // Force renderer update
                 if (this.app.renderer) {
-                    this.app.renderer.resizeCanvas(); // Ensure correct size
+                    this.app.renderer.resizeCanvas();
                     this.app.renderer.invalidateCache();
                 }
 
@@ -84,6 +80,74 @@ export class PersistenceManager {
             this.app.ui.updateStatus('Errore caricamento sessione');
         }
         return false;
+    }
+
+    /**
+     * Load using Web Worker for non-blocking JSON parse
+     */
+    loadWithWorker(jsonString) {
+        return new Promise((resolve, reject) => {
+            const worker = new Worker(
+                new URL('../workers/stateLoaderWorker.js', import.meta.url),
+                { type: 'module' }
+            );
+
+            worker.onmessage = (e) => {
+                const msg = e.data;
+
+                if (msg.type === 'metadata') {
+                    // Restore layers and settings first
+                    if (msg.layers && this.app.layerManager) {
+                        this.app.layerManager.deserialize(msg.layers);
+                    }
+                    if (msg.view && this.app.renderer) {
+                        Object.assign(this.app.renderer.view, msg.view);
+                    }
+                    if (msg.workspace && this.app.renderer) {
+                        this.app.renderer.workspace = { ...msg.workspace };
+                    }
+                    if (msg.grid && this.app.renderer) {
+                        this.app.renderer.grid = { ...msg.grid };
+                    }
+                    // Clear primitives for new data
+                    this.app.primitives = [];
+                    this.app.selectedPrimitives.clear();
+                }
+
+                if (msg.type === 'primitives') {
+                    // Deserialize chunk and add to app
+                    for (const item of msg.items) {
+                        const prim = this.app.state.deserializeSinglePrimitive(item);
+                        if (prim) this.app.primitives.push(prim);
+                    }
+                    // Update progress
+                    this.app.ui.updateStatus(`Caricamento ${msg.progress}%...`);
+                    // Progressive render every 25%
+                    if (msg.progress % 25 === 0 && this.app.renderer) {
+                        this.app.renderer.invalidateCache();
+                        this.app.render();
+                    }
+                }
+
+                if (msg.type === 'done') {
+                    worker.terminate();
+                    resolve();
+                }
+
+                if (msg.type === 'error') {
+                    worker.terminate();
+                    reject(new Error(msg.message));
+                }
+            };
+
+            worker.onerror = (e) => {
+                worker.terminate();
+                reject(e);
+            };
+
+            // Start worker
+            worker.postMessage({ jsonString });
+        });
     }
 }
 

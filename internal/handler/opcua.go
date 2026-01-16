@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
@@ -319,4 +320,62 @@ func (h *OpcuaHandler) GenerateCertificate(c *gin.Context) {
 		"derFile":  req.OutputDir + "/client.der",
 		"message":  "Certificates generated. Import .der file to PLC trust list.",
 	})
+}
+
+// CertificateStatus checks if certificates exist
+func (h *OpcuaHandler) CertificateStatus(c *gin.Context) {
+	certDir := "certs"
+	pemPath := certDir + "/client.pem"
+	keyPath := certDir + "/client.key"
+	derPath := certDir + "/client.der"
+
+	pemExists := fileExists(pemPath)
+	keyExists := fileExists(keyPath)
+	derExists := fileExists(derPath)
+
+	c.JSON(http.StatusOK, gin.H{
+		"exists": pemExists && keyExists && derExists,
+		"pem":    pemExists,
+		"key":    keyExists,
+		"der":    derExists,
+	})
+}
+
+// DownloadCertificate serves certificate files for download
+func (h *OpcuaHandler) DownloadCertificate(c *gin.Context) {
+	certType := c.Param("type")
+	certDir := "certs"
+
+	var filePath, filename, contentType string
+	switch certType {
+	case "pem":
+		filePath = certDir + "/client.pem"
+		filename = "client.pem"
+		contentType = "application/x-pem-file"
+	case "key":
+		filePath = certDir + "/client.key"
+		filename = "client.key"
+		contentType = "application/x-pem-file"
+	case "der":
+		filePath = certDir + "/client.der"
+		filename = "client.der"
+		contentType = "application/x-x509-ca-cert"
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid certificate type"})
+		return
+	}
+
+	if !fileExists(filePath) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "certificate not found"})
+		return
+	}
+
+	c.Header("Content-Disposition", "attachment; filename="+filename)
+	c.Header("Content-Type", contentType)
+	c.File(filePath)
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }

@@ -192,7 +192,7 @@ export class FileManager {
 
       this.app.ui.updateStats();
       this.app.ui.updateStatus(`Rendering...`);
-      await new Promise(r => requestAnimationFrame(r));
+      await new Promise(r => setTimeout(r, 0));
 
       if (this.app.renderer) this.app.renderer.invalidateCache();
       if (this.app.snapManager) this.app.snapManager.setPrimitives(this.app.primitives);
@@ -204,7 +204,7 @@ export class FileManager {
       // REGENERATE PLC OUTPUT with correct origin
       // This ensures that the generated G-code matches the centered drawing on screen
       this.app.ui.updateStatus('Rigenerazione percorso PLC...');
-      await new Promise(r => requestAnimationFrame(r));
+      await new Promise(r => setTimeout(r, 0));
       this.app.plcOutputManager.refreshPLCOutput();
 
     } catch (error) {
@@ -218,9 +218,10 @@ export class FileManager {
    */
   async createPrimitivesFromDataAsync(data) {
     const primitives = [];
-    const CHUNK_SIZE = 500;
+    const CHUNK_SIZE = 10; // Small chunks for responsive UI
     const total = data.length;
     const supportedTypes = new Set(['line', 'arc', 'circle', 'rectangle', 'polygon', 'polyline']);
+    const yieldToMain = () => new Promise(r => setTimeout(r, 0));
 
     for (let i = 0; i < total; i += CHUNK_SIZE) {
       const end = Math.min(i + CHUNK_SIZE, total);
@@ -232,10 +233,12 @@ export class FileManager {
         }
       }
 
-      // Update progress and yield to browser
-      if (i + CHUNK_SIZE < total) {
+      // Yield to browser event loop - truly non-blocking
+      await yieldToMain();
+
+      // Update progress less frequently to reduce overhead
+      if (i % 100 === 0) {
         this.app.ui.updateStatus(`Creazione primitive ${end}/${total}...`);
-        await new Promise(r => requestAnimationFrame(r));
       }
     }
 
@@ -264,17 +267,18 @@ export class FileManager {
     const offsetY = centerY - bounds.minY;
 
     if (Math.abs(offsetX) > 0.01 || Math.abs(offsetY) > 0.01) {
-      // Chunked translation to avoid freeze
-      const CHUNK_SIZE = 500;
+      // Chunked translation - small chunks with setTimeout(0) for true event loop yielding
+      const CHUNK_SIZE = 50;
       const prims = this.app.primitives;
+      const yieldToMain = () => new Promise(r => setTimeout(r, 0));
+
       for (let i = 0; i < prims.length; i += CHUNK_SIZE) {
         const end = Math.min(i + CHUNK_SIZE, prims.length);
         for (let j = i; j < end; j++) {
           prims[j].translate(offsetX, offsetY);
         }
-        if (i + CHUNK_SIZE < prims.length) {
-          await new Promise(r => requestAnimationFrame(r));
-        }
+        // Yield to browser event loop - truly non-blocking
+        await yieldToMain();
       }
     }
 
