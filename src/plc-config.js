@@ -40,64 +40,47 @@ function populateForm(data) {
     return;
   }
   cachedConfig = { ...data };
+  // Connection
   form.endpoint.value = data.endpoint ?? "";
-  form.nodeId.value = data.nodeId ?? "";
+  if (form.securityMode) form.securityMode.value = data.securityMode ?? "None";
+  if (form.securityPolicy) form.securityPolicy.value = data.securityPolicy ?? "None";
   form.username.value = data.username ?? "";
   form.password.value = data.password ?? "";
-  form.triggerNodeId.value = data.triggerNodeId ?? "";
-  form.triggerResetDelayMs.value =
-    typeof data.triggerResetDelayMs === "number" ? data.triggerResetDelayMs : "";
-  form.valueType.value = data.valueType ?? "";
-  form.arrayLength.value =
-    typeof data.arrayLength === "number" ? data.arrayLength : "";
+  // Data nodes (correct backend field names)
+  if (form.dataNode) form.dataNode.value = data.dataNode ?? "";
+  if (form.dataType) form.dataType.value = data.dataType ?? "string_array";
+  if (form.triggerNode) form.triggerNode.value = data.triggerNode ?? "";
+  if (form.resetNode) form.resetNode.value = data.resetNode ?? "";
+  // Position nodes
+  if (form.positionXNode) form.positionXNode.value = data.positionXNode ?? "";
+  if (form.positionYNode) form.positionYNode.value = data.positionYNode ?? "";
+  if (form.positionZNode) form.positionZNode.value = data.positionZNode ?? "";
 }
 
 function readForm() {
   if (!form) {
     return null;
   }
-  const {
-    endpoint,
-    nodeId,
-    username,
-    password,
-    triggerNodeId,
-    triggerResetDelayMs,
-    valueType,
-    arrayLength,
-  } = form;
-
   const base = cachedConfig ? { ...cachedConfig } : {};
 
-  const result = {
+  return {
     ...base,
-    endpoint: endpoint.value.trim(),
-    nodeId: nodeId.value.trim(),
-    username: username.value.trim(),
-    password: password.value,
-    triggerNodeId: triggerNodeId.value.trim(),
-    valueType: valueType.value.trim(),
+    // Connection
+    endpoint: form.endpoint?.value?.trim() || "",
+    securityMode: form.securityMode?.value || "None",
+    securityPolicy: form.securityPolicy?.value || "None",
+    username: form.username?.value?.trim() || "",
+    password: form.password?.value || "",
+    // Data nodes (correct backend field names)
+    dataNode: form.dataNode?.value?.trim() || "",
+    dataType: form.dataType?.value || "string_array",
+    triggerNode: form.triggerNode?.value?.trim() || "",
+    resetNode: form.resetNode?.value?.trim() || "",
+    // Position nodes
+    positionXNode: form.positionXNode?.value?.trim() || "",
+    positionYNode: form.positionYNode?.value?.trim() || "",
+    positionZNode: form.positionZNode?.value?.trim() || "",
   };
-
-  const delay = Number.parseInt(triggerResetDelayMs.value, 10);
-  if (!Number.isNaN(delay) && delay >= 0) {
-    result.triggerResetDelayMs = delay;
-  } else if (base && typeof base.triggerResetDelayMs === "number") {
-    result.triggerResetDelayMs = base.triggerResetDelayMs;
-  } else {
-    result.triggerResetDelayMs = 0;
-  }
-
-  const length = Number.parseInt(arrayLength.value, 10);
-  if (!Number.isNaN(length) && length >= 0) {
-    result.arrayLength = length;
-  } else if (base && typeof base.arrayLength === "number") {
-    result.arrayLength = base.arrayLength;
-  } else {
-    result.arrayLength = 0;
-  }
-
-  return result;
 }
 
 async function loadConfig() {
@@ -146,9 +129,9 @@ async function saveConfig(event) {
     form.endpoint.focus();
     return;
   }
-  if (!payload.nodeId) {
-    showStatus("Il Node ID e' obbligatorio.", "error");
-    form.nodeId.focus();
+  if (!payload.dataNode) {
+    showStatus("Il Data Node e' obbligatorio.", "error");
+    form.dataNode?.focus();
     return;
   }
 

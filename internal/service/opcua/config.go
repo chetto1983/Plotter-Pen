@@ -1,13 +1,19 @@
 package opcua
 
 import (
-	"encoding/json"
 	"os"
 	"sync"
+
+	"plotter-pen/internal/persistence"
+
+	"gorm.io/gorm"
 )
 
 // Config represents OPC UA connection settings
 type Config struct {
+	ID          int64  `json:"id,omitempty"`
+	Name        string `json:"name,omitempty"`
+	IsActive    bool   `json:"isActive,omitempty"`
 	Endpoint    string `json:"endpoint"`
 	NamespaceID int    `json:"namespaceId"`
 	TriggerNode string `json:"triggerNode"`
@@ -26,86 +32,58 @@ type Config struct {
 	ProgressNode string `json:"progressNode"`
 
 	// Chunked transfer nodes (Db_Punti interface)
-	PointArrayNode   string `json:"pointArrayNode"`   // ns=2;i=45 - STRING[21] array
-	TriggerWriteNode string `json:"triggerWriteNode"` // ns=2;i=12 - PC triggers PLC
-	ReadDoneNode     string `json:"readDoneNode"`     // ns=2;i=23 - PLC ack (Trirrer_Read_Dn)
-	EndOfFileNode    string `json:"endOfFileNode"`    // ns=2;i=34 - Transfer complete
+	PointArrayNode   string `json:"pointArrayNode"`
+	TriggerWriteNode string `json:"triggerWriteNode"`
+	ReadDoneNode     string `json:"readDoneNode"`
+	EndOfFileNode    string `json:"endOfFileNode"`
 
 	// Chunked transfer settings
-	ChunkSize    int `json:"chunkSize"`    // Default 21
-	AckTimeout   int `json:"ackTimeout"`   // ms, default 5000
-	PollInterval int `json:"pollInterval"` // ms, default 100
+	ChunkSize    int `json:"chunkSize"`
+	AckTimeout   int `json:"ackTimeout"`
+	PollInterval int `json:"pollInterval"`
 
 	// Subscription settings
-	SubscriptionInterval int `json:"subscriptionInterval"` // milliseconds
+	SubscriptionInterval int `json:"subscriptionInterval"`
 
 	// Security settings
-	SecurityMode   string `json:"securityMode"`   // None, Sign, SignAndEncrypt
-	SecurityPolicy string `json:"securityPolicy"` // None, Basic256, Basic256Sha256
-	CertFile       string `json:"certFile"`       // Client certificate PEM
-	KeyFile        string `json:"keyFile"`        // Client private key PEM
-	ServerCertFile string `json:"serverCertFile"` // Server certificate for validation
-	Username       string `json:"username"`       // For UserIdentity
-	Password       string `json:"password"`       // For UserIdentity
+	SecurityMode   string `json:"securityMode"`
+	SecurityPolicy string `json:"securityPolicy"`
+	CertFile       string `json:"certFile"`
+	KeyFile        string `json:"keyFile"`
+	ServerCertFile string `json:"serverCertFile"`
+	Username       string `json:"username"`
+	Password       string `json:"password"`
 }
 
-// ConfigManager handles OPC UA configuration with file persistence
+// ConfigManager handles OPC UA configuration with database persistence
 type ConfigManager struct {
-	config     Config
-	configFile string
-	mu         sync.RWMutex
+	db       *gorm.DB
+	config   Config
+	activeID int64
+	mu       sync.RWMutex
 }
 
-// NewConfigManager creates a new config manager with defaults
-func NewConfigManager(configFile string) *ConfigManager {
-	cm := &ConfigManager{
-		configFile: configFile,
-		config: Config{
-			Endpoint:    "opc.tcp://localhost:4840",
-			NamespaceID: 2,
-			TriggerNode: "ns=2;s=Trigger",
-			ResetNode:   "ns=2;s=Reset",
-			DataNode:    "ns=2;s=Data",
-			DataType:    "string",
-			// Position defaults
-			PositionXNode: "ns=2;s=Position.X",
-			PositionYNode: "ns=2;s=Position.Y",
-			PositionZNode: "ns=2;s=Position.Z",
-			// Status defaults
-			StatusNode:   "ns=2;s=Status",
-			AlarmNode:    "ns=2;s=Alarm",
-			ProgressNode: "ns=2;s=Progress",
-			// Chunked transfer defaults (Db_Punti)
-			PointArrayNode:   "ns=2;i=45",
-			TriggerWriteNode: "ns=2;i=12",
-			ReadDoneNode:     "ns=2;i=23",
-			EndOfFileNode:    "ns=2;i=34",
-			ChunkSize:        20,
-			AckTimeout:       5000,
-			PollInterval:     100,
-			// Subscription default: 100ms
-			SubscriptionInterval: 100,
-			// Security defaults (None = no encryption)
-			SecurityMode:   "None",
-			SecurityPolicy: "None",
-		},
-	}
-	cm.loadFromFile()
+// NewConfigManager creates a new config manager backed by database
+func NewConfigManager(db *gorm.DB) *ConfigManager {
+	cm := &ConfigManager{db: db}
+	cm.loadFromDB()
 	cm.loadFromEnv()
 	return cm
 }
 
-// loadFromFile loads config from JSON file
-func (cm *ConfigManager) loadFromFile() {
-	data, err := os.ReadFile(cm.configFile)
-	if err != nil {
-		return // Use defaults
+// loadFromDB loads the active config from database
+func (cm *ConfigManager) loadFromDB() {
+	var dbCfg persistence.OPCUAConfig
+	// Load the active PLC config
+	if err := cm.db.Where("is_active = ?", true).First(&dbCfg).Error; err != nil {
+		// Fallback to first config if no active
+		if err := cm.db.First(&dbCfg).Error; err != nil {
+			cm.config = defaultConfig()
+			return
+		}
 	}
-
-	var cfg Config
-	if err := json.Unmarshal(data, &cfg); err == nil {
-		cm.config = cfg
-	}
+	cm.activeID = dbCfg.ID
+	cm.config = dbConfigToConfig(dbCfg)
 }
 
 // loadFromEnv overrides config with environment variables
@@ -125,7 +103,6 @@ func (cm *ConfigManager) loadFromEnv() {
 	if dt := os.Getenv("OPCUA_DATA_TYPE"); dt != "" {
 		cm.config.DataType = dt
 	}
-	// Position nodes
 	if px := os.Getenv("OPCUA_POSITION_X"); px != "" {
 		cm.config.PositionXNode = px
 	}
@@ -135,22 +112,89 @@ func (cm *ConfigManager) loadFromEnv() {
 	if pz := os.Getenv("OPCUA_POSITION_Z"); pz != "" {
 		cm.config.PositionZNode = pz
 	}
-	// Status nodes
 	if sn := os.Getenv("OPCUA_STATUS_NODE"); sn != "" {
 		cm.config.StatusNode = sn
 	}
 }
 
-// SaveToFile persists config to JSON file
-func (cm *ConfigManager) SaveToFile() error {
+// SaveToDB persists config to database
+func (cm *ConfigManager) SaveToDB() error {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
 
-	data, err := json.MarshalIndent(cm.config, "", "  ")
-	if err != nil {
-		return err
+	dbCfg := configToDBConfig(cm.config)
+	if cm.activeID > 0 {
+		dbCfg.ID = cm.activeID
 	}
-	return os.WriteFile(cm.configFile, data, 0644)
+	return cm.db.Save(&dbCfg).Error
+}
+
+// ListAll returns all PLC configurations
+func (cm *ConfigManager) ListAll() ([]Config, error) {
+	var dbCfgs []persistence.OPCUAConfig
+	if err := cm.db.Order("name").Find(&dbCfgs).Error; err != nil {
+		return nil, err
+	}
+	configs := make([]Config, len(dbCfgs))
+	for i, db := range dbCfgs {
+		configs[i] = dbConfigToConfig(db)
+	}
+	return configs, nil
+}
+
+// GetByID returns a specific PLC configuration
+func (cm *ConfigManager) GetByID(id int64) (Config, error) {
+	var dbCfg persistence.OPCUAConfig
+	if err := cm.db.First(&dbCfg, id).Error; err != nil {
+		return Config{}, err
+	}
+	return dbConfigToConfig(dbCfg), nil
+}
+
+// Create creates a new PLC configuration
+func (cm *ConfigManager) Create(cfg Config) (Config, error) {
+	dbCfg := configToDBConfig(cfg)
+	dbCfg.ID = 0 // Let DB assign ID
+	if err := cm.db.Create(&dbCfg).Error; err != nil {
+		return Config{}, err
+	}
+	return dbConfigToConfig(dbCfg), nil
+}
+
+// Delete deletes a PLC configuration
+func (cm *ConfigManager) Delete(id int64) error {
+	// Don't allow deleting active config
+	cm.mu.RLock()
+	if cm.activeID == id {
+		cm.mu.RUnlock()
+		return gorm.ErrRecordNotFound
+	}
+	cm.mu.RUnlock()
+	return cm.db.Delete(&persistence.OPCUAConfig{}, id).Error
+}
+
+// SetActive sets a PLC as the active configuration
+func (cm *ConfigManager) SetActive(id int64) error {
+	return cm.db.Transaction(func(tx *gorm.DB) error {
+		// Deactivate all
+		if err := tx.Model(&persistence.OPCUAConfig{}).Where("is_active = ?", true).Update("is_active", false).Error; err != nil {
+			return err
+		}
+		// Activate the selected one
+		if err := tx.Model(&persistence.OPCUAConfig{}).Where("id = ?", id).Update("is_active", true).Error; err != nil {
+			return err
+		}
+		// Reload active config
+		cm.mu.Lock()
+		defer cm.mu.Unlock()
+		var dbCfg persistence.OPCUAConfig
+		if err := tx.First(&dbCfg, id).Error; err != nil {
+			return err
+		}
+		cm.activeID = dbCfg.ID
+		cm.config = dbConfigToConfig(dbCfg)
+		return nil
+	})
 }
 
 // Get returns current config (thread-safe)
@@ -183,7 +227,6 @@ func (cm *ConfigManager) Update(updates Config) {
 	if updates.DataType != "" {
 		cm.config.DataType = updates.DataType
 	}
-	// Position nodes
 	if updates.PositionXNode != "" {
 		cm.config.PositionXNode = updates.PositionXNode
 	}
@@ -193,7 +236,6 @@ func (cm *ConfigManager) Update(updates Config) {
 	if updates.PositionZNode != "" {
 		cm.config.PositionZNode = updates.PositionZNode
 	}
-	// Status nodes
 	if updates.StatusNode != "" {
 		cm.config.StatusNode = updates.StatusNode
 	}
@@ -206,7 +248,6 @@ func (cm *ConfigManager) Update(updates Config) {
 	if updates.SubscriptionInterval > 0 {
 		cm.config.SubscriptionInterval = updates.SubscriptionInterval
 	}
-	// Chunked transfer nodes
 	if updates.PointArrayNode != "" {
 		cm.config.PointArrayNode = updates.PointArrayNode
 	}
@@ -228,7 +269,6 @@ func (cm *ConfigManager) Update(updates Config) {
 	if updates.PollInterval > 0 {
 		cm.config.PollInterval = updates.PollInterval
 	}
-	// Security settings
 	if updates.SecurityMode != "" {
 		cm.config.SecurityMode = updates.SecurityMode
 	}
@@ -255,11 +295,9 @@ func (cm *ConfigManager) Update(updates Config) {
 // Merge creates effective config by merging stored config with request overrides
 func (cm *ConfigManager) Merge(override *Config) Config {
 	base := cm.Get()
-
 	if override == nil {
 		return base
 	}
-
 	if override.Endpoint != "" {
 		base.Endpoint = override.Endpoint
 	}
@@ -278,6 +316,102 @@ func (cm *ConfigManager) Merge(override *Config) Config {
 	if override.DataType != "" {
 		base.DataType = override.DataType
 	}
-
 	return base
+}
+
+// defaultConfig returns default OPC UA configuration
+func defaultConfig() Config {
+	return Config{
+		Endpoint:             "opc.tcp://192.168.0.1:4840",
+		NamespaceID:          2,
+		TriggerNode:          "ns=2;i=12",
+		ResetNode:            "ns=2;i=23",
+		DataNode:             "ns=2;i=93",
+		DataType:             "string_array",
+		PositionXNode:        "ns=2;i=80",
+		PositionYNode:        "ns=2;i=81",
+		PositionZNode:        "ns=2;i=82",
+		PointArrayNode:       "ns=2;i=93",
+		TriggerWriteNode:     "ns=2;i=12",
+		ReadDoneNode:         "ns=2;i=23",
+		EndOfFileNode:        "ns=2;i=34",
+		ChunkSize:            20,
+		AckTimeout:           5000,
+		PollInterval:         100,
+		SubscriptionInterval: 100,
+		SecurityMode:         "SignAndEncrypt",
+		SecurityPolicy:       "Basic256Sha256",
+	}
+}
+
+// dbConfigToConfig converts database model to Config
+func dbConfigToConfig(db persistence.OPCUAConfig) Config {
+	return Config{
+		ID:                   db.ID,
+		Name:                 db.Name,
+		IsActive:             db.IsActive,
+		Endpoint:             db.Endpoint,
+		NamespaceID:          db.NamespaceID,
+		TriggerNode:          db.TriggerNode,
+		ResetNode:            db.ResetNode,
+		DataNode:             db.DataNode,
+		DataType:             db.DataType,
+		PositionXNode:        db.PositionXNode,
+		PositionYNode:        db.PositionYNode,
+		PositionZNode:        db.PositionZNode,
+		StatusNode:           db.StatusNode,
+		AlarmNode:            db.AlarmNode,
+		ProgressNode:         db.ProgressNode,
+		PointArrayNode:       db.PointArrayNode,
+		TriggerWriteNode:     db.TriggerWriteNode,
+		ReadDoneNode:         db.ReadDoneNode,
+		EndOfFileNode:        db.EndOfFileNode,
+		ChunkSize:            db.ChunkSize,
+		AckTimeout:           db.AckTimeout,
+		PollInterval:         db.PollInterval,
+		SubscriptionInterval: db.SubscriptionInterval,
+		SecurityMode:         db.SecurityMode,
+		SecurityPolicy:       db.SecurityPolicy,
+		CertFile:             db.CertFile,
+		KeyFile:              db.KeyFile,
+		ServerCertFile:       db.ServerCertFile,
+		Username:             db.Username,
+		Password:             db.Password,
+	}
+}
+
+// configToDBConfig converts Config to database model
+func configToDBConfig(cfg Config) persistence.OPCUAConfig {
+	return persistence.OPCUAConfig{
+		ID:                   cfg.ID,
+		Name:                 cfg.Name,
+		IsActive:             cfg.IsActive,
+		Endpoint:             cfg.Endpoint,
+		NamespaceID:          cfg.NamespaceID,
+		TriggerNode:          cfg.TriggerNode,
+		ResetNode:            cfg.ResetNode,
+		DataNode:             cfg.DataNode,
+		DataType:             cfg.DataType,
+		PositionXNode:        cfg.PositionXNode,
+		PositionYNode:        cfg.PositionYNode,
+		PositionZNode:        cfg.PositionZNode,
+		StatusNode:           cfg.StatusNode,
+		AlarmNode:            cfg.AlarmNode,
+		ProgressNode:         cfg.ProgressNode,
+		PointArrayNode:       cfg.PointArrayNode,
+		TriggerWriteNode:     cfg.TriggerWriteNode,
+		ReadDoneNode:         cfg.ReadDoneNode,
+		EndOfFileNode:        cfg.EndOfFileNode,
+		ChunkSize:            cfg.ChunkSize,
+		AckTimeout:           cfg.AckTimeout,
+		PollInterval:         cfg.PollInterval,
+		SubscriptionInterval: cfg.SubscriptionInterval,
+		SecurityMode:         cfg.SecurityMode,
+		SecurityPolicy:       cfg.SecurityPolicy,
+		CertFile:             cfg.CertFile,
+		KeyFile:              cfg.KeyFile,
+		ServerCertFile:       cfg.ServerCertFile,
+		Username:             cfg.Username,
+		Password:             cfg.Password,
+	}
 }

@@ -53,6 +53,41 @@ type MachineConfig struct {
 	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
 }
 
+// OPCUAConfig stores OPC UA connection settings (supports multiple PLCs)
+type OPCUAConfig struct {
+	ID                   int64     `gorm:"primaryKey;autoIncrement" json:"id"`
+	Name                 string    `gorm:"uniqueIndex;not null" json:"name"`
+	IsActive             bool      `gorm:"default:false" json:"isActive"`
+	Endpoint             string    `gorm:"not null" json:"endpoint"`
+	NamespaceID          int       `gorm:"default:2" json:"namespaceId"`
+	TriggerNode          string    `json:"triggerNode"`
+	ResetNode            string    `json:"resetNode"`
+	DataNode             string    `json:"dataNode"`
+	DataType             string    `gorm:"default:'string_array'" json:"dataType"`
+	PositionXNode        string    `json:"positionXNode"`
+	PositionYNode        string    `json:"positionYNode"`
+	PositionZNode        string    `json:"positionZNode"`
+	StatusNode           string    `json:"statusNode"`
+	AlarmNode            string    `json:"alarmNode"`
+	ProgressNode         string    `json:"progressNode"`
+	PointArrayNode       string    `json:"pointArrayNode"`
+	TriggerWriteNode     string    `json:"triggerWriteNode"`
+	ReadDoneNode         string    `json:"readDoneNode"`
+	EndOfFileNode        string    `json:"endOfFileNode"`
+	ChunkSize            int       `gorm:"default:20" json:"chunkSize"`
+	AckTimeout           int       `gorm:"default:5000" json:"ackTimeout"`
+	PollInterval         int       `gorm:"default:100" json:"pollInterval"`
+	SubscriptionInterval int       `gorm:"default:100" json:"subscriptionInterval"`
+	SecurityMode         string    `gorm:"default:'None'" json:"securityMode"`
+	SecurityPolicy       string    `gorm:"default:'None'" json:"securityPolicy"`
+	CertFile             string    `json:"certFile"`
+	KeyFile              string    `json:"keyFile"`
+	ServerCertFile       string    `json:"serverCertFile"`
+	Username             string    `json:"username"`
+	Password             string    `json:"password"`
+	UpdatedAt            time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
+}
+
 // DBConfig holds database configuration
 type DBConfig struct {
 	MaxOpenConns    int
@@ -103,6 +138,7 @@ func InitDBWithConfig(dbPath string, cfg DBConfig) (*gorm.DB, error) {
 		&Tool{},
 		&CAMSettings{},
 		&MachineConfig{},
+		&OPCUAConfig{},
 	)
 	if err != nil {
 		return nil, err
@@ -116,6 +152,9 @@ func InitDBWithConfig(dbPath string, cfg DBConfig) (*gorm.DB, error) {
 
 	// Seed default machines if empty
 	seedDefaultMachines(db)
+
+	// Seed OPC UA config if not exists
+	seedOPCUAConfig(db)
 
 	return db, nil
 }
@@ -207,4 +246,38 @@ func seedDefaultMachines(db *gorm.DB) {
 	for _, machine := range defaultMachines {
 		db.Create(&machine)
 	}
+}
+
+func seedOPCUAConfig(db *gorm.DB) {
+	var count int64
+	db.Model(&OPCUAConfig{}).Count(&count)
+	if count > 0 {
+		return // Already has configs
+	}
+
+	// Default config with correct namespace (ns=2) from Siemens PLC interface
+	defaultCfg := OPCUAConfig{
+		Name:                 "Siemens S7-1500 Default",
+		IsActive:             true,
+		Endpoint:             "opc.tcp://192.168.0.1:4840",
+		NamespaceID:          2,
+		TriggerNode:          "ns=2;i=12",
+		ResetNode:            "ns=2;i=23",
+		DataNode:             "ns=2;i=93",
+		DataType:             "string_array",
+		PositionXNode:        "ns=2;i=80",
+		PositionYNode:        "ns=2;i=81",
+		PositionZNode:        "ns=2;i=82",
+		PointArrayNode:       "ns=2;i=93",
+		TriggerWriteNode:     "ns=2;i=12",
+		ReadDoneNode:         "ns=2;i=23",
+		EndOfFileNode:        "ns=2;i=34",
+		ChunkSize:            20,
+		AckTimeout:           5000,
+		PollInterval:         100,
+		SubscriptionInterval: 100,
+		SecurityMode:         "SignAndEncrypt",
+		SecurityPolicy:       "Basic256Sha256",
+	}
+	db.Create(&defaultCfg)
 }

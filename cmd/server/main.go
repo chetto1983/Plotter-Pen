@@ -39,9 +39,11 @@ func main() {
 	healthHandler := handler.NewHealthHandler(db)
 	healthHandler.RegisterRoutes(r)
 
-	// Serve static files
-	r.Static("/src", cfg.StaticDir+"/src")
-	r.Static("/styles", cfg.StaticDir+"/styles")
+	// Serve static files with correct MIME types
+	staticGroup := r.Group("/")
+	staticGroup.Use(middleware.MIMEType())
+	staticGroup.Static("/src", cfg.StaticDir+"/src")
+	staticGroup.Static("/styles", cfg.StaticDir+"/styles")
 	r.StaticFile("/", cfg.StaticDir+"/plotter_pen.html")
 	r.StaticFile("/plotter_pen.html", cfg.StaticDir+"/plotter_pen.html")
 
@@ -94,8 +96,8 @@ func registerHandlers(api *gin.RouterGroup, db *gorm.DB) {
 	camHandler := handler.NewCAMHandler()
 	camHandler.RegisterRoutes(api)
 
-	// OPC UA handlers
-	opcuaHandler := handler.NewOpcuaHandler()
+	// OPC UA handlers (database-backed config)
+	opcuaHandler := handler.NewOpcuaHandler(db)
 	opcuaHandler.RegisterRoutes(api)
 
 	// DXF/SVG/STL handlers

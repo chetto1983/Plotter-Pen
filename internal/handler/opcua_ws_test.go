@@ -8,26 +8,44 @@ import (
 	"testing"
 	"time"
 
+	"plotter-pen/internal/persistence"
 	"plotter-pen/internal/service/opcua"
 
+	"github.com/glebarez/sqlite"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 func init() {
 	gin.SetMode(gin.TestMode)
 }
 
-func setupTestWSServer() (*gin.Engine, *OpcuaHandler) {
+// setupHandlerTestDB creates an in-memory test database
+func setupHandlerTestDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	if err != nil {
+		t.Fatalf("Failed to create test database: %v", err)
+	}
+	db.AutoMigrate(&persistence.OPCUAConfig{})
+	return db
+}
+
+func setupTestWSServer(t *testing.T) (*gin.Engine, *OpcuaHandler) {
+	db := setupHandlerTestDB(t)
 	r := gin.New()
-	h := NewOpcuaHandler()
+	h := NewOpcuaHandler(db)
 	api := r.Group("/api")
 	h.RegisterRoutes(api)
 	return r, h
 }
 
 func TestWebSocket_Upgrade(t *testing.T) {
-	r, _ := setupTestWSServer()
+	r, _ := setupTestWSServer(t)
 	server := httptest.NewServer(r)
 	defer server.Close()
 
@@ -47,7 +65,7 @@ func TestWebSocket_Upgrade(t *testing.T) {
 }
 
 func TestWebSocket_InitialStatus(t *testing.T) {
-	r, _ := setupTestWSServer()
+	r, _ := setupTestWSServer(t)
 	server := httptest.NewServer(r)
 	defer server.Close()
 
@@ -76,7 +94,7 @@ func TestWebSocket_InitialStatus(t *testing.T) {
 }
 
 func TestWebSocket_Subscribe(t *testing.T) {
-	r, _ := setupTestWSServer()
+	r, _ := setupTestWSServer(t)
 	server := httptest.NewServer(r)
 	defer server.Close()
 
@@ -115,7 +133,7 @@ func TestWebSocket_Subscribe(t *testing.T) {
 }
 
 func TestWebSocket_Unsubscribe(t *testing.T) {
-	r, _ := setupTestWSServer()
+	r, _ := setupTestWSServer(t)
 	server := httptest.NewServer(r)
 	defer server.Close()
 
@@ -153,7 +171,7 @@ func TestWebSocket_Unsubscribe(t *testing.T) {
 }
 
 func TestWebSocket_Ping(t *testing.T) {
-	r, _ := setupTestWSServer()
+	r, _ := setupTestWSServer(t)
 	server := httptest.NewServer(r)
 	defer server.Close()
 
@@ -184,7 +202,7 @@ func TestWebSocket_Ping(t *testing.T) {
 }
 
 func TestWebSocket_InvalidCommand(t *testing.T) {
-	r, _ := setupTestWSServer()
+	r, _ := setupTestWSServer(t)
 	server := httptest.NewServer(r)
 	defer server.Close()
 
@@ -219,7 +237,8 @@ func TestWebSocket_InvalidCommand(t *testing.T) {
 
 // Test stream service
 func TestPositionStream_NewPositionStream(t *testing.T) {
-	configMgr := opcua.NewConfigManager("")
+	db := setupHandlerTestDB(t)
+	configMgr := opcua.NewConfigManager(db)
 	client := opcua.NewClient(configMgr)
 
 	stream := opcua.NewPositionStream(client, 100)
@@ -233,7 +252,8 @@ func TestPositionStream_NewPositionStream(t *testing.T) {
 }
 
 func TestPositionStream_IntervalBounds(t *testing.T) {
-	configMgr := opcua.NewConfigManager("")
+	db := setupHandlerTestDB(t)
+	configMgr := opcua.NewConfigManager(db)
 	client := opcua.NewClient(configMgr)
 
 	// Test minimum interval (should be clamped to 50ms)

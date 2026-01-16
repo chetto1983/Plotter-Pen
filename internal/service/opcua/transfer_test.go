@@ -2,7 +2,26 @@ package opcua
 
 import (
 	"testing"
+
+	"plotter-pen/internal/persistence"
+
+	"github.com/glebarez/sqlite"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
+
+// setupTransferTestDB creates an in-memory test database for transfer tests
+func setupTransferTestDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	if err != nil {
+		t.Fatalf("Failed to create test database: %v", err)
+	}
+	db.AutoMigrate(&persistence.OPCUAConfig{})
+	return db
+}
 
 func TestPadToSize(t *testing.T) {
 	tests := []struct {
@@ -58,7 +77,8 @@ func TestPadToSize(t *testing.T) {
 }
 
 func TestNewChunkedTransfer(t *testing.T) {
-	configMgr := NewConfigManager("")
+	db := setupTransferTestDB(t)
+	configMgr := NewConfigManager(db)
 	client := NewClient(configMgr)
 
 	cfg := configMgr.Get()
@@ -74,7 +94,8 @@ func TestNewChunkedTransfer(t *testing.T) {
 }
 
 func TestChunkedTransfer_DefaultConfig(t *testing.T) {
-	configMgr := NewConfigManager("")
+	db := setupTransferTestDB(t)
+	configMgr := NewConfigManager(db)
 	client := NewClient(configMgr)
 
 	// Test with zero values - should use defaults

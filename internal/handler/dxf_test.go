@@ -186,6 +186,57 @@ func TestSmartImport_MissingContent(t *testing.T) {
 	}
 }
 
+func TestSmartImport_RawTextPlain(t *testing.T) {
+	r := setupDXFRouter()
+
+	dxfContent := `0
+SECTION
+2
+HEADER
+0
+ENDSEC
+0
+SECTION
+2
+ENTITIES
+0
+LINE
+10
+0
+20
+0
+11
+100
+21
+100
+0
+ENDSEC
+0
+EOF`
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/smart-import", bytes.NewBufferString(dxfContent))
+	req.Header.Set("Content-Type", "text/plain")
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Status = %d, want 200 for text/plain body, body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestSmartImport_RawTextPlain_InvalidDXF(t *testing.T) {
+	r := setupDXFRouter()
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/smart-import", bytes.NewBufferString("not a DXF"))
+	req.Header.Set("Content-Type", "text/plain")
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Status = %d, want 400 for invalid text/plain DXF", w.Code)
+	}
+}
+
 // === ExportDXF Tests ===
 
 func TestExportDXF_Valid(t *testing.T) {

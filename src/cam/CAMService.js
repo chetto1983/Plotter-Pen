@@ -24,6 +24,10 @@ export class CAMService {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
+        if (!res.ok) {
+            const errText = await res.text().catch(() => 'Request failed');
+            throw new Error(errText || `CAM Process Failed (${res.status})`);
+        }
         const json = await res.json();
         if (json.status !== 'ok') {
             throw new Error(json.message || 'CAM Process Failed');
@@ -41,6 +45,10 @@ export class CAMService {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ gcode })
         });
+        if (!res.ok) {
+            const errText = await res.text().catch(() => 'Parse failed');
+            throw new Error(errText || `Parse Failed (${res.status})`);
+        }
         const json = await res.json();
         if (json.status === 'error') {
             throw new Error(json.message);
@@ -54,11 +62,13 @@ export class CAMService {
     async loadSettings() {
         try {
             const res = await fetch('/api/cam/settings');
+            if (!res.ok) return null;
             const json = await res.json();
-            if (json.status === 'ok' && json.data) {
-                return json.data;
+            // Backend returns { data: "..." }
+            if (json.data) {
+                return typeof json.data === 'string' ? JSON.parse(json.data) : json.data;
             }
-            return null; // No saved settings
+            return null;
         } catch (e) {
             console.error('Failed to load CAM settings', e);
             return null;

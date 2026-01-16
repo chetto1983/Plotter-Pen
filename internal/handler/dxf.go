@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"io"
 	"net/http"
+	"strings"
 
 	importservice "plotter-pen/internal/service/import"
 
@@ -74,27 +76,50 @@ type SmartImportRequest struct {
 }
 
 // SmartImport performs intelligent DXF import with optimizations
+// Supports both JSON body and raw text/plain body for efficiency with large files
 func (h *DXFHandler) SmartImport(c *gin.Context) {
-	var req SmartImportRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+	var content string
+	var opts importservice.ImportOptions
+
+	contentType := c.GetHeader("Content-Type")
+
+	// Handle raw text body (efficient for large DXF files)
+	if strings.HasPrefix(contentType, "text/plain") {
+		body, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
+			return
+		}
+		content = string(body)
+		// Use default options for raw text
+		opts = importservice.ImportOptions{
+			Normalize:    true,
+			CenterOrigin: true,
+			ExtractPLC:   true,
+		}
+	} else {
+		// Handle JSON body
+		var req SmartImportRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		content = req.Content
+		opts = importservice.ImportOptions{
+			Normalize:    req.Options.Normalize,
+			CenterOrigin: req.Options.CenterOrigin,
+			ScaleFactor:  req.Options.ScaleFactor,
+			ExtractPLC:   req.Options.ExtractPLC,
+		}
 	}
 
 	// Validate content
-	if !importservice.ValidateContent(req.Content) {
+	if !importservice.ValidateContent(content) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid DXF content"})
 		return
 	}
 
-	opts := importservice.ImportOptions{
-		Normalize:    req.Options.Normalize,
-		CenterOrigin: req.Options.CenterOrigin,
-		ScaleFactor:  req.Options.ScaleFactor,
-		ExtractPLC:   req.Options.ExtractPLC,
-	}
-
-	result, err := importservice.SmartImport(req.Content, opts)
+	result, err := importservice.SmartImport(content, opts)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "smart import failed",

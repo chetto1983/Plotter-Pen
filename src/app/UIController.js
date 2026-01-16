@@ -505,7 +505,9 @@ export class UIController {
     });
 
     ws.on('connected', () => {
-      this.updateOPCUAStatus('WebSocket connesso', 'success');
+      this.updateOPCUAStatus('Connessione PLC...', 'info');
+      // Auto-connect to PLC and subscribe to position updates
+      ws.command('connect');
     });
 
     ws.on('disconnected', () => {
@@ -551,7 +553,11 @@ export class UIController {
 
     // ACK messages
     ws.on('ack', (data) => {
-      if (data.success) {
+      if (data.action === 'connect' && data.success) {
+        // PLC connected - subscribe to position updates
+        this.updateOPCUAStatus('Connesso', 'success');
+        ws.subscribe(100);
+      } else if (data.success) {
         this.updateOPCUAStatus(data.message || 'OK', 'success');
       } else {
         this.updateOPCUAStatus(data.message || 'Errore', 'error');

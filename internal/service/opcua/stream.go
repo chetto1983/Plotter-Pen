@@ -161,11 +161,11 @@ func AlarmMessage(code, message string) WSMessage {
 }
 
 // AckMessage creates an acknowledgment message
-func AckMessage(commandID string, success bool, message string) WSMessage {
+func AckMessage(action string, success bool, message string) WSMessage {
 	return NewWSMessage("ack", map[string]interface{}{
-		"commandId": commandID,
-		"success":   success,
-		"message":   message,
+		"action":  action,
+		"success": success,
+		"message": message,
 	})
 }
 

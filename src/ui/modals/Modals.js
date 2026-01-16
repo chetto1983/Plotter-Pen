@@ -174,47 +174,119 @@ export class Modals {
     </div>
     <div class="cad-modal-body">
       <form id="plcConfigForm" novalidate class="cad-modal-form">
-        <div class="cad-input-row cad-col-full">
+        <!-- PLC Selection -->
+        <fieldset class="cad-fieldset"><legend>Seleziona PLC</legend>
+        <div class="cad-modal-cols-2">
+          <div class="cad-input-row" style="flex:2">
+            <label for="plcSelector">PLC Attivo</label>
+            <select id="plcSelector" name="plcSelector" class="cad-modal-select"></select>
+          </div>
+          <div class="cad-input-row" style="flex:1; align-self:flex-end">
+            <div style="display:flex;gap:4px">
+              <button type="button" class="cad-btn-outline" id="btnNewPLC" title="Nuovo PLC">+</button>
+              <button type="button" class="cad-btn-outline" id="btnDeletePLC" title="Elimina PLC">&times;</button>
+            </div>
+          </div>
+        </div>
+        <div class="cad-input-row">
+          <label for="plcName">Nome PLC</label>
+          <input type="text" id="plcName" name="plcName" placeholder="Siemens S7-1500" class="cad-modal-input" />
+        </div>
+        </fieldset>
+        <!-- Connection Section -->
+        <fieldset class="cad-fieldset"><legend>Connessione</legend>
+        <div class="cad-input-row">
           <label for="endpoint">Endpoint OPC UA</label>
           <input type="text" id="endpoint" name="endpoint" required placeholder="opc.tcp://192.168.1.100:4840" class="cad-modal-input" />
         </div>
         <div class="cad-modal-cols-2">
-          <div class="cad-input-row cad-col-full">
-            <label for="nodeId">Node ID Target</label>
-            <input type="text" id="nodeId" name="nodeId" required placeholder="ns=4;i=12" class="cad-modal-input" />
+          <div class="cad-input-row">
+            <label for="securityMode">Sicurezza</label>
+            <select id="securityMode" name="securityMode" class="cad-modal-select">
+              <option value="None">Nessuna</option>
+              <option value="Sign">Sign</option>
+              <option value="SignAndEncrypt">SignAndEncrypt</option>
+            </select>
           </div>
-          <div class="cad-input-row cad-col-full">
-            <label for="triggerNodeId">Node ID Trigger</label>
-            <input type="text" id="triggerNodeId" name="triggerNodeId" placeholder="ns=4;i=535" class="cad-modal-input" />
+          <div class="cad-input-row">
+            <label for="securityPolicy">Policy</label>
+            <select id="securityPolicy" name="securityPolicy" class="cad-modal-select">
+              <option value="None">Nessuna</option>
+              <option value="Basic256">Basic256</option>
+              <option value="Basic256Sha256">Basic256Sha256</option>
+            </select>
           </div>
         </div>
         <div class="cad-modal-cols-2">
-          <div class="cad-input-row cad-col-full">
+          <div class="cad-input-row">
             <label for="username">Username</label>
             <input type="text" id="username" name="username" placeholder="admin" autocomplete="username" class="cad-modal-input" />
           </div>
-          <div class="cad-input-row cad-col-full">
+          <div class="cad-input-row">
             <label for="password">Password</label>
             <input type="password" id="password" name="password" placeholder="••••••••" autocomplete="current-password" class="cad-modal-input" />
           </div>
         </div>
+        </fieldset>
+        <!-- Data Nodes Section -->
+        <fieldset class="cad-fieldset"><legend>Nodi Dati</legend>
         <div class="cad-modal-cols-2">
-           <div class="cad-input-row cad-col-full">
-              <label for="valueType">Tipo Valore</label>
-              <select id="valueType" name="valueType" class="cad-modal-select">
-                <option value="string_array">String Array</option>
-                <option value="string">String</option>
-                <option value="int_array">Int Array</option>
-                <option value="float_array">Float Array</option>
-                <option value="bool_array">Bool Array</option>
-              </select>
-           </div>
-           <div class="cad-input-row cad-col-full">
-              <label for="triggerResetDelayMs">Delay (ms)</label>
-              <input type="number" id="triggerResetDelayMs" name="triggerResetDelayMs" placeholder="500" class="cad-modal-input" />
-           </div>
+          <div class="cad-input-row">
+            <label for="dataNode">Node ID Dati</label>
+            <input type="text" id="dataNode" name="dataNode" required placeholder="ns=2;s=Data" class="cad-modal-input" />
+          </div>
+          <div class="cad-input-row">
+            <label for="dataType">Tipo Dati</label>
+            <select id="dataType" name="dataType" class="cad-modal-select">
+              <option value="string_array">String Array</option>
+              <option value="string">String</option>
+              <option value="int32">Int32</option>
+              <option value="float">Float</option>
+            </select>
+          </div>
         </div>
-        <input type="hidden" name="arrayLength" value="100">
+        <div class="cad-modal-cols-2">
+          <div class="cad-input-row">
+            <label for="triggerNode">Node ID Trigger</label>
+            <input type="text" id="triggerNode" name="triggerNode" placeholder="ns=2;s=Trigger" class="cad-modal-input" />
+          </div>
+          <div class="cad-input-row">
+            <label for="resetNode">Node ID Reset</label>
+            <input type="text" id="resetNode" name="resetNode" placeholder="ns=2;s=Reset" class="cad-modal-input" />
+          </div>
+        </div>
+        </fieldset>
+        <!-- Position Nodes Section -->
+        <fieldset class="cad-fieldset"><legend>Nodi Posizione (Lettura)</legend>
+        <div class="cad-input-row">
+          <label for="positionXNode">Posizione X</label>
+          <input type="text" id="positionXNode" name="positionXNode" placeholder="ns=3;s=&quot;DB_Position&quot;.X" class="cad-modal-input" />
+        </div>
+        <div class="cad-input-row">
+          <label for="positionYNode">Posizione Y</label>
+          <input type="text" id="positionYNode" name="positionYNode" placeholder="ns=3;s=&quot;DB_Position&quot;.Y" class="cad-modal-input" />
+        </div>
+        <div class="cad-input-row">
+          <label for="positionZNode">Posizione Z</label>
+          <input type="text" id="positionZNode" name="positionZNode" placeholder="ns=3;s=&quot;DB_Position&quot;.Z" class="cad-modal-input" />
+        </div>
+        </fieldset>
+        <!-- Security Certificates -->
+        <fieldset class="cad-fieldset"><legend>Certificati (per SignAndEncrypt)</legend>
+        <div class="cad-input-row">
+          <label>Stato</label>
+          <span id="certStatus" style="color:var(--muted)">Non generati</span>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button type="button" class="cad-primary-btn" id="btnGenerateCert">Genera</button>
+          <button type="button" class="cad-primary-btn cad-btn-outline" id="btnDownloadPem" disabled>PEM</button>
+          <button type="button" class="cad-primary-btn cad-btn-outline" id="btnDownloadKey" disabled>KEY</button>
+          <button type="button" class="cad-primary-btn cad-btn-outline" id="btnDownloadDer" disabled>DER (PLC)</button>
+        </div>
+        <p style="font-size:0.8em;color:var(--muted);margin-top:6px">
+          Importare il file <code>.der</code> nella trust list del PLC.
+        </p>
+        </fieldset>
         <div id="configStatus" class="cad-modal-status" hidden></div>
         <div class="cad-modal-actions-right">
           <button type="button" class="cad-primary-btn cad-btn-outline" id="reloadConfigBtn">Ricarica</button>

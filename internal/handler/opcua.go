@@ -3,11 +3,13 @@ package handler
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"time"
 
 	"plotter-pen/internal/service/opcua"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // OpcuaHandler handles OPC UA communication endpoints
@@ -16,9 +18,9 @@ type OpcuaHandler struct {
 	client    *opcua.Client
 }
 
-// NewOpcuaHandler creates a new OPC UA handler
-func NewOpcuaHandler() *OpcuaHandler {
-	configMgr := opcua.NewConfigManager("opcua_config.json")
+// NewOpcuaHandler creates a new OPC UA handler with database backing
+func NewOpcuaHandler(db *gorm.DB) *OpcuaHandler {
+	configMgr := opcua.NewConfigManager(db)
 	client := opcua.NewClient(configMgr)
 
 	return &OpcuaHandler{
@@ -31,8 +33,23 @@ func NewOpcuaHandler() *OpcuaHandler {
 func (h *OpcuaHandler) RegisterRoutes(r *gin.RouterGroup) {
 	opcuaGroup := r.Group("/opcua")
 	{
+		// Active config (current PLC)
 		opcuaGroup.GET("/config", h.GetConfig)
 		opcuaGroup.PUT("/config", h.UpdateConfig)
+
+		// Multi-PLC management
+		opcuaGroup.GET("/plcs", h.ListPLCs)
+		opcuaGroup.POST("/plcs", h.CreatePLC)
+		opcuaGroup.GET("/plcs/:id", h.GetPLC)
+		opcuaGroup.DELETE("/plcs/:id", h.DeletePLC)
+		opcuaGroup.POST("/plcs/:id/activate", h.ActivatePLC)
+
+		// Certificate management
+		opcuaGroup.POST("/certificates/generate", h.GenerateCertificate)
+		opcuaGroup.GET("/certificates/status", h.CertificateStatus)
+		opcuaGroup.GET("/certificates/download/:type", h.DownloadCertificate)
+
+		// Connection
 		opcuaGroup.POST("/send", h.Send)
 		opcuaGroup.GET("/status", h.Status)
 		opcuaGroup.POST("/connect", h.Connect)
@@ -45,7 +62,7 @@ func (h *OpcuaHandler) RegisterRoutes(r *gin.RouterGroup) {
 
 // GetConfig returns current OPC UA configuration
 func (h *OpcuaHandler) GetConfig(c *gin.Context) {
-	c.JSON(http.StatusOK, h.configMgr.Get())
+	c.JSON(http.StatusOK, gin.H{"data": h.configMgr.Get()})
 }
 
 // UpdateConfig updates OPC UA configuration
@@ -58,12 +75,12 @@ func (h *OpcuaHandler) UpdateConfig(c *gin.Context) {
 
 	h.configMgr.Update(req)
 
-	if err := h.configMgr.SaveToFile(); err != nil {
+	if err := h.configMgr.SaveToDB(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save config"})
 		return
 	}
 
-	c.JSON(http.StatusOK, h.configMgr.Get())
+	c.JSON(http.StatusOK, gin.H{"data": h.configMgr.Get()})
 }
 
 // SendRequest represents data to send to PLC
@@ -195,4 +212,111 @@ func (h *OpcuaHandler) GetMachineStatus(c *gin.Context) {
 
 	status := h.client.GetMachineStatus(ctx)
 	c.JSON(http.StatusOK, status)
+}
+
+// ListPLCs returns all PLC configurations
+func (h *OpcuaHandler) ListPLCs(c *gin.Context) {
+	configs, err := h.configMgr.ListAll()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": configs})
+}
+
+// CreatePLC creates a new PLC configuration
+func (h *OpcuaHandler) CreatePLC(c *gin.Context) {
+	var req opcua.Config
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if req.Name == "" || req.Endpoint == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name and endpoint are required"})
+		return
+	}
+	created, err := h.configMgr.Create(req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"data": created})
+}
+
+// GetPLC returns a specific PLC configuration
+func (h *OpcuaHandler) GetPLC(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+	cfg, err := h.configMgr.GetByID(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "PLC not found"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": cfg})
+}
+
+// DeletePLC deletes a PLC configuration
+func (h *OpcuaHandler) DeletePLC(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+	if err := h.configMgr.Delete(id); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "cannot delete active PLC"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+// ActivatePLC sets a PLC as the active configuration
+func (h *OpcuaHandler) ActivatePLC(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+	// Disconnect current PLC before switching
+	if h.client.IsConnected() {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+		h.client.Disconnect(ctx)
+		cancel()
+	}
+	if err := h.configMgr.SetActive(id); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": h.configMgr.Get()})
+}
+
+// CertRequest represents certificate generation request
+type CertRequest struct {
+	OutputDir string `json:"outputDir"`
+}
+
+// GenerateCertificate generates OPC UA client certificates
+func (h *OpcuaHandler) GenerateCertificate(c *gin.Context) {
+	var req CertRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		req.OutputDir = "certs"
+	}
+	if req.OutputDir == "" {
+		req.OutputDir = "certs"
+	}
+	certPath := req.OutputDir + "/client.pem"
+	keyPath := req.OutputDir + "/client.key"
+	if err := opcua.GenerateAndSaveCert(certPath, keyPath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success":  true,
+		"certFile": certPath,
+		"keyFile":  keyPath,
+		"derFile":  req.OutputDir + "/client.der",
+		"message":  "Certificates generated. Import .der file to PLC trust list.",
+	})
 }

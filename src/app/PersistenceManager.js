@@ -32,13 +32,11 @@ export class PersistenceManager {
             // Get serialized state from StateManager
             const stateJson = this.app.state.serializeState();
 
-            // Parse to object to send as JSON body
-            const state = JSON.parse(stateJson);
-
+            // Backend expects { data: "<json-string>" }
             const response = await fetch('/api/state', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(state)
+                body: JSON.stringify({ data: stateJson })
             });
 
             if (!response.ok) throw new Error('Server returned ' + response.status);
@@ -61,7 +59,7 @@ export class PersistenceManager {
 
             const result = await response.json();
 
-            if (result.status === 'ok' && result.data) {
+            if (result.data) {
                 // Restore state with View settings enabled (true)
                 this.app.state.restoreState(result.data, true);
 

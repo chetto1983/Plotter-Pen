@@ -7,22 +7,40 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"plotter-pen/internal/persistence"
 	"plotter-pen/internal/service/opcua"
 
+	"github.com/glebarez/sqlite"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
-func setupTestOpcuaServer() (*gin.Engine, *OpcuaHandler) {
+// setupOpcuaTestDB creates an in-memory test database
+func setupOpcuaTestDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	if err != nil {
+		t.Fatalf("Failed to create test database: %v", err)
+	}
+	db.AutoMigrate(&persistence.OPCUAConfig{})
+	return db
+}
+
+func setupTestOpcuaServer(t *testing.T) (*gin.Engine, *OpcuaHandler) {
 	gin.SetMode(gin.TestMode)
+	db := setupOpcuaTestDB(t)
 	r := gin.New()
-	h := NewOpcuaHandler()
+	h := NewOpcuaHandler(db)
 	api := r.Group("/api")
 	h.RegisterRoutes(api)
 	return r, h
 }
 
 func TestOpcuaHandler_GetConfig(t *testing.T) {
-	r, _ := setupTestOpcuaServer()
+	r, _ := setupTestOpcuaServer(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/opcua/config", nil)
 	w := httptest.NewRecorder()
@@ -33,19 +51,22 @@ func TestOpcuaHandler_GetConfig(t *testing.T) {
 		t.Errorf("Expected status %d, got %d", http.StatusOK, w.Code)
 	}
 
-	var config opcua.Config
-	if err := json.Unmarshal(w.Body.Bytes(), &config); err != nil {
+	// Response format: { "data": { ...config } }
+	var resp struct {
+		Data opcua.Config `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("Failed to parse response: %v", err)
 	}
 
 	// Check default config values exist
-	if config.Endpoint == "" {
+	if resp.Data.Endpoint == "" {
 		t.Error("Expected endpoint to be set in config")
 	}
 }
 
 func TestOpcuaHandler_UpdateConfig(t *testing.T) {
-	r, _ := setupTestOpcuaServer()
+	r, _ := setupTestOpcuaServer(t)
 
 	newConfig := opcua.Config{
 		Endpoint: "opc.tcp://test-plc:4840",
@@ -64,18 +85,21 @@ func TestOpcuaHandler_UpdateConfig(t *testing.T) {
 		t.Errorf("Expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
 	}
 
-	var config opcua.Config
-	if err := json.Unmarshal(w.Body.Bytes(), &config); err != nil {
+	// Response format: { "data": { ...config } }
+	var resp struct {
+		Data opcua.Config `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("Failed to parse response: %v", err)
 	}
 
-	if config.Endpoint != newConfig.Endpoint {
-		t.Errorf("Expected endpoint %s, got %s", newConfig.Endpoint, config.Endpoint)
+	if resp.Data.Endpoint != newConfig.Endpoint {
+		t.Errorf("Expected endpoint %s, got %s", newConfig.Endpoint, resp.Data.Endpoint)
 	}
 }
 
 func TestOpcuaHandler_UpdateConfig_InvalidJSON(t *testing.T) {
-	r, _ := setupTestOpcuaServer()
+	r, _ := setupTestOpcuaServer(t)
 
 	req := httptest.NewRequest(http.MethodPut, "/api/opcua/config", bytes.NewReader([]byte("invalid json")))
 	req.Header.Set("Content-Type", "application/json")
@@ -89,7 +113,7 @@ func TestOpcuaHandler_UpdateConfig_InvalidJSON(t *testing.T) {
 }
 
 func TestOpcuaHandler_Status(t *testing.T) {
-	r, _ := setupTestOpcuaServer()
+	r, _ := setupTestOpcuaServer(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/opcua/status", nil)
 	w := httptest.NewRecorder()
@@ -116,7 +140,7 @@ func TestOpcuaHandler_Status(t *testing.T) {
 }
 
 func TestOpcuaHandler_GetMachineStatus(t *testing.T) {
-	r, _ := setupTestOpcuaServer()
+	r, _ := setupTestOpcuaServer(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/opcua/machine-status", nil)
 	w := httptest.NewRecorder()
@@ -139,7 +163,7 @@ func TestOpcuaHandler_GetMachineStatus(t *testing.T) {
 }
 
 func TestOpcuaHandler_GetPosition_NotConnected(t *testing.T) {
-	r, _ := setupTestOpcuaServer()
+	r, _ := setupTestOpcuaServer(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/opcua/position", nil)
 	w := httptest.NewRecorder()
@@ -162,7 +186,7 @@ func TestOpcuaHandler_GetPosition_NotConnected(t *testing.T) {
 }
 
 func TestOpcuaHandler_Send_InvalidJSON(t *testing.T) {
-	r, _ := setupTestOpcuaServer()
+	r, _ := setupTestOpcuaServer(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/opcua/send", bytes.NewReader([]byte("invalid")))
 	req.Header.Set("Content-Type", "application/json")
@@ -176,7 +200,7 @@ func TestOpcuaHandler_Send_InvalidJSON(t *testing.T) {
 }
 
 func TestOpcuaHandler_Send_MissingData(t *testing.T) {
-	r, _ := setupTestOpcuaServer()
+	r, _ := setupTestOpcuaServer(t)
 
 	// Empty JSON object - missing required 'data' field
 	req := httptest.NewRequest(http.MethodPost, "/api/opcua/send", bytes.NewReader([]byte("{}")))
@@ -191,7 +215,7 @@ func TestOpcuaHandler_Send_MissingData(t *testing.T) {
 }
 
 func TestOpcuaHandler_Connect_NoServer(t *testing.T) {
-	r, _ := setupTestOpcuaServer()
+	r, _ := setupTestOpcuaServer(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/opcua/connect", nil)
 	w := httptest.NewRecorder()
@@ -205,7 +229,7 @@ func TestOpcuaHandler_Connect_NoServer(t *testing.T) {
 }
 
 func TestOpcuaHandler_Disconnect_NotConnected(t *testing.T) {
-	r, _ := setupTestOpcuaServer()
+	r, _ := setupTestOpcuaServer(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/opcua/disconnect", nil)
 	w := httptest.NewRecorder()

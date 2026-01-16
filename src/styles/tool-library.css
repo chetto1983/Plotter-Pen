@@ -1,0 +1,208 @@
+/* ============================================
+   TOOL LIBRARY MODAL STYLES
+   ============================================ */
+
+.tool-lib-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+}
+
+.tool-lib-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--fg);
+}
+
+.tool-lib-title svg {
+    width: 18px;
+    height: 18px;
+}
+
+.tool-lib-close {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 20px;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.tool-lib-close:hover {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+}
+
+#toolLibraryModal .cad-modal {
+    width: 520px;
+    max-width: calc(100vw - 48px);
+}
+
+.tool-lib-body {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    min-height: 280px;
+    overflow: hidden;
+}
+
+.tool-lib-sidebar {
+    border-right: 1px solid var(--border);
+    padding: 12px;
+    overflow-y: auto;
+}
+
+.tool-lib-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.tool-lib-item {
+    padding: 10px 12px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    text-align: left;
+    color: var(--fg);
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.tool-lib-item:hover {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: var(--border-light);
+}
+
+.tool-lib-item.active {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+}
+
+.tool-lib-empty {
+    padding: 20px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.tool-lib-main {
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow: hidden;
+    min-width: 0;
+}
+
+.tool-lib-section-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.tool-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.tool-input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.tool-input-group.full-width {
+    grid-column: span 2;
+}
+
+.tool-input-group label {
+    font-size: 11px;
+    color: var(--muted);
+}
+
+.tool-input {
+    padding: 8px 10px;
+    background: rgba(11, 14, 22, 0.9);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--fg);
+    font-size: 13px;
+}
+
+.tool-input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.tool-select {
+    appearance: none;
+    cursor: pointer;
+}
+
+.tool-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.btn-tool-delete,
+.btn-tool-save {
+    flex: 1;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.btn-tool-delete {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+}
+
+.btn-tool-delete:hover:not(:disabled) {
+    border-color: #ef4444;
+    color: #ef4444;
+}
+
+.btn-tool-delete:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-tool-save {
+    background: var(--accent-dim);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+}
+
+.btn-tool-save:hover {
+    background: var(--accent);
+    color: #fff;
+}
+
+.btn-tool-use {
+    width: 100%;
+    padding: 10px;
+    background: linear-gradient(135deg, rgba(82, 168, 255, 0.9), rgba(54, 122, 255, 0.9));
+    border: none;
+    border-radius: 6px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.btn-tool-use:hover {
+    background: linear-gradient(135deg, rgba(106, 184, 255, 0.95), rgba(82, 148, 255, 0.95));
+}

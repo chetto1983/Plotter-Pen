@@ -1,13 +1,27 @@
 export class PLCConfigManager {
     constructor() {
-        this.modal = document.getElementById('plcConfigModal'); // This should be the .cad-modal-overlay
+        this.modal = document.getElementById('plcConfigModal');
         this.form = document.getElementById('plcConfigForm');
         this.statusBox = document.getElementById('configStatus');
-        this.openBtn = document.getElementById('btnOpenPLCConfig'); // The button in the ribbon
-        this.closeBtn = document.getElementById('btnClosePLCConfig'); // The X button in modal
+        this.openBtn = document.getElementById('btnOpenPLCConfig');
+        this.closeBtn = document.getElementById('btnClosePLCConfig');
         this.reloadBtn = document.getElementById('reloadConfigBtn');
 
+        // Multi-PLC elements
+        this.plcSelector = document.getElementById('plcSelector');
+        this.plcNameInput = document.getElementById('plcName');
+        this.btnNewPLC = document.getElementById('btnNewPLC');
+        this.btnDeletePLC = document.getElementById('btnDeletePLC');
+        this.btnGenerateCert = document.getElementById('btnGenerateCert');
+        this.certStatus = document.getElementById('certStatus');
+
+        // Certificate download buttons
+        this.btnDownloadPem = document.getElementById('btnDownloadPem');
+        this.btnDownloadKey = document.getElementById('btnDownloadKey');
+        this.btnDownloadDer = document.getElementById('btnDownloadDer');
+
         this.cachedConfig = null;
+        this.plcList = [];
 
         this.init();
     }
@@ -21,7 +35,6 @@ export class PLCConfigManager {
         }
         if (this.modal) {
             this.modal.addEventListener('click', (e) => {
-                // Close if clicking the overlay (outside the modal content)
                 if (e.target === this.modal) this.close();
             });
         }
@@ -29,15 +42,177 @@ export class PLCConfigManager {
             this.form.addEventListener('submit', (e) => this.saveConfig(e));
         }
         if (this.reloadBtn) {
-            this.reloadBtn.addEventListener('click', () => this.loadConfig());
+            this.reloadBtn.addEventListener('click', () => this.loadPLCList());
+        }
+        // Multi-PLC handlers
+        if (this.plcSelector) {
+            this.plcSelector.addEventListener('change', () => this.onPLCSelect());
+        }
+        if (this.btnNewPLC) {
+            this.btnNewPLC.addEventListener('click', () => this.createNewPLC());
+        }
+        if (this.btnDeletePLC) {
+            this.btnDeletePLC.addEventListener('click', () => this.deletePLC());
+        }
+        if (this.btnGenerateCert) {
+            this.btnGenerateCert.addEventListener('click', () => this.generateCertificates());
+        }
+        // Certificate download handlers
+        if (this.btnDownloadPem) {
+            this.btnDownloadPem.addEventListener('click', () => this.downloadCert('pem'));
+        }
+        if (this.btnDownloadKey) {
+            this.btnDownloadKey.addEventListener('click', () => this.downloadCert('key'));
+        }
+        if (this.btnDownloadDer) {
+            this.btnDownloadDer.addEventListener('click', () => this.downloadCert('der'));
         }
     }
 
     open() {
         if (this.modal) {
             this.modal.classList.add('open');
-            this.loadConfig(); // Reload fresh on open
+            this.loadPLCList();
+            this.checkCertificates();
         }
+    }
+
+    // Load all PLCs and populate dropdown
+    async loadPLCList() {
+        this.setFormDisabled(true);
+        this.clearStatus();
+        try {
+            const response = await fetch("/api/opcua/plcs");
+            if (!response.ok) throw new Error(`Status ${response.status}`);
+            const payload = await response.json();
+            this.plcList = payload?.data || [];
+            this.populatePLCSelector();
+            // Load active PLC config
+            const activePLC = this.plcList.find(p => p.isActive);
+            if (activePLC) {
+                this.plcSelector.value = activePLC.id;
+                this.populateForm(activePLC);
+            } else if (this.plcList.length > 0) {
+                this.plcSelector.value = this.plcList[0].id;
+                this.populateForm(this.plcList[0]);
+            }
+        } catch (error) {
+            console.error("Load PLC list failed:", error);
+            this.showStatus("Errore caricamento lista PLC.", "error");
+        } finally {
+            this.setFormDisabled(false);
+        }
+    }
+
+    populatePLCSelector() {
+        if (!this.plcSelector) return;
+        this.plcSelector.innerHTML = this.plcList.map(plc =>
+            `<option value="${plc.id}"${plc.isActive ? ' selected' : ''}>${plc.name}</option>`
+        ).join('');
+    }
+
+    async onPLCSelect() {
+        const id = parseInt(this.plcSelector.value, 10);
+        if (!id) return;
+        // Activate selected PLC
+        try {
+            const response = await fetch(`/api/opcua/plcs/${id}/activate`, { method: "POST" });
+            if (!response.ok) throw new Error("Activation failed");
+            const payload = await response.json();
+            this.populateForm(payload.data);
+            this.showStatus("PLC attivato.", "success");
+        } catch (error) {
+            console.error("Activate PLC failed:", error);
+            this.showStatus("Errore attivazione PLC.", "error");
+        }
+    }
+
+    async createNewPLC() {
+        const name = prompt("Nome del nuovo PLC:", "Nuovo PLC");
+        if (!name) return;
+        try {
+            const response = await fetch("/api/opcua/plcs", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name, endpoint: "opc.tcp://192.168.0.1:4840" })
+            });
+            if (!response.ok) throw new Error("Creation failed");
+            this.showStatus("PLC creato.", "success");
+            await this.loadPLCList();
+        } catch (error) {
+            console.error("Create PLC failed:", error);
+            this.showStatus("Errore creazione PLC.", "error");
+        }
+    }
+
+    async deletePLC() {
+        const id = parseInt(this.plcSelector.value, 10);
+        if (!id) return;
+        const plc = this.plcList.find(p => p.id === id);
+        if (!confirm(`Eliminare "${plc?.name}"?`)) return;
+        try {
+            const response = await fetch(`/api/opcua/plcs/${id}`, { method: "DELETE" });
+            if (!response.ok) throw new Error("Cannot delete active PLC");
+            this.showStatus("PLC eliminato.", "success");
+            await this.loadPLCList();
+        } catch (error) {
+            console.error("Delete PLC failed:", error);
+            this.showStatus("Impossibile eliminare PLC attivo.", "error");
+        }
+    }
+
+    async generateCertificates() {
+        this.showStatus("Generazione certificati...", "info");
+        try {
+            const response = await fetch("/api/opcua/certificates/generate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({})
+            });
+            if (!response.ok) throw new Error("Generation failed");
+            const result = await response.json();
+            if (this.certStatus) {
+                this.certStatus.textContent = "Generati";
+                this.certStatus.style.color = "var(--success)";
+            }
+            this.enableDownloadButtons(true);
+            this.showStatus(result.message || "Certificati generati.", "success");
+        } catch (error) {
+            console.error("Generate cert failed:", error);
+            this.showStatus("Errore generazione certificati.", "error");
+        }
+    }
+
+    async checkCertificates() {
+        try {
+            const response = await fetch("/api/opcua/certificates/status");
+            if (!response.ok) {
+                this.enableDownloadButtons(false);
+                return;
+            }
+            const result = await response.json();
+            if (result.exists) {
+                this.enableDownloadButtons(true);
+                if (this.certStatus) {
+                    this.certStatus.textContent = "Disponibili";
+                    this.certStatus.style.color = "var(--success)";
+                }
+            } else {
+                this.enableDownloadButtons(false);
+            }
+        } catch {
+            this.enableDownloadButtons(false);
+        }
+    }
+
+    enableDownloadButtons(enabled) {
+        if (this.btnDownloadPem) this.btnDownloadPem.disabled = !enabled;
+        if (this.btnDownloadKey) this.btnDownloadKey.disabled = !enabled;
+        if (this.btnDownloadDer) this.btnDownloadDer.disabled = !enabled;
+    }
+
+    downloadCert(type) {
+        window.open(`/api/opcua/certificates/download/${type}`, '_blank');
     }
 
     close() {
@@ -74,16 +249,23 @@ export class PLCConfigManager {
     populateForm(data) {
         if (!this.form || !data) return;
         this.cachedConfig = { ...data };
+        // PLC name
+        if (this.plcNameInput) this.plcNameInput.value = data.name ?? "";
+        // Connection
         if (this.form.endpoint) this.form.endpoint.value = data.endpoint ?? "";
-        if (this.form.nodeId) this.form.nodeId.value = data.nodeId ?? "";
+        if (this.form.securityMode) this.form.securityMode.value = data.securityMode ?? "None";
+        if (this.form.securityPolicy) this.form.securityPolicy.value = data.securityPolicy ?? "None";
         if (this.form.username) this.form.username.value = data.username ?? "";
         if (this.form.password) this.form.password.value = data.password ?? "";
-        if (this.form.triggerNodeId) this.form.triggerNodeId.value = data.triggerNodeId ?? "";
-        if (this.form.triggerResetDelayMs) this.form.triggerResetDelayMs.value =
-            typeof data.triggerResetDelayMs === "number" ? data.triggerResetDelayMs : "";
-        if (this.form.valueType) this.form.valueType.value = data.valueType ?? "";
-        if (this.form.arrayLength) this.form.arrayLength.value =
-            typeof data.arrayLength === "number" ? data.arrayLength : "";
+        // Data nodes (correct backend field names)
+        if (this.form.dataNode) this.form.dataNode.value = data.dataNode ?? "";
+        if (this.form.dataType) this.form.dataType.value = data.dataType ?? "string_array";
+        if (this.form.triggerNode) this.form.triggerNode.value = data.triggerNode ?? "";
+        if (this.form.resetNode) this.form.resetNode.value = data.resetNode ?? "";
+        // Position nodes
+        if (this.form.positionXNode) this.form.positionXNode.value = data.positionXNode ?? "";
+        if (this.form.positionYNode) this.form.positionYNode.value = data.positionYNode ?? "";
+        if (this.form.positionZNode) this.form.positionZNode.value = data.positionZNode ?? "";
     }
 
     readForm() {
@@ -91,23 +273,26 @@ export class PLCConfigManager {
         const formData = new FormData(this.form);
         const base = this.cachedConfig ? { ...this.cachedConfig } : {};
 
-        const result = {
+        return {
             ...base,
+            // PLC name
+            name: this.plcNameInput?.value?.trim() || base.name || "PLC",
+            // Connection
             endpoint: formData.get('endpoint')?.trim() || "",
-            nodeId: formData.get('nodeId')?.trim() || "",
+            securityMode: formData.get('securityMode') || "None",
+            securityPolicy: formData.get('securityPolicy') || "None",
             username: formData.get('username')?.trim() || "",
-            password: formData.get('password'),
-            triggerNodeId: formData.get('triggerNodeId')?.trim() || "",
-            valueType: formData.get('valueType')?.trim() || "",
+            password: formData.get('password') || "",
+            // Data nodes (correct backend field names)
+            dataNode: formData.get('dataNode')?.trim() || "",
+            dataType: formData.get('dataType') || "string_array",
+            triggerNode: formData.get('triggerNode')?.trim() || "",
+            resetNode: formData.get('resetNode')?.trim() || "",
+            // Position nodes
+            positionXNode: formData.get('positionXNode')?.trim() || "",
+            positionYNode: formData.get('positionYNode')?.trim() || "",
+            positionZNode: formData.get('positionZNode')?.trim() || "",
         };
-
-        const delay = Number.parseInt(formData.get('triggerResetDelayMs'), 10);
-        result.triggerResetDelayMs = (!Number.isNaN(delay) && delay >= 0) ? delay : (base.triggerResetDelayMs ?? 0);
-
-        const length = Number.parseInt(formData.get('arrayLength'), 10);
-        result.arrayLength = (!Number.isNaN(length) && length >= 0) ? length : (base.arrayLength ?? 0);
-
-        return result;
     }
 
     async loadConfig() {
@@ -136,8 +321,8 @@ export class PLCConfigManager {
     async saveConfig(event) {
         event.preventDefault();
         const payload = this.readForm();
-        if (!payload?.endpoint || !payload?.nodeId) {
-            this.showStatus("Campi obbligatori mancanti (Endpoint, Node ID).", "error");
+        if (!payload?.endpoint || !payload?.dataNode) {
+            this.showStatus("Campi obbligatori mancanti (Endpoint, Data Node).", "error");
             return;
         }
 

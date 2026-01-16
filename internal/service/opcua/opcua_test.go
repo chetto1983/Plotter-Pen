@@ -4,63 +4,81 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"plotter-pen/internal/persistence"
+
+	"github.com/glebarez/sqlite"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
+
+// setupTestDB creates an in-memory test database
+func setupTestDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	if err != nil {
+		t.Fatalf("Failed to create test database: %v", err)
+	}
+	err = db.AutoMigrate(&persistence.OPCUAConfig{})
+	if err != nil {
+		t.Fatalf("Failed to migrate: %v", err)
+	}
+	return db
+}
+
+// seedTestConfig inserts a test config
+func seedTestConfig(db *gorm.DB, cfg persistence.OPCUAConfig) {
+	db.Create(&cfg)
+}
 
 // === Config Tests ===
 
 func TestNewConfigManager_Defaults(t *testing.T) {
-	// Use temp file that doesn't exist
-	tmpFile := filepath.Join(os.TempDir(), "nonexistent_opcua_config.json")
-	defer os.Remove(tmpFile)
-
-	cm := NewConfigManager(tmpFile)
-
+	db := setupTestDB(t)
+	cm := NewConfigManager(db)
 	cfg := cm.Get()
 
-	if cfg.Endpoint != "opc.tcp://localhost:4840" {
-		t.Errorf("Endpoint = %v, want opc.tcp://localhost:4840", cfg.Endpoint)
+	// Check defaults are applied
+	if cfg.Endpoint != "opc.tcp://192.168.0.1:4840" {
+		t.Errorf("Endpoint = %v, want opc.tcp://192.168.0.1:4840", cfg.Endpoint)
 	}
 	if cfg.NamespaceID != 2 {
 		t.Errorf("NamespaceID = %v, want 2", cfg.NamespaceID)
-	}
-	if cfg.DataType != "string" {
-		t.Errorf("DataType = %v, want string", cfg.DataType)
-	}
-	if cfg.SecurityMode != "None" {
-		t.Errorf("SecurityMode = %v, want None", cfg.SecurityMode)
-	}
-}
-
-func TestConfigManager_LoadFromFile(t *testing.T) {
-	tmpFile := filepath.Join(os.TempDir(), "test_opcua_config.json")
-	defer os.Remove(tmpFile)
-
-	// Write test config
-	configJSON := `{
-		"endpoint": "opc.tcp://192.168.1.100:4840",
-		"namespaceId": 3,
-		"dataType": "string_array",
-		"triggerNode": "ns=3;s=MyTrigger"
-	}`
-	os.WriteFile(tmpFile, []byte(configJSON), 0644)
-
-	cm := NewConfigManager(tmpFile)
-	cfg := cm.Get()
-
-	if cfg.Endpoint != "opc.tcp://192.168.1.100:4840" {
-		t.Errorf("Endpoint = %v, want opc.tcp://192.168.1.100:4840", cfg.Endpoint)
-	}
-	if cfg.NamespaceID != 3 {
-		t.Errorf("NamespaceID = %v, want 3", cfg.NamespaceID)
 	}
 	if cfg.DataType != "string_array" {
 		t.Errorf("DataType = %v, want string_array", cfg.DataType)
 	}
 }
 
+func TestConfigManager_LoadFromDB(t *testing.T) {
+	db := setupTestDB(t)
+	seedTestConfig(db, persistence.OPCUAConfig{
+		Name:        "Test PLC",
+		IsActive:    true,
+		Endpoint:    "opc.tcp://192.168.1.100:4840",
+		NamespaceID: 3,
+		DataType:    "string_array",
+		TriggerNode: "ns=3;s=MyTrigger",
+	})
+
+	cm := NewConfigManager(db)
+	cfg := cm.Get()
+
+	if cfg.Name != "Test PLC" {
+		t.Errorf("Name = %v, want Test PLC", cfg.Name)
+	}
+	if cfg.Endpoint != "opc.tcp://192.168.1.100:4840" {
+		t.Errorf("Endpoint = %v, want opc.tcp://192.168.1.100:4840", cfg.Endpoint)
+	}
+	if cfg.NamespaceID != 3 {
+		t.Errorf("NamespaceID = %v, want 3", cfg.NamespaceID)
+	}
+}
+
 func TestConfigManager_LoadFromEnv(t *testing.T) {
-	tmpFile := filepath.Join(os.TempDir(), "test_opcua_env.json")
-	defer os.Remove(tmpFile)
+	db := setupTestDB(t)
 
 	// Set env vars
 	envVars := map[string]string{
@@ -75,7 +93,7 @@ func TestConfigManager_LoadFromEnv(t *testing.T) {
 		defer os.Unsetenv(k)
 	}
 
-	cm := NewConfigManager(tmpFile)
+	cm := NewConfigManager(db)
 	cfg := cm.Get()
 
 	if cfg.Endpoint != "opc.tcp://env-server:4840" {
@@ -90,12 +108,9 @@ func TestConfigManager_LoadFromEnv(t *testing.T) {
 }
 
 func TestConfigManager_Update(t *testing.T) {
-	tmpFile := filepath.Join(os.TempDir(), "test_opcua_update.json")
-	defer os.Remove(tmpFile)
+	db := setupTestDB(t)
+	cm := NewConfigManager(db)
 
-	cm := NewConfigManager(tmpFile)
-
-	// Update config
 	cm.Update(Config{
 		Endpoint:    "opc.tcp://updated:4840",
 		NamespaceID: 5,
@@ -112,32 +127,24 @@ func TestConfigManager_Update(t *testing.T) {
 	}
 }
 
-func TestConfigManager_SaveToFile(t *testing.T) {
-	tmpFile := filepath.Join(os.TempDir(), "test_opcua_save.json")
-	defer os.Remove(tmpFile)
-
-	cm := NewConfigManager(tmpFile)
-	cm.Update(Config{
-		Endpoint: "opc.tcp://saved:4840",
+func TestConfigManager_SaveToDB(t *testing.T) {
+	db := setupTestDB(t)
+	seedTestConfig(db, persistence.OPCUAConfig{
+		Name:     "Save Test",
+		IsActive: true,
+		Endpoint: "opc.tcp://initial:4840",
 	})
 
-	err := cm.SaveToFile()
-	if err != nil {
-		t.Fatalf("SaveToFile error: %v", err)
-	}
+	cm := NewConfigManager(db)
+	cm.Update(Config{Endpoint: "opc.tcp://saved:4840"})
 
-	// Verify file was written
-	data, err := os.ReadFile(tmpFile)
+	err := cm.SaveToDB()
 	if err != nil {
-		t.Fatalf("Failed to read saved file: %v", err)
-	}
-
-	if len(data) == 0 {
-		t.Error("Saved file is empty")
+		t.Fatalf("SaveToDB error: %v", err)
 	}
 
 	// Load new manager and verify
-	cm2 := NewConfigManager(tmpFile)
+	cm2 := NewConfigManager(db)
 	cfg := cm2.Get()
 
 	if cfg.Endpoint != "opc.tcp://saved:4840" {
@@ -146,22 +153,17 @@ func TestConfigManager_SaveToFile(t *testing.T) {
 }
 
 func TestConfigManager_Merge(t *testing.T) {
-	tmpFile := filepath.Join(os.TempDir(), "test_opcua_merge.json")
-	defer os.Remove(tmpFile)
+	db := setupTestDB(t)
+	cm := NewConfigManager(db)
 
-	cm := NewConfigManager(tmpFile)
-
-	// Base config
 	cm.Update(Config{
 		Endpoint:    "opc.tcp://base:4840",
 		NamespaceID: 2,
 		DataNode:    "ns=2;s=BaseData",
 	})
 
-	// Merge with override
 	override := &Config{
 		Endpoint: "opc.tcp://override:4840",
-		// NamespaceID not set (0), should keep base
 	}
 
 	merged := cm.Merge(override)
@@ -178,10 +180,8 @@ func TestConfigManager_Merge(t *testing.T) {
 }
 
 func TestConfigManager_MergeNil(t *testing.T) {
-	tmpFile := filepath.Join(os.TempDir(), "test_opcua_merge_nil.json")
-	defer os.Remove(tmpFile)
-
-	cm := NewConfigManager(tmpFile)
+	db := setupTestDB(t)
+	cm := NewConfigManager(db)
 	cm.Update(Config{Endpoint: "opc.tcp://base:4840"})
 
 	merged := cm.Merge(nil)
@@ -191,13 +191,77 @@ func TestConfigManager_MergeNil(t *testing.T) {
 	}
 }
 
-// === Client Tests (Unit - No Real Connection) ===
+// === Multi-PLC Tests ===
+
+func TestConfigManager_ListAll(t *testing.T) {
+	db := setupTestDB(t)
+	seedTestConfig(db, persistence.OPCUAConfig{Name: "PLC 1", Endpoint: "opc.tcp://plc1:4840"})
+	seedTestConfig(db, persistence.OPCUAConfig{Name: "PLC 2", Endpoint: "opc.tcp://plc2:4840"})
+
+	cm := NewConfigManager(db)
+	configs, err := cm.ListAll()
+	if err != nil {
+		t.Fatalf("ListAll error: %v", err)
+	}
+
+	if len(configs) != 2 {
+		t.Errorf("Expected 2 PLCs, got %d", len(configs))
+	}
+}
+
+func TestConfigManager_Create(t *testing.T) {
+	db := setupTestDB(t)
+	cm := NewConfigManager(db)
+
+	created, err := cm.Create(Config{
+		Name:     "New PLC",
+		Endpoint: "opc.tcp://new:4840",
+	})
+	if err != nil {
+		t.Fatalf("Create error: %v", err)
+	}
+
+	if created.ID == 0 {
+		t.Error("Created PLC should have ID")
+	}
+	if created.Name != "New PLC" {
+		t.Errorf("Name = %v, want New PLC", created.Name)
+	}
+}
+
+func TestConfigManager_SetActive(t *testing.T) {
+	db := setupTestDB(t)
+	seedTestConfig(db, persistence.OPCUAConfig{Name: "PLC 1", IsActive: true, Endpoint: "opc.tcp://plc1:4840"})
+	seedTestConfig(db, persistence.OPCUAConfig{Name: "PLC 2", IsActive: false, Endpoint: "opc.tcp://plc2:4840"})
+
+	cm := NewConfigManager(db)
+
+	// Get PLC 2 ID
+	configs, _ := cm.ListAll()
+	var plc2ID int64
+	for _, c := range configs {
+		if c.Name == "PLC 2" {
+			plc2ID = c.ID
+			break
+		}
+	}
+
+	err := cm.SetActive(plc2ID)
+	if err != nil {
+		t.Fatalf("SetActive error: %v", err)
+	}
+
+	cfg := cm.Get()
+	if cfg.Name != "PLC 2" {
+		t.Errorf("Active PLC = %v, want PLC 2", cfg.Name)
+	}
+}
+
+// === Client Tests ===
 
 func TestNewClient(t *testing.T) {
-	tmpFile := filepath.Join(os.TempDir(), "test_opcua_client.json")
-	defer os.Remove(tmpFile)
-
-	cm := NewConfigManager(tmpFile)
+	db := setupTestDB(t)
+	cm := NewConfigManager(db)
 	client := NewClient(cm)
 
 	if client == nil {
@@ -210,10 +274,8 @@ func TestNewClient(t *testing.T) {
 }
 
 func TestClient_IsConnected_Initial(t *testing.T) {
-	tmpFile := filepath.Join(os.TempDir(), "test_client_connected.json")
-	defer os.Remove(tmpFile)
-
-	cm := NewConfigManager(tmpFile)
+	db := setupTestDB(t)
+	cm := NewConfigManager(db)
 	client := NewClient(cm)
 
 	if client.IsConnected() {
@@ -224,10 +286,8 @@ func TestClient_IsConnected_Initial(t *testing.T) {
 // === Security Config Tests ===
 
 func TestConfig_SecuritySettings(t *testing.T) {
-	tmpFile := filepath.Join(os.TempDir(), "test_opcua_security.json")
-	defer os.Remove(tmpFile)
-
-	cm := NewConfigManager(tmpFile)
+	db := setupTestDB(t)
+	cm := NewConfigManager(db)
 
 	cm.Update(Config{
 		SecurityMode:   "SignAndEncrypt",
@@ -252,10 +312,8 @@ func TestConfig_SecuritySettings(t *testing.T) {
 }
 
 func TestConfig_PositionNodes(t *testing.T) {
-	tmpFile := filepath.Join(os.TempDir(), "test_opcua_position.json")
-	defer os.Remove(tmpFile)
+	db := setupTestDB(t)
 
-	// Set position env vars
 	os.Setenv("OPCUA_POSITION_X", "ns=2;s=Pos.X")
 	os.Setenv("OPCUA_POSITION_Y", "ns=2;s=Pos.Y")
 	os.Setenv("OPCUA_POSITION_Z", "ns=2;s=Pos.Z")
@@ -263,7 +321,7 @@ func TestConfig_PositionNodes(t *testing.T) {
 	defer os.Unsetenv("OPCUA_POSITION_Y")
 	defer os.Unsetenv("OPCUA_POSITION_Z")
 
-	cm := NewConfigManager(tmpFile)
+	cm := NewConfigManager(db)
 	cfg := cm.Get()
 
 	if cfg.PositionXNode != "ns=2;s=Pos.X" {
@@ -278,10 +336,8 @@ func TestConfig_PositionNodes(t *testing.T) {
 }
 
 func TestConfig_SubscriptionInterval(t *testing.T) {
-	tmpFile := filepath.Join(os.TempDir(), "test_opcua_subscription.json")
-	defer os.Remove(tmpFile)
-
-	cm := NewConfigManager(tmpFile)
+	db := setupTestDB(t)
+	cm := NewConfigManager(db)
 	cfg := cm.Get()
 
 	// Default should be 100ms
@@ -289,11 +345,39 @@ func TestConfig_SubscriptionInterval(t *testing.T) {
 		t.Errorf("Default SubscriptionInterval = %v, want 100", cfg.SubscriptionInterval)
 	}
 
-	// Update
 	cm.Update(Config{SubscriptionInterval: 50})
 	cfg = cm.Get()
 
 	if cfg.SubscriptionInterval != 50 {
 		t.Errorf("Updated SubscriptionInterval = %v, want 50", cfg.SubscriptionInterval)
+	}
+}
+
+// === Certificate Tests ===
+
+func TestGenerateAndSaveCert(t *testing.T) {
+	tmpDir := filepath.Join(os.TempDir(), "plotter-pen-test-certs")
+	defer os.RemoveAll(tmpDir)
+
+	certPath := filepath.Join(tmpDir, "client.pem")
+	keyPath := filepath.Join(tmpDir, "client.key")
+
+	err := GenerateAndSaveCert(certPath, keyPath)
+	if err != nil {
+		t.Fatalf("GenerateAndSaveCert error: %v", err)
+	}
+
+	// Verify files exist
+	if _, err := os.Stat(certPath); os.IsNotExist(err) {
+		t.Error("Certificate file not created")
+	}
+	if _, err := os.Stat(keyPath); os.IsNotExist(err) {
+		t.Error("Key file not created")
+	}
+
+	// Verify DER file also created
+	derPath := filepath.Join(tmpDir, "client.der")
+	if _, err := os.Stat(derPath); os.IsNotExist(err) {
+		t.Error("DER file not created")
 	}
 }
