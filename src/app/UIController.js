@@ -209,6 +209,7 @@ export class UIController {
     document.getElementById('btnDownloadOutput')?.addEventListener('click', () => this.app.plcOutputManager.downloadOutput());
     document.getElementById('btnSendPLC')?.addEventListener('click', () => this.app.plcOutputManager.sendToPLC());
 
+    // PLC Settings: workSpeed, rapidSpeed, safeZ, workZ, waitTime
     const workSpeedInput = document.getElementById('simWorkSpeed');
     if (workSpeedInput) {
       workSpeedInput.addEventListener('change', (e) => {
@@ -217,6 +218,7 @@ export class UIController {
           this.app.renderer.setSimulationSpeed(speed);
         }
         this.app.plcOutputManager.refreshPLCOutput();
+        this.app.persistenceManager.triggerAutoSave();
       });
     }
 
@@ -228,6 +230,31 @@ export class UIController {
           this.app.renderer.setRapidSpeed(speed);
         }
         this.app.plcOutputManager.refreshPLCOutput();
+        this.app.persistenceManager.triggerAutoSave();
+      });
+    }
+
+    const safeZInput = document.getElementById('simSafeZ');
+    if (safeZInput) {
+      safeZInput.addEventListener('change', () => {
+        this.app.plcOutputManager.refreshPLCOutput();
+        this.app.persistenceManager.triggerAutoSave();
+      });
+    }
+
+    const workZInput = document.getElementById('simWorkZ');
+    if (workZInput) {
+      workZInput.addEventListener('change', () => {
+        this.app.plcOutputManager.refreshPLCOutput();
+        this.app.persistenceManager.triggerAutoSave();
+      });
+    }
+
+    const waitTimeInput = document.getElementById('simWaitTime');
+    if (waitTimeInput) {
+      waitTimeInput.addEventListener('change', () => {
+        this.app.plcOutputManager.refreshPLCOutput();
+        this.app.persistenceManager.triggerAutoSave();
       });
     }
   }

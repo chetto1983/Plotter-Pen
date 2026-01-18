@@ -70,6 +70,11 @@ export class PersistenceManager {
                     this.app.renderer.invalidateCache();
                 }
 
+                // Refresh PLC output with loaded settings
+                if (this.app.plcOutputManager) {
+                    this.app.plcOutputManager.refreshPLCOutput();
+                }
+
                 this.app.render();
                 this.app.ui.updateStats();
                 this.app.ui.updateStatus('Sessione ripristinata');
@@ -108,6 +113,21 @@ export class PersistenceManager {
                     }
                     if (msg.grid && this.app.renderer) {
                         this.app.renderer.grid = { ...msg.grid };
+                    }
+                    // Restore PLC settings
+                    if (msg.plcSettings) {
+                        const p = msg.plcSettings;
+                        const els = {
+                            simWorkSpeed: p.workSpeed ?? 100,
+                            simRapidSpeed: p.rapidSpeed ?? 1000,
+                            simSafeZ: p.safeZ ?? 5,
+                            simWorkZ: p.workZ ?? -2,
+                            simWaitTime: p.waitTime ?? 0
+                        };
+                        for (const [id, val] of Object.entries(els)) {
+                            const el = document.getElementById(id);
+                            if (el) el.value = val;
+                        }
                     }
                     // Clear primitives for new data
                     this.app.primitives = [];

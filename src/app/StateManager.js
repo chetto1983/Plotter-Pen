@@ -110,12 +110,22 @@ export class StateManager {
     const workspace = this.app.renderer ? { ...this.app.renderer.workspace } : null;
     const grid = this.app.renderer ? { ...this.app.renderer.grid } : null;
 
+    // PLC settings from UI inputs
+    const plcSettings = {
+      workSpeed: parseFloat(document.getElementById('simWorkSpeed')?.value) || 100,
+      rapidSpeed: parseFloat(document.getElementById('simRapidSpeed')?.value) || 1000,
+      safeZ: parseFloat(document.getElementById('simSafeZ')?.value) || 5,
+      workZ: parseFloat(document.getElementById('simWorkZ')?.value) || -2,
+      waitTime: parseInt(document.getElementById('simWaitTime')?.value) || 0
+    };
+
     const state = {
       primitives: this.app.primitives.map(p => p.toJSON()),
       layers: this.app.layerManager ? this.app.layerManager.serialize() : null,
       view,
       workspace,
-      grid
+      grid,
+      plcSettings
     };
     return JSON.stringify(state);
   }
@@ -145,33 +155,8 @@ export class StateManager {
     this.app.selectedPrimitives.clear();
 
     // Restore View/Settings if requested
-    if (restoreView && this.app.renderer) {
-      if (data.workspace) {
-        this.app.renderer.workspace = { ...data.workspace };
-        // Sync app-level settings
-        this.app.workspaceWidth = data.workspace.width;
-        this.app.workspaceHeight = data.workspace.height;
-        this.app.renderer.resizeCanvas();
-        // Update UI inputs
-        const widthInput = document.getElementById('workspaceWidth');
-        const heightInput = document.getElementById('workspaceHeight');
-        if (widthInput) widthInput.value = this.app.workspaceWidth;
-        if (heightInput) heightInput.value = this.app.workspaceHeight;
-      }
-      if (data.grid) {
-        this.app.renderer.setGridOptions(data.grid);
-        // Sync app-level settings
-        this.app.gridSpacing = data.grid.spacing ?? 10;
-        this.app.showGrid = data.grid.show ?? true;
-        this.app.snapToGrid = data.grid.snapToGrid ?? false;
-        // Update UI inputs
-        const gridInput = document.getElementById('gridSpacing');
-        if (gridInput) gridInput.value = this.app.gridSpacing;
-      }
-      if (data.view) {
-        this.app.renderer.view = { ...data.view };
-        this.app.renderer.isCacheDirty = true;
-      }
+    if (restoreView) {
+      this.applyViewSettings(data);
     }
 
     // Refresh PLC output if manager exists
@@ -233,8 +218,11 @@ export class StateManager {
             if (msg.layers && this.app.layerManager) {
               this.app.layerManager.deserialize(msg.layers);
             }
-            if (restoreView && this.app.renderer) {
+            if (restoreView) {
               this.applyViewSettings(msg);
+            } else if (msg.plcSettings) {
+              // Always restore PLC settings even without view
+              this.applyPlcSettings(msg.plcSettings);
             }
             if (this.app.ui) {
               this.app.ui.updateStatus(`Caricamento ${msg.totalPrimitives} primitive...`);
@@ -330,10 +318,28 @@ export class StateManager {
   }
 
   /**
-   * Apply view/workspace/grid settings
+   * Apply PLC settings to UI inputs
+   */
+  applyPlcSettings(p) {
+    if (!p) return;
+    const els = {
+      simWorkSpeed: p.workSpeed ?? 100,
+      simRapidSpeed: p.rapidSpeed ?? 1000,
+      simSafeZ: p.safeZ ?? 5,
+      simWorkZ: p.workZ ?? -2,
+      simWaitTime: p.waitTime ?? 0
+    };
+    for (const [id, val] of Object.entries(els)) {
+      const el = document.getElementById(id);
+      if (el) el.value = val;
+    }
+  }
+
+  /**
+   * Apply view/workspace/grid/plc settings
    */
   applyViewSettings(data) {
-    if (data.workspace) {
+    if (data.workspace && this.app.renderer) {
       this.app.renderer.workspace = { ...data.workspace };
       this.app.workspaceWidth = data.workspace.width;
       this.app.workspaceHeight = data.workspace.height;
@@ -343,7 +349,7 @@ export class StateManager {
       if (widthInput) widthInput.value = this.app.workspaceWidth;
       if (heightInput) heightInput.value = this.app.workspaceHeight;
     }
-    if (data.grid) {
+    if (data.grid && this.app.renderer) {
       this.app.renderer.setGridOptions(data.grid);
       this.app.gridSpacing = data.grid.spacing ?? 10;
       this.app.showGrid = data.grid.show ?? true;
@@ -351,10 +357,12 @@ export class StateManager {
       const gridInput = document.getElementById('gridSpacing');
       if (gridInput) gridInput.value = this.app.gridSpacing;
     }
-    if (data.view) {
+    if (data.view && this.app.renderer) {
       this.app.renderer.view = { ...data.view };
       this.app.renderer.isCacheDirty = true;
     }
+    // Restore PLC settings (always restore, doesn't need renderer)
+    this.applyPlcSettings(data.plcSettings);
   }
 
   /**

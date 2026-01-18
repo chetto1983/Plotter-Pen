@@ -201,8 +201,10 @@ export class FileManager {
       this.app.renderer.resetView();
       this.app.ui.updateStatus(`DXF importato: ${primitives.length} primitive`);
 
-      // PLC regeneration disabled for performance - call manually when needed
-      // this.app.plcOutputManager.refreshPLCOutput();
+      // Auto-extract PLC commands after import
+      if (this.app.plcOutputManager && primitives.length > 0) {
+        setTimeout(() => this.app.plcOutputManager.extractPLC(), 100);
+      }
 
     } catch (error) {
       console.error('DXF import error:', error);

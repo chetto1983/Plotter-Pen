@@ -133,7 +133,7 @@ func (e *Extractor) extractLine(prim Primitive, idx *int) []Command {
 	return commands
 }
 
-// extractArc generates commands for an arc primitive
+// extractArc generates commands for an arc primitive using A command
 func (e *Extractor) extractArc(prim Primitive, idx *int) []Command {
 	if prim.X1 == nil || prim.Y1 == nil || prim.X2 == nil || prim.Y2 == nil {
 		return nil
@@ -142,11 +142,14 @@ func (e *Extractor) extractArc(prim Primitive, idx *int) []Command {
 		return nil
 	}
 
-	commands := make([]Command, 0, 4)
-
 	start := geom.Point{X: *prim.X1, Y: *prim.Y1}
 	end := geom.Point{X: *prim.X2, Y: *prim.Y2}
 	center := geom.Point{X: *prim.Cx, Y: *prim.Cy}
+
+	// Calculate midpoint on arc for I,J parameters
+	mid := calcArcMidpoint(start, end, center, prim.IsClockwise)
+
+	commands := make([]Command, 0, 5)
 
 	// Jump to start at safe Z
 	e.gen.Jump(start.X, start.Y, e.safeZ, e.rapidSpeed)
@@ -162,8 +165,8 @@ func (e *Extractor) extractArc(prim Primitive, idx *int) []Command {
 	e.gen.Line(start.X, start.Y, e.workZ, e.defaultSpeed)
 	commands = append(commands, e.makeCommand(idx, "L", prim.ID))
 
-	// Arc cut
-	e.gen.Arc(end, center, start, prim.IsClockwise, e.workZ, e.defaultSpeed)
+	// Arc to end (I,J = midpoint on arc)
+	e.gen.Arc(end, center, mid, prim.IsClockwise, e.workZ, e.defaultSpeed)
 	commands = append(commands, e.makeCommand(idx, "A", prim.ID))
 
 	// Retract to safe Z
@@ -173,41 +176,46 @@ func (e *Extractor) extractArc(prim Primitive, idx *int) []Command {
 	return commands
 }
 
-// extractCircle generates commands for a circle primitive (full 360 arc)
+// extractCircle generates commands for a circle primitive using 2 arcs (180° each)
 func (e *Extractor) extractCircle(prim Primitive, idx *int) []Command {
 	cx, cy, r := prim.GetCircleParams()
 	if r <= 0 {
 		return nil
 	}
 
-	commands := make([]Command, 0, 5)
-
-	// Start at rightmost point
-	startX := cx + r
-	startY := cy
+	commands := make([]Command, 0, 7)
 	center := geom.Point{X: cx, Y: cy}
-	start := geom.Point{X: startX, Y: startY}
 
-	// Jump to start at safe Z
-	e.gen.Jump(startX, startY, e.safeZ, e.rapidSpeed)
+	// Circle points: right (0°), top (90°), left (180°), bottom (270°)
+	right := geom.Point{X: cx + r, Y: cy}  // 0°
+	top := geom.Point{X: cx, Y: cy + r}    // 90° (midpoint for arc 1)
+	left := geom.Point{X: cx - r, Y: cy}   // 180°
+	bottom := geom.Point{X: cx, Y: cy - r} // 270° (midpoint for arc 2)
+
+	// Jump to start (rightmost point)
+	e.gen.Jump(right.X, right.Y, e.safeZ, e.rapidSpeed)
 	commands = append(commands, e.makeCommand(idx, "J", prim.ID))
 
-	// Optional wait after rapid
+	// Optional wait
 	if e.waitTime > 0 {
 		e.gen.Wait(e.waitTime)
 		commands = append(commands, e.makeCommand(idx, "WAIT", prim.ID))
 	}
 
-	// Plunge to work depth
-	e.gen.Line(startX, startY, e.workZ, e.defaultSpeed)
+	// Plunge
+	e.gen.Line(right.X, right.Y, e.workZ, e.defaultSpeed)
 	commands = append(commands, e.makeCommand(idx, "L", prim.ID))
 
-	// Full circle as CCW arc (end = start for full circle)
-	e.gen.Arc(start, center, start, false, e.workZ, e.defaultSpeed)
+	// Arc 1: right → left (CCW, top half, midpoint at top)
+	e.gen.Arc(left, center, top, false, e.workZ, e.defaultSpeed)
 	commands = append(commands, e.makeCommand(idx, "A", prim.ID))
 
-	// Retract to safe Z
-	e.gen.Jump(startX, startY, e.safeZ, e.rapidSpeed)
+	// Arc 2: left → right (CCW, bottom half, midpoint at bottom)
+	e.gen.Arc(right, center, bottom, false, e.workZ, e.defaultSpeed)
+	commands = append(commands, e.makeCommand(idx, "A", prim.ID))
+
+	// Retract
+	e.gen.Jump(right.X, right.Y, e.safeZ, e.rapidSpeed)
 	commands = append(commands, e.makeCommand(idx, "J", prim.ID))
 
 	return commands
@@ -330,4 +338,35 @@ func splitLines(s string) []string {
 		result = append(result, s[start:])
 	}
 	return result
+}
+
+// calcArcMidpoint calculates the midpoint on the arc for I,J parameters
+func calcArcMidpoint(start, end, center geom.Point, clockwise bool) geom.Point {
+	dx1, dy1 := start.X-center.X, start.Y-center.Y
+	dx2, dy2 := end.X-center.X, end.Y-center.Y
+	radius := math.Sqrt(dx1*dx1 + dy1*dy1)
+
+	startAngle := math.Atan2(dy1, dx1)
+	endAngle := math.Atan2(dy2, dx2)
+
+	// Calculate mid angle
+	var midAngle float64
+	if clockwise {
+		sweep := startAngle - endAngle
+		if sweep <= 0 {
+			sweep += 2 * math.Pi
+		}
+		midAngle = startAngle - sweep/2
+	} else {
+		sweep := endAngle - startAngle
+		if sweep <= 0 {
+			sweep += 2 * math.Pi
+		}
+		midAngle = startAngle + sweep/2
+	}
+
+	return geom.Point{
+		X: center.X + radius*math.Cos(midAngle),
+		Y: center.Y + radius*math.Sin(midAngle),
+	}
 }

@@ -1,6 +1,9 @@
 package plc
 
-import "plotter-pen/pkg/geom"
+import (
+	"encoding/json"
+	"plotter-pen/pkg/geom"
+)
 
 // Primitive types for PLC extraction
 type PrimitiveType string
@@ -122,6 +125,51 @@ func (p *Primitive) IsClosed() bool {
 	default:
 		return false
 	}
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling to handle both frontend formats:
+// - Frontend/DXF import: startX, startY, endX, endY, centerX, centerY
+// - Internal format: x1, y1, x2, y2, cx, cy
+func (p *Primitive) UnmarshalJSON(data []byte) error {
+	// Use an alias type to avoid infinite recursion
+	type PrimitiveAlias Primitive
+	aux := &struct {
+		StartX  *float64 `json:"startX,omitempty"`
+		StartY  *float64 `json:"startY,omitempty"`
+		EndX    *float64 `json:"endX,omitempty"`
+		EndY    *float64 `json:"endY,omitempty"`
+		CenterX *float64 `json:"centerX,omitempty"`
+		CenterY *float64 `json:"centerY,omitempty"`
+		*PrimitiveAlias
+	}{
+		PrimitiveAlias: (*PrimitiveAlias)(p),
+	}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	// Map DXF/frontend format to internal format (prefer DXF format if present)
+	if aux.StartX != nil {
+		p.X1 = aux.StartX
+	}
+	if aux.StartY != nil {
+		p.Y1 = aux.StartY
+	}
+	if aux.EndX != nil {
+		p.X2 = aux.EndX
+	}
+	if aux.EndY != nil {
+		p.Y2 = aux.EndY
+	}
+	if aux.CenterX != nil {
+		p.Cx = aux.CenterX
+	}
+	if aux.CenterY != nil {
+		p.Cy = aux.CenterY
+	}
+
+	return nil
 }
 
 // Command represents a single PLC instruction

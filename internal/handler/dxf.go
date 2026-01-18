@@ -72,6 +72,8 @@ type SmartImportRequest struct {
 		CenterOrigin bool    `json:"centerOrigin"`
 		ScaleFactor  float64 `json:"scaleFactor"`
 		ExtractPLC   bool    `json:"extractPLC"`
+		FitArcs      bool    `json:"fitArcs"`
+		ArcTolerance float64 `json:"arcTolerance"`
 	} `json:"options"`
 }
 
@@ -97,6 +99,8 @@ func (h *DXFHandler) SmartImport(c *gin.Context) {
 			Normalize:    false,
 			CenterOrigin: true,
 			ExtractPLC:   false,
+			FitArcs:      true,        // ENABLED: Robust Taubin+RANSAC arc fitting
+			ArcTolerance: 0.1,         // 0.1mm tolerance
 		}
 	} else {
 		// Handle JSON body
@@ -111,6 +115,8 @@ func (h *DXFHandler) SmartImport(c *gin.Context) {
 			CenterOrigin: req.Options.CenterOrigin,
 			ScaleFactor:  req.Options.ScaleFactor,
 			ExtractPLC:   req.Options.ExtractPLC,
+			FitArcs:      req.Options.FitArcs,
+			ArcTolerance: req.Options.ArcTolerance,
 		}
 	}
 

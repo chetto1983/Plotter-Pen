@@ -12,6 +12,25 @@ export class CanvasArea {
       <div class="cad-canvas-overlay" id="canvasOverlay"></div>
       <div class="cad-selection-box" id="selectionBox"></div>
 
+      <!-- 3D PLC Simulation Overlay -->
+      <div class="cad-3d-overlay" id="plc3dOverlay" style="display:none;">
+        <canvas id="plcSimulation3DCanvas"></canvas>
+        <div class="cad-3d-toolbar">
+          <button type="button" class="cad-3d-btn" id="btn3DPlay" title="Play/Pausa">▶</button>
+          <button type="button" class="cad-3d-btn" id="btn3DStep" title="Step">⏭</button>
+          <button type="button" class="cad-3d-btn" id="btn3DReset" title="Reset">⏮</button>
+          <input type="range" class="cad-3d-speed-slider" id="sim3DSpeed" min="0.1" max="5" step="0.1" value="1">
+          <span class="cad-3d-speed-label" id="sim3DSpeedLabel">1x</span>
+          <div class="cad-3d-spacer"></div>
+          <label class="cad-3d-btn cad-stl-upload-label" title="Carica Tool STL">
+            <input type="file" id="stlToolUpload" accept=".stl">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </label>
+          <button type="button" class="cad-3d-btn" id="btn3DClose" title="Chiudi 3D">✕</button>
+        </div>
+        <div class="cad-3d-progress"><div class="cad-3d-progress-bar"></div></div>
+      </div>
+
       <!-- Floating Edit Toolbar -->
       <div class="cad-float-toolbar" id="floatToolbar">
         <!-- Rotate -->

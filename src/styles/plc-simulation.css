@@ -1,0 +1,154 @@
+/* PLC 3D Simulation Styles - Main Canvas Overlay */
+
+.cad-3d-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #1a1a2e;
+    z-index: 100;
+}
+
+.cad-3d-overlay #plcSimulation3DCanvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.cad-3d-toolbar {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.8);
+    padding: 8px 16px;
+    border-radius: 8px;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.cad-3d-btn {
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    font-size: 16px;
+}
+
+.cad-3d-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.05);
+}
+
+.cad-3d-btn:active {
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(0.95);
+}
+
+.cad-3d-btn.playing {
+    background: rgba(76, 175, 80, 0.5);
+    box-shadow: 0 0 10px rgba(76, 175, 80, 0.4);
+}
+
+.cad-3d-btn svg {
+    width: 20px;
+    height: 20px;
+}
+
+.cad-3d-spacer {
+    width: 1px;
+    height: 24px;
+    background: rgba(255, 255, 255, 0.2);
+    margin: 0 8px;
+}
+
+.cad-3d-speed-slider {
+    width: 120px;
+    height: 4px;
+    -webkit-appearance: none;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+    outline: none;
+}
+
+.cad-3d-speed-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    background: #4fc3f7;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.cad-3d-speed-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: #4fc3f7;
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+}
+
+.cad-3d-speed-label {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 13px;
+    min-width: 32px;
+    text-align: center;
+    font-weight: 500;
+}
+
+.cad-3d-progress {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.cad-3d-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #4fc3f7, #29b6f6);
+    width: 0%;
+    transition: width 0.1s linear;
+}
+
+/* STL Upload in toolbar */
+.cad-3d-toolbar .cad-stl-upload-label {
+    cursor: pointer;
+}
+
+.cad-3d-toolbar .cad-stl-upload-label input[type="file"] {
+    display: none;
+}
+
+/* STL Upload Button */
+.cad-stl-upload-label {
+    cursor: pointer;
+}
+
+.cad-stl-upload-label input[type="file"] {
+    display: none;
+}
+
+/* Toggle button active state */
+#btn3DToggle.active {
+    background: rgba(79, 195, 247, 0.3);
+    border-color: rgba(79, 195, 247, 0.5);
+}
+
+#btn3DToggle.active svg {
+    stroke: #4fc3f7;
+}

@@ -441,11 +441,26 @@ export class Arc extends Primitive {
   }
 
   static fromJSON(data) {
+    // Handle both formats: DXF import (startX/startY/endX/endY/centerX/centerY)
+    // and internal format (ax/ay/bx/by/cx/cy)
+    const ax = data.ax ?? data.startX;
+    const ay = data.ay ?? data.startY;
+    const bx = data.bx ?? data.endX;
+    const by = data.by ?? data.endY;
+    const cx = data.cx ?? data.centerX;
+    const cy = data.cy ?? data.centerY;
+
+    // Handle throughPoint: object format or separate throughX/throughY fields
+    let throughPoint = data.throughPoint;
+    if (!throughPoint && data.throughX !== undefined && data.throughY !== undefined) {
+      throughPoint = { x: data.throughX, y: data.throughY };
+    }
+
     const arc = new Arc(
-      data.ax, data.ay,
-      data.bx, data.by,
-      data.cx, data.cy,
-      data.throughPoint || null,
+      ax, ay,
+      bx, by,
+      cx, cy,
+      throughPoint,
       data.id
     );
     if (data.style) arc.style = { ...data.style };

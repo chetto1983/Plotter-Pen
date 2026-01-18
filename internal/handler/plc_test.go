@@ -159,8 +159,28 @@ func TestPLCExtract_Circle(t *testing.T) {
 		t.Fatalf("Failed to parse response: %v", err)
 	}
 
-	if resp.Count < 4 {
-		t.Errorf("Expected at least 4 commands for circle, got %d", resp.Count)
+	// Circle should generate: J, L, A, A, J = 5 commands minimum
+	if resp.Count < 5 {
+		t.Errorf("Expected at least 5 commands for circle (2 arcs), got %d", resp.Count)
+	}
+
+	// Verify we have exactly 2 arc commands with DIFFERENT midpoints
+	arcCount := 0
+	var arcMidpoints []string
+	for _, cmd := range resp.Output {
+		if strings.HasPrefix(cmd, "A ") {
+			arcCount++
+			arcMidpoints = append(arcMidpoints, cmd)
+		}
+	}
+
+	if arcCount != 2 {
+		t.Errorf("Expected exactly 2 arc commands for circle, got %d", arcCount)
+	}
+
+	// Verify arc midpoints are different (not degenerate)
+	if len(arcMidpoints) == 2 && arcMidpoints[0] == arcMidpoints[1] {
+		t.Errorf("Arc midpoints are identical (degenerate circle): %s", arcMidpoints[0])
 	}
 }
 

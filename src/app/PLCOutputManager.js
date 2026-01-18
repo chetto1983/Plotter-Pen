@@ -1,6 +1,196 @@
+import { PLCSimulator3D } from '../plc/PLCSimulator3D.js';
+import { PLC3DAnimator } from '../plc/PLC3DAnimator.js';
+
 export class PLCOutputManager {
   constructor(app) {
     this.app = app;
+    this.simulator3D = null;
+    this.animator3D = null;
+    this._is3DInitialized = false;
+  }
+
+  /**
+   * Initialize 3D simulator and wire event handlers
+   */
+  init3DSimulator() {
+    if (this._is3DInitialized) return;
+
+    const canvas = document.getElementById('plcSimulation3DCanvas');
+    const overlay = document.getElementById('plc3dOverlay');
+
+    // Log DOM state for debugging
+    console.log('[PLC3D] init3DSimulator called');
+    console.log('[PLC3D] canvas:', canvas ? 'found' : 'NOT FOUND');
+    console.log('[PLC3D] overlay:', overlay ? 'found' : 'NOT FOUND');
+
+    if (!canvas || !overlay) {
+      console.error('[PLC3D] Missing DOM elements, cannot initialize');
+      return;
+    }
+
+    // Create simulator and animator with error handling
+    try {
+      this.simulator3D = new PLCSimulator3D(canvas);
+      this.animator3D = new PLC3DAnimator(this.simulator3D);
+      console.log('[PLC3D] Simulator created successfully');
+    } catch (err) {
+      console.error('[PLC3D] Failed to create simulator:', err);
+      // Continue to wire buttons even if 3D fails
+    }
+
+    // Wire 3D toggle button (in sidebar)
+    const btnToggle = document.getElementById('btn3DToggle');
+    console.log('[PLC3D] btn3DToggle:', btnToggle ? 'found' : 'NOT FOUND');
+    if (btnToggle) {
+      btnToggle.addEventListener('click', () => {
+        console.log('[PLC3D] Toggle button clicked!');
+        this.toggle3DView();
+      });
+      console.log('[PLC3D] Toggle button wired');
+    }
+
+    // Wire close button (in overlay)
+    const btnClose = document.getElementById('btn3DClose');
+    if (btnClose) {
+      btnClose.addEventListener('click', () => this.toggle3DView());
+    }
+
+    // Wire playback controls
+    const btnPlay = document.getElementById('btn3DPlay');
+    const btnStep = document.getElementById('btn3DStep');
+    const btnReset = document.getElementById('btn3DReset');
+    const speedSlider = document.getElementById('sim3DSpeed');
+    const speedLabel = document.getElementById('sim3DSpeedLabel');
+
+    if (btnPlay) {
+      btnPlay.addEventListener('click', () => {
+        if (this.animator3D.isPlaying) {
+          this.animator3D.pause();
+          btnPlay.textContent = '▶';
+          btnPlay.classList.remove('playing');
+        } else {
+          this.animator3D.play();
+          btnPlay.textContent = '⏸';
+          btnPlay.classList.add('playing');
+        }
+      });
+    }
+
+    if (btnStep) {
+      btnStep.addEventListener('click', () => this.animator3D.step());
+    }
+
+    if (btnReset) {
+      btnReset.addEventListener('click', () => {
+        this.animator3D.stop();
+        if (btnPlay) {
+          btnPlay.textContent = '▶';
+          btnPlay.classList.remove('playing');
+        }
+      });
+    }
+
+    if (speedSlider) {
+      speedSlider.addEventListener('input', () => {
+        const speed = parseFloat(speedSlider.value);
+        this.animator3D.setSpeed(speed);
+        if (speedLabel) speedLabel.textContent = `${speed.toFixed(1)}x`;
+      });
+    }
+
+    // Wire STL upload
+    const stlUpload = document.getElementById('stlToolUpload');
+    if (stlUpload) {
+      stlUpload.addEventListener('change', (e) => this.handleSTLUpload(e));
+    }
+
+    // Listen for animation progress
+    this.animator3D.onUpdate = (currentIndex, total) => {
+      const progressBar = overlay.querySelector('.cad-3d-progress-bar');
+      if (progressBar && total > 0) {
+        const percent = Math.round((currentIndex / total) * 100);
+        progressBar.style.width = `${percent}%`;
+      }
+    };
+
+    this.animator3D.onComplete = () => {
+      if (btnPlay) {
+        btnPlay.textContent = '▶';
+        btnPlay.classList.remove('playing');
+      }
+      const progressBar = overlay.querySelector('.cad-3d-progress-bar');
+      if (progressBar) progressBar.style.width = '100%';
+    };
+
+    // ESC key to close 3D view
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && overlay.style.display !== 'none') {
+        this.toggle3DView();
+      }
+    });
+
+    this._is3DInitialized = true;
+    console.log('[PLC3D] init3DSimulator completed successfully');
+  }
+
+  /**
+   * Toggle 3D view visibility (main canvas overlay)
+   */
+  toggle3DView() {
+    console.log('[PLC3D] toggle3DView called');
+    const overlay = document.getElementById('plc3dOverlay');
+    const btnToggle = document.getElementById('btn3DToggle');
+
+    console.log('[PLC3D] overlay in toggle:', overlay ? 'found' : 'NOT FOUND');
+    if (!overlay) {
+      console.error('[PLC3D] Cannot toggle - overlay not found!');
+      return;
+    }
+
+    const isVisible = overlay.style.display !== 'none';
+    console.log('[PLC3D] isVisible:', isVisible, '-> setting to:', isVisible ? 'none' : 'block');
+    overlay.style.display = isVisible ? 'none' : 'block';
+
+    if (btnToggle) {
+      btnToggle.classList.toggle('active', !isVisible);
+    }
+
+    // Update simulator with current commands when shown
+    if (!isVisible && this.app.plcOutput && this.app.plcOutput.length > 0) {
+      this.update3DSimulation();
+      // Trigger resize after display change
+      setTimeout(() => this.simulator3D?.resize(), 50);
+    }
+  }
+
+  /**
+   * Handle STL file upload for custom tool model
+   */
+  async handleSTLUpload(event) {
+    const file = event.target.files?.[0];
+    if (!file || !this.simulator3D) return;
+
+    try {
+      await this.simulator3D.loadToolSTL(file);
+      this.app.ui.updateStatus('Modello STL caricato');
+    } catch (err) {
+      console.error('STL load failed:', err);
+      this.app.ui.updateStatus('Errore caricamento STL');
+    }
+  }
+
+  /**
+   * Update 3D simulation with current PLC output
+   */
+  update3DSimulation() {
+    if (!this.animator3D || !this.app.plcOutput || this.app.plcOutput.length === 0) return;
+
+    // Draw CAD primitives on 3D work surface
+    if (this.simulator3D && this.app.primitives && this.app.primitives.length > 0) {
+      this.simulator3D.drawPrimitivesOnSurface(this.app.primitives);
+    }
+
+    this.animator3D.load(this.app.plcOutput);
   }
 
   refreshPLCOutput() {
@@ -25,11 +215,13 @@ export class PLCOutputManager {
     const rapidInput = document.getElementById('simRapidSpeed');
     const safeZInput = document.getElementById('simSafeZ');
     const workZInput = document.getElementById('simWorkZ');
+    const waitInput = document.getElementById('simWaitTime');
 
     const defaultSpeed = speedInput ? parseFloat(speedInput.value) : 100.0;
     const rapidSpeed = rapidInput ? parseFloat(rapidInput.value) : 1000.0;
     const safeZ = safeZInput ? parseFloat(safeZInput.value) : 5.0;
     const workZ = workZInput ? parseFloat(workZInput.value) : -2.0;
+    const waitTime = waitInput ? parseInt(waitInput.value, 10) : 0;
 
     // Convert primitives to API format
     const supportedTypes = new Set(["line", "arc", "circle", "rectangle", "polygon", "polyline"]);
@@ -41,7 +233,7 @@ export class PLCOutputManager {
       const response = await fetch("/api/plc/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ primitives, defaultSpeed, rapidSpeed, safeZ, workZ })
+        body: JSON.stringify({ primitives, defaultSpeed, rapidSpeed, safeZ, workZ, waitTime })
       });
 
       if (!response.ok) {
@@ -66,6 +258,9 @@ export class PLCOutputManager {
       this.app.ui.displayPLCOutput(displayCommands, this.app);
       this.app.ui.updateStats();
       this.app.ui.updateStatus(`Estratte ${this.app.plcOutput.length} istruzioni PLC`);
+
+      // Update 3D simulation if visible
+      this.update3DSimulation();
     } catch (err) {
       console.error("PLC extraction failed:", err);
       this.app.ui.updateStatus(`Errore estrazione PLC: ${err.message}`);
@@ -133,59 +328,32 @@ export class PLCOutputManager {
     this.app.ui.updateStatus("File scaricato");
   }
 
+  /**
+   * Start 3D simulation - opens overlay and plays
+   */
   simulatePath() {
-    if (!this.app.plcCommands || this.app.plcCommands.length === 0) {
+    if (!this.app.plcOutput || this.app.plcOutput.length === 0) {
       this.app.ui.updateStatus("Nessun percorso da simulare");
       return;
     }
 
-    const controlsEl = document.getElementById("simulationControls");
-    const sliderEl = document.getElementById("simSpeedSlider");
-    const btnSimulate = document.getElementById("btnSimulate");
+    // Open 3D view if not already open
+    const overlay = document.getElementById('plc3dOverlay');
+    if (overlay && overlay.style.display === 'none') {
+      this.toggle3DView();
+    }
 
-    if (this.app.renderer.simulation && this.app.renderer.simulation.running) {
-      this.app.renderer.stopSimulation();
-      if (btnSimulate) {
-        btnSimulate.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
+    // Start playing after a short delay for resize
+    setTimeout(() => {
+      if (this.animator3D && !this.animator3D.isPlaying) {
+        this.animator3D.play();
+        const btnPlay = document.getElementById('btn3DPlay');
+        if (btnPlay) {
+          btnPlay.textContent = '⏸';
+          btnPlay.classList.add('playing');
+        }
       }
-      return;
-    }
-
-    if (controlsEl) controlsEl.style.display = "block";
-    if (btnSimulate) {
-      btnSimulate.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12"/></svg>';
-    }
-
-    const speed = sliderEl ? parseInt(sliderEl.value, 10) : 80;
-    this.app.ui.updateStatus("Simulazione in corso... (premi ESC per fermare)");
-
-    this.app.renderer.startSimulation(this.app.plcCommands, {
-      speed,
-      onComplete: () => {
-        this.app.ui.updateStatus("Simulazione completata");
-        // controlsEl.style.display = "none"; // Always visible
-        if (btnSimulate) {
-          btnSimulate.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
-        }
-        const active = document.querySelector('.cad-output-item.executing');
-        if (active) active.classList.remove('executing');
-      },
-      onUpdate: (state) => {
-        const index = state.index;
-        const grid = document.getElementById('outputGrid');
-        if (this._lastSimIndex !== index) {
-          this._lastSimIndex = index;
-          const prev = grid.querySelector('.cad-output-item.executing');
-          if (prev) prev.classList.remove('executing');
-
-          const current = grid.querySelector(`.cad-output-item[data-index="${index}"]`);
-          if (current) {
-            current.classList.add('executing');
-            current.scrollIntoView({ block: 'nearest', behavior: 'auto' });
-          }
-        }
-      },
-    });
+    }, 100);
   }
 
   /**

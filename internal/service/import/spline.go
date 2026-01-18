@@ -131,16 +131,17 @@ func calculateSplineSamplesWithScale(controls [][]float64, scaleFactor float64) 
 	}
 	length *= 1.3 // Spline correction factor
 
-	// Sample based on length: ~2 points per mm for smooth visual curves
-	// Balance: quality vs JSON size (79 splines in LOVE clock)
-	samples := int(length * 2)
+	// Sample based on length for CAM/CNC arc fitting
+	// Industrial standard: 0.1-0.2 points per mm (20-50 points per 200mm circle)
+	// This allows proper arc detection without over-tessellation
+	samples := int(length * 0.15)
 
-	// Clamp to reasonable range
-	if samples < 80 {
-		samples = 80
+	// Clamp to reasonable range for arc fitting
+	if samples < 10 {
+		samples = 10
 	}
-	if samples > 400 {
-		samples = 400
+	if samples > 100 {
+		samples = 100
 	}
 	return samples
 }
