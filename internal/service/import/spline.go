@@ -131,14 +131,13 @@ func calculateSplineSamplesWithScale(controls [][]float64, scaleFactor float64) 
 	}
 	length *= 1.3 // Spline correction factor
 
-	// Sample based on length for CAM/CNC arc fitting
-	// Industrial standard: 0.1-0.2 points per mm (20-50 points per 200mm circle)
-	// This allows proper arc detection without over-tessellation
-	samples := int(length * 0.15)
+	// Smooth visualization: 0.2-0.3 points/mm for smooth curves on screen
+	// Research showed this is what old JS implementation used
+	samples := int(length * 0.25) // 0.25 points/mm = ~100 points for 400mm
 
-	// Clamp to reasonable range for arc fitting
-	if samples < 10 {
-		samples = 10
+	// Reasonable range for smooth rendering
+	if samples < 20 {
+		samples = 20
 	}
 	if samples > 100 {
 		samples = 100

@@ -38,11 +38,41 @@ export class PrimitiveRenderer3D {
                 const points = curve.getPoints(64).map(pt => new THREE.Vector3(pt.x, pt.y, 0));
                 geometry = new THREE.BufferGeometry().setFromPoints(points);
             } else if (p.type === 'arc') {
-                const cx = p.cx, cy = p.cy;
-                const radius = Math.sqrt((p.x1 - cx) ** 2 + (p.y1 - cy) ** 2);
-                const startAngle = Math.atan2(p.y1 - cy, p.x1 - cx);
-                const endAngle = Math.atan2(p.y2 - cy, p.x2 - cx);
-                const ccw = !p.isClockwise;
+                // Support both Go backend (centerX/centerY/startX/startY/endX/endY)
+                // and frontend primitives (cx/cy/x1/y1/x2/y2)
+                const cx = p.centerX ?? p.cx;
+                const cy = p.centerY ?? p.cy;
+                const startX = p.startX ?? p.x1;
+                const startY = p.startY ?? p.y1;
+                const endX = p.endX ?? p.x2;
+                const endY = p.endY ?? p.y2;
+
+                if (cx === undefined || cy === undefined) continue;
+
+                const radius = p.radius ?? Math.sqrt((startX - cx) ** 2 + (startY - cy) ** 2);
+                const startAngle = Math.atan2(startY - cy, startX - cx);
+                const endAngle = Math.atan2(endY - cy, endX - cx);
+
+                // Determine sweep direction using throughPoint if available
+                let ccw = false;
+                if (p.throughX !== undefined && p.throughY !== undefined) {
+                    const throughAngle = Math.atan2(p.throughY - cy, p.throughX - cx);
+                    const TWO_PI = Math.PI * 2;
+
+                    const normStart = ((startAngle % TWO_PI) + TWO_PI) % TWO_PI;
+                    const normEnd = ((endAngle % TWO_PI) + TWO_PI) % TWO_PI;
+                    const normThrough = ((throughAngle % TWO_PI) + TWO_PI) % TWO_PI;
+
+                    const throughRelToStart = ((normThrough - normStart) % TWO_PI + TWO_PI) % TWO_PI;
+                    const endRelToStart = ((normEnd - normStart) % TWO_PI + TWO_PI) % TWO_PI;
+
+                    // If through is "before" end in positive direction, use CCW
+                    ccw = (throughRelToStart < endRelToStart && throughRelToStart > 0);
+                } else {
+                    // Fallback: use isClockwise flag if available
+                    ccw = !p.isClockwise;
+                }
+
                 const curve = new THREE.EllipseCurve(cx, cy, radius, radius, startAngle, endAngle, ccw);
                 const points = curve.getPoints(32).map(pt => new THREE.Vector3(pt.x, pt.y, 0));
                 geometry = new THREE.BufferGeometry().setFromPoints(points);

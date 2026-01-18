@@ -25,14 +25,11 @@ type Primitive struct {
 	CenterX             float64 `json:"centerX"`
 	CenterY             float64 `json:"centerY"`
 	Radius              float64 `json:"radius"`
-	StartAngle          float64 `json:"startAngle"`
-	EndAngle            float64 `json:"endAngle"`
-	ThroughX            float64 `json:"throughX,omitempty"` // For arc direction in Arc.js
-	ThroughY            float64 `json:"throughY,omitempty"` // For arc direction in Arc.js
-	Points              []Point `json:"points,omitempty"`
-	Closed              bool    `json:"closed,omitempty"`
-	Stroke              string  `json:"stroke,omitempty"`
-	ScaledDuringExtract bool    `json:"-"` // Internal flag, not serialized
+	StartAngle float64 `json:"startAngle"`
+	EndAngle   float64 `json:"endAngle"`
+	Points     []Point `json:"points,omitempty"`
+	Closed     bool    `json:"closed,omitempty"`
+	Stroke     string  `json:"stroke,omitempty"`
 }
 
 // Point represents a 2D point with optimized JSON output
@@ -126,7 +123,7 @@ func ParseDXF(content string) (*ParseResult, error) {
 		prims := extractEntity(e, &idx, scaleFactor)
 		for _, p := range prims {
 			// Apply unit conversion (except polylines from splines - already scaled)
-			if scaleFactor != 1.0 && !p.ScaledDuringExtract {
+			if scaleFactor != 1.0 {
 				scalePrimitiveInPlace(&p, scaleFactor)
 			}
 			result.Primitives = append(result.Primitives, p)
@@ -180,15 +177,6 @@ func SmartImport(content string, opts ImportOptions) (*SmartImportResult, error)
 
 	result.Primitives = optimizePathOrder(result.Primitives)
 
-	// Arc fitting: convert polyline segments to arcs
-	if opts.FitArcs {
-		tolerance := opts.ArcTolerance
-		if tolerance <= 0 {
-			tolerance = 0.1 // Default 0.1mm tolerance
-		}
-		result.Primitives = applyArcFitting(result.Primitives, tolerance)
-		result.Stats = recalculateStats(result.Primitives)
-	}
 
 	if opts.ExtractPLC {
 		result.PLCData = extractPLCData(result.Primitives)
@@ -325,16 +313,16 @@ func extractEntity(e entity.Entity, idx *int, scaleFactor float64) []Primitive {
 			numSamples := calculateSplineSamplesWithScale(ent.Controls, scaleFactor)
 			rawPoints := evaluateBSpline(ent.Controls, ent.Knots, ent.Degree, numSamples)
 
-			// Scale and round points to mm with 0.01mm precision
+			// Don't scale here - will be scaled with all other primitives at line 127
 			points = make([]Point, len(rawPoints))
 			for i, p := range rawPoints {
-				points[i] = newPoint(p.X*scaleFactor, p.Y*scaleFactor)
+				points[i] = newPoint(p.X, p.Y)
 			}
 		} else if len(ent.Fits) >= 2 {
 			// Fallback: use fit points if control points unavailable
 			points = make([]Point, len(ent.Fits))
 			for i, f := range ent.Fits {
-				points[i] = newPoint(f[0]*scaleFactor, f[1]*scaleFactor)
+				points[i] = newPoint(f[0], f[1])
 			}
 		}
 
@@ -346,7 +334,6 @@ func extractEntity(e entity.Entity, idx *int, scaleFactor float64) []Primitive {
 				Layer:               ent.Layer().Name(),
 				Points:              points,
 				Closed:              closed,
-				ScaledDuringExtract: true, // Already scaled during tessellation
 			})
 		}
 	}
@@ -464,30 +451,6 @@ func scalePrimitiveInPlace(p *Primitive, factor float64) {
 	}
 }
 
-// applyArcFitting replaces polylines with fitted arcs using RANSAC + Taubin
-func applyArcFitting(primitives []Primitive, tolerance float64) []Primitive {
-	result := make([]Primitive, 0, len(primitives))
-
-	for _, prim := range primitives {
-		if prim.Type == "polyline" && len(prim.Points) >= 3 {
-			// Apply arc fitting to ALL polylines (coarse tessellation ensures proper detection)
-			fitted := FitPolylineToArcs(prim.Points, tolerance)
-
-			if len(fitted) > 0 {
-				for _, f := range fitted {
-					f.Layer = prim.Layer
-					result = append(result, f)
-				}
-			} else {
-				result = append(result, prim)
-			}
-		} else {
-			result = append(result, prim)
-		}
-	}
-
-	return result
-}
 
 // recalculateStats recalculates statistics after arc fitting
 func recalculateStats(primitives []Primitive) ParseStats {
