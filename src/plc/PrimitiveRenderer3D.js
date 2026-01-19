@@ -53,10 +53,13 @@ export class PrimitiveRenderer3D {
                 const startAngle = Math.atan2(startY - cy, startX - cx);
                 const endAngle = Math.atan2(endY - cy, endX - cx);
 
-                // Determine sweep direction using throughPoint if available
-                let ccw = false;
-                if (p.throughX !== undefined && p.throughY !== undefined) {
-                    const throughAngle = Math.atan2(p.throughY - cy, p.throughX - cx);
+                // Determine sweep direction using throughPoint/sweep/isClockwise if available
+                let clockwise = false;
+                const throughPoint = p.throughPoint ?? p._throughPoint;
+                const throughX = throughPoint?.x ?? p.throughX;
+                const throughY = throughPoint?.y ?? p.throughY;
+                if (throughX !== undefined && throughY !== undefined) {
+                    const throughAngle = Math.atan2(throughY - cy, throughX - cx);
                     const TWO_PI = Math.PI * 2;
 
                     const normStart = ((startAngle % TWO_PI) + TWO_PI) % TWO_PI;
@@ -67,13 +70,18 @@ export class PrimitiveRenderer3D {
                     const endRelToStart = ((normEnd - normStart) % TWO_PI + TWO_PI) % TWO_PI;
 
                     // If through is "before" end in positive direction, use CCW
-                    ccw = (throughRelToStart < endRelToStart && throughRelToStart > 0);
+                    const ccw = (throughRelToStart < endRelToStart && throughRelToStart > 0);
+                    clockwise = !ccw;
                 } else {
-                    // Fallback: use isClockwise flag if available
-                    ccw = !p.isClockwise;
+                    // Fallback: use sweep or isClockwise flag if available
+                    if (Number.isFinite(p.sweep)) {
+                        clockwise = p.sweep < 0;
+                    } else if (typeof p.isClockwise === 'boolean') {
+                        clockwise = p.isClockwise;
+                    }
                 }
 
-                const curve = new THREE.EllipseCurve(cx, cy, radius, radius, startAngle, endAngle, ccw);
+                const curve = new THREE.EllipseCurve(cx, cy, radius, radius, startAngle, endAngle, clockwise);
                 const points = curve.getPoints(32).map(pt => new THREE.Vector3(pt.x, pt.y, 0));
                 geometry = new THREE.BufferGeometry().setFromPoints(points);
             } else if (p.type === 'rectangle') {
