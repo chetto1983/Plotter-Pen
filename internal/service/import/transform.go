@@ -22,11 +22,22 @@ func translatePrimitive(p *Primitive, dx, dy float64) {
 	case "circle", "arc":
 		p.CenterX += dx
 		p.CenterY += dy
-	case "polyline":
+		p.StartX += dx
+		p.StartY += dy
+		p.EndX += dx
+		p.EndY += dy
+		if p.ThroughPoint != nil {
+			p.ThroughPoint.X += dx
+			p.ThroughPoint.Y += dy
+		}
+	case "polyline", "polygon":
 		for i := range p.Points {
 			p.Points[i].X += dx
 			p.Points[i].Y += dy
 		}
+	case "rectangle":
+		p.X += dx
+		p.Y += dy
 	}
 }
 
@@ -49,11 +60,24 @@ func scalePrimitive(p *Primitive, factor float64) {
 		p.CenterX *= factor
 		p.CenterY *= factor
 		p.Radius *= factor
-	case "polyline":
+		p.StartX *= factor
+		p.StartY *= factor
+		p.EndX *= factor
+		p.EndY *= factor
+		if p.ThroughPoint != nil {
+			p.ThroughPoint.X *= factor
+			p.ThroughPoint.Y *= factor
+		}
+	case "polyline", "polygon":
 		for i := range p.Points {
 			p.Points[i].X *= factor
 			p.Points[i].Y *= factor
 		}
+	case "rectangle":
+		p.X *= factor
+		p.Y *= factor
+		p.Width *= factor
+		p.Height *= factor
 	}
 }
 
@@ -125,13 +149,16 @@ func getStartPoint(p *Primitive) Point {
 	switch p.Type {
 	case "line":
 		return Point{X: p.StartX, Y: p.StartY}
-	case "circle", "arc":
-		rad := p.StartAngle * math.Pi / 180
-		return Point{X: p.CenterX + p.Radius*math.Cos(rad), Y: p.CenterY + p.Radius*math.Sin(rad)}
-	case "polyline":
+	case "circle":
+		return Point{X: p.CenterX + p.Radius, Y: p.CenterY}
+	case "arc":
+		return Point{X: p.StartX, Y: p.StartY}
+	case "polyline", "polygon":
 		if len(p.Points) > 0 {
 			return p.Points[0]
 		}
+	case "rectangle":
+		return Point{X: p.X, Y: p.Y}
 	}
 	return Point{}
 }
@@ -144,12 +171,16 @@ func getEndPoint(p *Primitive) Point {
 	case "circle":
 		return Point{X: p.CenterX + p.Radius, Y: p.CenterY}
 	case "arc":
-		rad := p.EndAngle * math.Pi / 180
-		return Point{X: p.CenterX + p.Radius*math.Cos(rad), Y: p.CenterY + p.Radius*math.Sin(rad)}
-	case "polyline":
+		return Point{X: p.EndX, Y: p.EndY}
+	case "polyline", "polygon":
 		if len(p.Points) > 0 {
+			if p.Type == "polygon" || p.Closed {
+				return p.Points[0]
+			}
 			return p.Points[len(p.Points)-1]
 		}
+	case "rectangle":
+		return Point{X: p.X, Y: p.Y}
 	}
 	return Point{}
 }
@@ -172,7 +203,7 @@ func extractPLCData(prims []Primitive) []PLCItem {
 			items = append(items, PLCItem{Type: "A", Coords: []float64{p.CenterX, p.CenterY, p.Radius, p.StartAngle, p.EndAngle}, Layer: p.Layer})
 		case "circle":
 			items = append(items, PLCItem{Type: "C", Coords: []float64{p.CenterX, p.CenterY, p.Radius}, Layer: p.Layer})
-		case "polyline":
+		case "polyline", "polygon":
 			coords := make([]float64, 0, len(p.Points)*2)
 			for _, pt := range p.Points {
 				coords = append(coords, pt.X, pt.Y)

@@ -116,7 +116,11 @@ func ParseSVG(content string, scale float64) (*SVGResult, error) {
 				idx++
 				prim := createPolylinePrimitive(currentPath, true, idx)
 				result.Primitives = append(result.Primitives, prim)
-				result.Stats.ByType["polyline"]++
+				if prim.Type == "polygon" {
+					result.Stats.ByType["polygon"]++
+				} else {
+					result.Stats.ByType["polyline"]++
+				}
 				updateBoundsFromPoints(bounds, currentPath)
 			}
 			currentPath = nil
@@ -144,8 +148,12 @@ func ParseSVG(content string, scale float64) (*SVGResult, error) {
 
 // createPolylinePrimitive creates a polyline primitive from points
 func createPolylinePrimitive(points []Point, closed bool, idx int) Primitive {
+	primType := "polyline"
+	if closed {
+		primType = "polygon"
+	}
 	return Primitive{
-		Type:   "polyline",
+		Type:   primType,
 		ID:     fmt.Sprintf("svg_%d", idx),
 		Points: append([]Point{}, points...), // Copy slice
 		Closed: closed,

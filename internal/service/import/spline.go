@@ -1,146 +1,84 @@
 package importservice
 
-import "math"
+import (
+    "errors"
+    "math"
+)
 
-// evaluateBSpline evaluates a B-spline curve and returns sampled points
-// Uses De Boor's algorithm for numerical stability
-func evaluateBSpline(controls [][]float64, knots []float64, degree int, numSamples int) []Point {
-	if len(controls) < 2 || degree < 1 {
-		return nil
-	}
+const bsplineTolerance = 1e-5
 
-	// Generate knot vector if not provided or invalid
-	if len(knots) < len(controls)+degree+1 {
-		knots = generateUniformKnots(len(controls), degree)
-	}
+// bSpline interpolates a point on a B-spline curve.
+// Ported from src/geometry/b-spline.js in the legacy JS implementation.
+func bSpline(t float64, degree int, points [][]float64, knots []float64) (Point, error) {
+    n := len(points)
+    if n == 0 {
+        return Point{}, errors.New("no control points")
+    }
+    if degree < 1 {
+        return Point{}, errors.New("degree must be at least 1")
+    }
+    if degree > n-1 {
+        return Point{}, errors.New("degree must be less than or equal to point count - 1")
+    }
 
-	// Find valid parameter range
-	tMin := knots[degree]
-	tMax := knots[len(knots)-degree-1]
-	if tMax <= tMin {
-		tMax = tMin + 1.0
-	}
+    // Build knot vector if missing.
+    if len(knots) == 0 {
+        knots = make([]float64, n+degree+1)
+        for i := range knots {
+            knots[i] = float64(i)
+        }
+    }
 
-	// Sample the curve
-	points := make([]Point, 0, numSamples)
-	for i := 0; i < numSamples; i++ {
-		t := tMin + (tMax-tMin)*float64(i)/float64(numSamples-1)
-		// Clamp to avoid numerical issues at boundaries
-		if t >= tMax {
-			t = tMax - 1e-10
-		}
-		pt := deBoor(controls, knots, degree, t)
-		points = append(points, Point{X: pt[0], Y: pt[1]})
-	}
+    domainMin := degree
+    domainMax := len(knots) - 1 - degree
+    if domainMax <= domainMin {
+        return Point{}, errors.New("invalid knot domain")
+    }
 
-	return points
-}
+    low := knots[domainMin]
+    high := knots[domainMax]
+    t = t*(high-low) + low
 
-// deBoor evaluates a B-spline at parameter t using De Boor's algorithm
-func deBoor(controls [][]float64, knots []float64, degree int, t float64) []float64 {
-	n := len(controls)
-	k := findKnotSpan(knots, n, degree, t)
+    if t < low || t > high {
+        if math.Abs(t-low) < bsplineTolerance {
+            t = low
+        } else if math.Abs(t-high) < bsplineTolerance {
+            t = high
+        } else {
+            return Point{}, errors.New("parameter out of bounds")
+        }
+    }
 
-	// Copy affected control points
-	d := make([][]float64, degree+1)
-	for j := 0; j <= degree; j++ {
-		idx := k - degree + j
-		if idx >= 0 && idx < n {
-			d[j] = []float64{controls[idx][0], controls[idx][1]}
-		} else {
-			d[j] = []float64{0, 0}
-		}
-	}
+    s := domainMin
+    for s < domainMax {
+        if t >= knots[s] && t <= knots[s+1] {
+            break
+        }
+        s++
+    }
 
-	// De Boor recursion
-	for r := 1; r <= degree; r++ {
-		for j := degree; j >= r; j-- {
-			idx := k - degree + j
-			denom := knots[idx+degree-r+1] - knots[idx]
-			if denom < 1e-10 {
-				continue
-			}
-			alpha := (t - knots[idx]) / denom
-			d[j][0] = (1-alpha)*d[j-1][0] + alpha*d[j][0]
-			d[j][1] = (1-alpha)*d[j-1][1] + alpha*d[j][1]
-		}
-	}
+    // Homogeneous coordinates (weights default to 1).
+    v := make([][]float64, n)
+    for i := 0; i < n; i++ {
+        v[i] = []float64{points[i][0], points[i][1], 1}
+    }
 
-	return d[degree]
-}
+    for l := 1; l <= degree+1; l++ {
+        for i := s; i > s-degree-1+l; i-- {
+            denom := knots[i+degree+1-l] - knots[i]
+            alpha := 0.0
+            if denom != 0 {
+                alpha = (t - knots[i]) / denom
+            }
+            v[i][0] = (1-alpha)*v[i-1][0] + alpha*v[i][0]
+            v[i][1] = (1-alpha)*v[i-1][1] + alpha*v[i][1]
+            v[i][2] = (1-alpha)*v[i-1][2] + alpha*v[i][2]
+        }
+    }
 
-// findKnotSpan finds the knot span index for parameter t
-func findKnotSpan(knots []float64, n, degree int, t float64) int {
-	if t >= knots[n] {
-		return n - 1
-	}
-	if t <= knots[degree] {
-		return degree
-	}
+    if v[s][2] == 0 {
+        return Point{X: v[s][0], Y: v[s][1]}, nil
+    }
 
-	// Binary search
-	low, high := degree, n
-	mid := (low + high) / 2
-	for t < knots[mid] || t >= knots[mid+1] {
-		if t < knots[mid] {
-			high = mid
-		} else {
-			low = mid
-		}
-		mid = (low + high) / 2
-	}
-	return mid
-}
-
-// generateUniformKnots creates a clamped uniform knot vector
-func generateUniformKnots(numControls, degree int) []float64 {
-	numKnots := numControls + degree + 1
-	knots := make([]float64, numKnots)
-
-	for i := 0; i < numKnots; i++ {
-		if i <= degree {
-			knots[i] = 0.0
-		} else if i >= numKnots-degree-1 {
-			knots[i] = 1.0
-		} else {
-			knots[i] = float64(i-degree) / float64(numControls-degree)
-		}
-	}
-	return knots
-}
-
-// calculateSplineSamples determines optimal sample count based on control points and curve length
-func calculateSplineSamples(controls [][]float64) int {
-	return calculateSplineSamplesWithScale(controls, 1.0)
-}
-
-// calculateSplineSamplesWithScale determines samples with unit scale factor
-// Scale factor converts original units to mm (e.g., 25.4 for inches)
-func calculateSplineSamplesWithScale(controls [][]float64, scaleFactor float64) int {
-	if len(controls) < 2 {
-		return 2
-	}
-
-	// Estimate curve length from control polygon IN FINAL UNITS (mm)
-	// Actual spline is ~1.3x longer than control polygon
-	length := 0.0
-	for i := 1; i < len(controls); i++ {
-		dx := (controls[i][0] - controls[i-1][0]) * scaleFactor
-		dy := (controls[i][1] - controls[i-1][1]) * scaleFactor
-		length += math.Sqrt(dx*dx + dy*dy)
-	}
-	length *= 1.3 // Spline correction factor
-
-	// Smooth visualization: 0.2-0.3 points/mm for smooth curves on screen
-	// Research showed this is what old JS implementation used
-	samples := int(length * 0.25) // 0.25 points/mm = ~100 points for 400mm
-
-	// Reasonable range for smooth rendering
-	if samples < 20 {
-		samples = 20
-	}
-	if samples > 100 {
-		samples = 100
-	}
-	return samples
+    return Point{X: v[s][0] / v[s][2], Y: v[s][1] / v[s][2]}, nil
 }

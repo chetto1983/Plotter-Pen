@@ -51,7 +51,8 @@ type Primitive struct {
 	Points []geom.Point `json:"points,omitempty"`
 
 	// Nested center object (frontend compatibility)
-	Center *geom.Point `json:"center,omitempty"`
+	Center       *geom.Point `json:"center,omitempty"`
+	ThroughPoint *geom.Point `json:"throughPoint,omitempty"`
 }
 
 // GetStartPoint returns the starting point of a primitive
@@ -140,6 +141,9 @@ func (p *Primitive) UnmarshalJSON(data []byte) error {
 		EndY    *float64 `json:"endY,omitempty"`
 		CenterX *float64 `json:"centerX,omitempty"`
 		CenterY *float64 `json:"centerY,omitempty"`
+		ThroughX *float64 `json:"throughX,omitempty"`
+		ThroughY *float64 `json:"throughY,omitempty"`
+		ThroughPoint *geom.Point `json:"throughPoint,omitempty"`
 		*PrimitiveAlias
 	}{
 		PrimitiveAlias: (*PrimitiveAlias)(p),
@@ -167,6 +171,11 @@ func (p *Primitive) UnmarshalJSON(data []byte) error {
 	}
 	if aux.CenterY != nil {
 		p.Cy = aux.CenterY
+	}
+	if aux.ThroughPoint != nil {
+		p.ThroughPoint = aux.ThroughPoint
+	} else if aux.ThroughX != nil && aux.ThroughY != nil {
+		p.ThroughPoint = &geom.Point{X: *aux.ThroughX, Y: *aux.ThroughY}
 	}
 
 	return nil

@@ -296,7 +296,7 @@ func TestGetStartPoint_AllTypes(t *testing.T) {
 		},
 		{
 			name: "arc",
-			prim: Primitive{Type: "arc", CenterX: 0, CenterY: 0, Radius: 10, StartAngle: 90},
+			prim: Primitive{Type: "arc", CenterX: 0, CenterY: 0, Radius: 10, StartX: 0, StartY: 10},
 			want: Point{X: 0, Y: 10},
 		},
 		{
@@ -344,7 +344,7 @@ func TestGetEndPoint_AllTypes(t *testing.T) {
 		},
 		{
 			name: "arc",
-			prim: Primitive{Type: "arc", CenterX: 0, CenterY: 0, Radius: 10, EndAngle: 90},
+			prim: Primitive{Type: "arc", CenterX: 0, CenterY: 0, Radius: 10, EndX: 0, EndY: 10},
 			want: Point{X: 0, Y: 10},
 		},
 		{
@@ -418,7 +418,7 @@ func TestExportDXF_AllTypes(t *testing.T) {
 	primitives := []Primitive{
 		{Type: "line", StartX: 0, StartY: 0, EndX: 100, EndY: 100, Layer: "Lines"},
 		{Type: "circle", CenterX: 50, CenterY: 50, Radius: 25, Layer: "Circles"},
-		{Type: "arc", CenterX: 25, CenterY: 25, Radius: 10, StartAngle: 0, EndAngle: 90, Layer: "Arcs"},
+		{Type: "arc", CenterX: 25, CenterY: 25, Radius: 10, StartX: 35, StartY: 25, EndX: 25, EndY: 35, Layer: "Arcs"},
 		{Type: "polyline", Points: []Point{{X: 0, Y: 0}, {X: 10, Y: 0}, {X: 10, Y: 10}}, Layer: "Polylines"},
 		{Type: "polyline", Points: []Point{{X: 0, Y: 0}, {X: 5, Y: 0}, {X: 5, Y: 5}, {X: 0, Y: 5}}, Closed: true, Layer: "ClosedPoly"},
 	}

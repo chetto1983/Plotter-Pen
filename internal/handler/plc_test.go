@@ -29,7 +29,7 @@ func TestPLCExtract_Line(t *testing.T) {
 			Type: plc.PrimitiveLine,
 			ID:   "line1",
 			X1:   &x1, Y1: &y1,
-			X2:   &x2, Y2: &y2,
+			X2: &x2, Y2: &y2,
 		}},
 		DefaultSpeed: 500,
 		RapidSpeed:   2000,
@@ -56,23 +56,23 @@ func TestPLCExtract_Line(t *testing.T) {
 		t.Errorf("Expected at least 4 commands, got %d", resp.Count)
 	}
 
-	// Check 3D interpolation format
+	// Check 3D format with Z coordinates
 	hasJump := false
 	hasLine := false
 	for _, cmd := range resp.Output {
-		if strings.HasPrefix(cmd, "J ") && strings.Contains(cmd, "Z") {
+		if strings.HasPrefix(cmd, "J ") && strings.Contains(cmd, "X ") && strings.Contains(cmd, "Y ") && strings.Contains(cmd, "Z ") && strings.Contains(cmd, "V ") {
 			hasJump = true
 		}
-		if strings.HasPrefix(cmd, "L ") && strings.Contains(cmd, "Z") {
+		if strings.HasPrefix(cmd, "L ") && strings.Contains(cmd, "X ") && strings.Contains(cmd, "Y ") && strings.Contains(cmd, "Z ") && strings.Contains(cmd, "V ") {
 			hasLine = true
 		}
 	}
 
 	if !hasJump {
-		t.Error("Expected Jump command with Z coordinate")
+		t.Error("Expected Jump command with X/Y/Z/V")
 	}
 	if !hasLine {
-		t.Error("Expected Line command with Z coordinate")
+		t.Error("Expected Line command with X/Y/Z/V")
 	}
 }
 
@@ -84,11 +84,11 @@ func TestPLCExtract_Arc(t *testing.T) {
 
 	req := plc.ExtractRequest{
 		Primitives: []plc.Primitive{{
-			Type:        plc.PrimitiveArc,
-			ID:          "arc1",
-			X1:          &x1, Y1: &y1,
-			X2:          &x2, Y2: &y2,
-			Cx:          &cx, Cy: &cy,
+			Type: plc.PrimitiveArc,
+			ID:   "arc1",
+			X1:   &x1, Y1: &y1,
+			X2: &x2, Y2: &y2,
+			Cx: &cx, Cy: &cy,
 			IsClockwise: false,
 		}},
 		DefaultSpeed: 300,
@@ -112,16 +112,16 @@ func TestPLCExtract_Arc(t *testing.T) {
 		t.Fatalf("Failed to parse response: %v", err)
 	}
 
-	// Check for Arc command
+	// Check for Arc command with midpoint and Z
 	hasArc := false
 	for _, cmd := range resp.Output {
-		if strings.HasPrefix(cmd, "A ") && strings.Contains(cmd, "I ") {
+		if strings.HasPrefix(cmd, "A ") && strings.Contains(cmd, "I ") && strings.Contains(cmd, "J ") && strings.Contains(cmd, "Z ") {
 			hasArc = true
 		}
 	}
 
 	if !hasArc {
-		t.Error("Expected Arc command with I/J midpoint")
+		t.Error("Expected Arc command with I/J midpoint and Z")
 	}
 }
 
@@ -274,7 +274,7 @@ func TestPLCExtract_3DFormat(t *testing.T) {
 			Type: plc.PrimitiveLine,
 			ID:   "line1",
 			X1:   &x1, Y1: &y1,
-			X2:   &x2, Y2: &y2,
+			X2: &x2, Y2: &y2,
 		}},
 		DefaultSpeed: 100,
 		RapidSpeed:   1000,

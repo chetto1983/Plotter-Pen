@@ -22,7 +22,7 @@ func (h *PLCHandler) RegisterRoutes(rg *gin.RouterGroup) {
 }
 
 // Extract handles POST /api/plc/extract
-// Extracts PLC commands from primitives using 3D interpolation format
+// Extracts PLC commands using 3D interpolation with Z coordinates and WAITs.
 func (h *PLCHandler) Extract(c *gin.Context) {
 	var req plc.ExtractRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

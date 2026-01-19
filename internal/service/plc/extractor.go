@@ -1,24 +1,23 @@
 package plc
 
 import (
+	"fmt"
 	"math"
 	"plotter-pen/pkg/geom"
-	plcgen "plotter-pen/pkg/plc"
 )
 
-// Extractor generates PLC commands from primitives
+// Extractor generates PLC commands with Z coordinates and optional WAITs.
 type Extractor struct {
-	gen          *plcgen.Generator
 	defaultSpeed float64
 	rapidSpeed   float64
 	safeZ        float64
 	workZ        float64
 	waitTime     int
+	precision    int
 }
 
-// NewExtractor creates a new PLC extractor with the given settings
+// NewExtractor creates a new PLC extractor with the given settings.
 func NewExtractor(req ExtractRequest) *Extractor {
-	// Apply defaults
 	defaultSpeed := req.DefaultSpeed
 	if defaultSpeed <= 0 {
 		defaultSpeed = 100.0
@@ -35,338 +34,360 @@ func NewExtractor(req ExtractRequest) *Extractor {
 	if workZ >= 0 {
 		workZ = -2.0
 	}
+	waitTime := req.WaitTime
+	if waitTime < 0 {
+		waitTime = 0
+	}
 
 	return &Extractor{
-		gen:          plcgen.NewGenerator(),
 		defaultSpeed: defaultSpeed,
 		rapidSpeed:   rapidSpeed,
 		safeZ:        safeZ,
 		workZ:        workZ,
-		waitTime:     req.WaitTime,
+		waitTime:     waitTime,
+		precision:    3,
 	}
 }
 
-// Extract generates PLC commands from the given primitives
+// Extract generates PLC commands from the given primitives.
 func (e *Extractor) Extract(primitives []Primitive) ExtractResponse {
 	if len(primitives) == 0 {
-		return ExtractResponse{
-			Commands: []Command{},
-			Output:   []string{},
-			Count:    0,
-		}
+		return ExtractResponse{Commands: []Command{}, Output: []string{}, Count: 0}
 	}
 
-	// Optimize order using nearest-neighbor
 	optimized := OptimizeOrder(primitives, geom.Point{X: 0, Y: 0})
 
-	commands := make([]Command, 0)
-	idx := 0
-
-	for _, prim := range optimized {
-		primCmds := e.extractPrimitive(prim, &idx)
-		commands = append(commands, primCmds...)
+	gen := outputGenerator{
+		precision:    e.precision,
+		defaultSpeed: e.defaultSpeed,
+		rapidSpeed:   e.rapidSpeed,
+		safeZ:        e.safeZ,
+		workZ:        e.workZ,
+		waitTime:     e.waitTime,
 	}
 
-	// Build output strings
+	commands := gen.generate(optimized)
+
 	output := make([]string, len(commands))
 	for i, cmd := range commands {
 		output[i] = cmd.CommandStr
 	}
 
-	return ExtractResponse{
-		Commands: commands,
-		Output:   output,
-		Count:    len(commands),
-	}
+	return ExtractResponse{Commands: commands, Output: output, Count: len(commands)}
 }
 
-// extractPrimitive generates commands for a single primitive
-func (e *Extractor) extractPrimitive(prim Primitive, idx *int) []Command {
+type outputGenerator struct {
+	precision    int
+	defaultSpeed float64
+	rapidSpeed   float64
+	safeZ        float64
+	workZ        float64
+	waitTime     int
+}
+
+func (g *outputGenerator) generate(primitives []Primitive) []Command {
 	commands := make([]Command, 0)
 
+	for _, prim := range primitives {
+		if !isSupportedPrimitive(prim.Type) {
+			continue
+		}
+
+		start, ok := primitiveStartXY(prim)
+		if !ok {
+			continue
+		}
+
+		primCmds := g.primitiveToCommands(prim)
+		if len(primCmds) == 0 {
+			continue
+		}
+
+		pushCommand(&commands, g.jumpCommand(start.X, start.Y, g.safeZ, prim.ID))
+		if g.waitTime > 0 {
+			pushCommand(&commands, g.waitCommand(prim.ID))
+		}
+		pushCommand(&commands, g.lineCommand(start.X, start.Y, g.workZ, prim.ID))
+
+		for _, cmd := range primCmds {
+			pushCommand(&commands, cmd)
+		}
+
+		end, ok := primitiveEndXY(prim)
+		if !ok {
+			end = start
+		}
+		pushCommand(&commands, g.jumpCommand(end.X, end.Y, g.safeZ, prim.ID))
+	}
+
+	return commands
+}
+
+func (g *outputGenerator) primitiveToCommands(prim Primitive) []Command {
 	switch prim.Type {
 	case PrimitiveLine:
-		commands = e.extractLine(prim, idx)
+		if prim.X2 == nil || prim.Y2 == nil {
+			return nil
+		}
+		cmd := Command{
+			Type:        "L",
+			CommandStr:  fmt.Sprintf("L X %s, Y %s, Z %s, V %s", g.format(*prim.X2), g.format(*prim.Y2), g.format(g.workZ), g.format(g.defaultSpeed)),
+			PrimitiveID: prim.ID,
+		}
+		return []Command{cmd}
+
 	case PrimitiveArc:
-		commands = e.extractArc(prim, idx)
+		if prim.X2 == nil || prim.Y2 == nil || prim.Cx == nil || prim.Cy == nil {
+			return nil
+		}
+		if prim.ThroughPoint == nil && (prim.X1 == nil || prim.Y1 == nil) {
+			return nil
+		}
+		aux := arcAuxPoint(prim)
+		cmd := Command{
+			Type:        "A",
+			CommandStr:  fmt.Sprintf("A X %s, Y %s, Z %s, I %s, J %s, V %s", g.format(*prim.X2), g.format(*prim.Y2), g.format(g.workZ), g.format(aux.X), g.format(aux.Y), g.format(g.defaultSpeed)),
+			PrimitiveID: prim.ID,
+		}
+		return []Command{cmd}
+
 	case PrimitiveCircle:
-		commands = e.extractCircle(prim, idx)
+		return g.circleToCommands(prim)
+
 	case PrimitiveRectangle:
-		commands = e.extractRectangle(prim, idx)
+		if prim.X == nil || prim.Y == nil || prim.Width == nil || prim.Height == nil {
+			return nil
+		}
+		x, y := *prim.X, *prim.Y
+		w, h := *prim.Width, *prim.Height
+		pts := []geom.Point{
+			{X: x, Y: y},
+			{X: x + w, Y: y},
+			{X: x + w, Y: y + h},
+			{X: x, Y: y + h},
+			{X: x, Y: y},
+		}
+		cmds := make([]Command, 0, 4)
+		for i := 0; i < 4; i++ {
+			cmds = append(cmds, Command{
+				Type:        "L",
+				CommandStr:  fmt.Sprintf("L X %s, Y %s, Z %s, V %s", g.format(pts[i+1].X), g.format(pts[i+1].Y), g.format(g.workZ), g.format(g.defaultSpeed)),
+				PrimitiveID: prim.ID,
+			})
+		}
+		return cmds
+
 	case PrimitivePolygon, PrimitivePolyline:
-		commands = e.extractPolyline(prim, idx)
+		if len(prim.Points) < 2 {
+			return nil
+		}
+		pts := make([]geom.Point, len(prim.Points))
+		copy(pts, prim.Points)
+		closed := prim.Type == PrimitivePolygon || prim.Closed
+		if closed && len(pts) > 2 {
+			pts = append(pts, pts[0])
+		}
+
+		fitted := fitArcsAndLines(pts, 0.5)
+		cmds := make([]Command, 0, len(fitted))
+		for _, seg := range fitted {
+			if seg.Type == "arc" {
+				startAngle := math.Atan2(seg.Y1-seg.Cy, seg.X1-seg.Cx)
+				endAngle := math.Atan2(seg.Y2-seg.Cy, seg.X2-seg.Cx)
+				sweep := endAngle - startAngle
+				if sweep > math.Pi {
+					sweep -= 2 * math.Pi
+				}
+				if sweep < -math.Pi {
+					sweep += 2 * math.Pi
+				}
+				midAngle := startAngle + sweep/2
+				auxX := seg.Cx + seg.R*math.Cos(midAngle)
+				auxY := seg.Cy + seg.R*math.Sin(midAngle)
+
+				cmds = append(cmds, Command{
+					Type:        "A",
+					CommandStr:  fmt.Sprintf("A X %s, Y %s, Z %s, I %s, J %s, V %s", g.format(seg.X2), g.format(seg.Y2), g.format(g.workZ), g.format(auxX), g.format(auxY), g.format(g.defaultSpeed)),
+					PrimitiveID: prim.ID,
+				})
+			} else {
+				cmds = append(cmds, Command{
+					Type:        "L",
+					CommandStr:  fmt.Sprintf("L X %s, Y %s, Z %s, V %s", g.format(seg.X2), g.format(seg.Y2), g.format(g.workZ), g.format(g.defaultSpeed)),
+					PrimitiveID: prim.ID,
+				})
+			}
+		}
+		return cmds
 	}
 
-	return commands
+	return nil
 }
 
-// extractLine generates commands for a line primitive
-func (e *Extractor) extractLine(prim Primitive, idx *int) []Command {
-	if prim.X1 == nil || prim.Y1 == nil || prim.X2 == nil || prim.Y2 == nil {
-		return nil
-	}
-
-	commands := make([]Command, 0, 4)
-
-	// Jump to start at safe Z
-	e.gen.Jump(*prim.X1, *prim.Y1, e.safeZ, e.rapidSpeed)
-	commands = append(commands, e.makeCommand(idx, "J", prim.ID))
-
-	// Optional wait after rapid
-	if e.waitTime > 0 {
-		e.gen.Wait(e.waitTime)
-		commands = append(commands, e.makeCommand(idx, "WAIT", prim.ID))
-	}
-
-	// Plunge to work depth
-	e.gen.Line(*prim.X1, *prim.Y1, e.workZ, e.defaultSpeed)
-	commands = append(commands, e.makeCommand(idx, "L", prim.ID))
-
-	// Cut to end
-	e.gen.Line(*prim.X2, *prim.Y2, e.workZ, e.defaultSpeed)
-	commands = append(commands, e.makeCommand(idx, "L", prim.ID))
-
-	// Retract to safe Z
-	e.gen.Jump(*prim.X2, *prim.Y2, e.safeZ, e.rapidSpeed)
-	commands = append(commands, e.makeCommand(idx, "J", prim.ID))
-
-	return commands
-}
-
-// extractArc generates commands for an arc primitive using A command
-func (e *Extractor) extractArc(prim Primitive, idx *int) []Command {
-	if prim.X1 == nil || prim.Y1 == nil || prim.X2 == nil || prim.Y2 == nil {
-		return nil
-	}
-	if prim.Cx == nil || prim.Cy == nil {
-		return nil
-	}
-
-	start := geom.Point{X: *prim.X1, Y: *prim.Y1}
-	end := geom.Point{X: *prim.X2, Y: *prim.Y2}
-	center := geom.Point{X: *prim.Cx, Y: *prim.Cy}
-
-	// Calculate midpoint on arc for I,J parameters
-	mid := calcArcMidpoint(start, end, center, prim.IsClockwise)
-
-	commands := make([]Command, 0, 5)
-
-	// Jump to start at safe Z
-	e.gen.Jump(start.X, start.Y, e.safeZ, e.rapidSpeed)
-	commands = append(commands, e.makeCommand(idx, "J", prim.ID))
-
-	// Optional wait after rapid
-	if e.waitTime > 0 {
-		e.gen.Wait(e.waitTime)
-		commands = append(commands, e.makeCommand(idx, "WAIT", prim.ID))
-	}
-
-	// Plunge to work depth
-	e.gen.Line(start.X, start.Y, e.workZ, e.defaultSpeed)
-	commands = append(commands, e.makeCommand(idx, "L", prim.ID))
-
-	// Arc to end (I,J = midpoint on arc)
-	e.gen.Arc(end, center, mid, prim.IsClockwise, e.workZ, e.defaultSpeed)
-	commands = append(commands, e.makeCommand(idx, "A", prim.ID))
-
-	// Retract to safe Z
-	e.gen.Jump(end.X, end.Y, e.safeZ, e.rapidSpeed)
-	commands = append(commands, e.makeCommand(idx, "J", prim.ID))
-
-	return commands
-}
-
-// extractCircle generates commands for a circle primitive using 2 arcs (180° each)
-func (e *Extractor) extractCircle(prim Primitive, idx *int) []Command {
+func (g *outputGenerator) circleToCommands(prim Primitive) []Command {
 	cx, cy, r := prim.GetCircleParams()
 	if r <= 0 {
 		return nil
 	}
 
-	commands := make([]Command, 0, 7)
-	center := geom.Point{X: cx, Y: cy}
+	startX := cx + r
+	startY := cy
+	midX := cx - r
+	midY := cy
 
-	// Circle points: right (0°), top (90°), left (180°), bottom (270°)
-	right := geom.Point{X: cx + r, Y: cy}  // 0°
-	top := geom.Point{X: cx, Y: cy + r}    // 90° (midpoint for arc 1)
-	left := geom.Point{X: cx - r, Y: cy}   // 180°
-	bottom := geom.Point{X: cx, Y: cy - r} // 270° (midpoint for arc 2)
+	aux1X := cx
+	aux1Y := cy - r
+	aux2X := cx
+	aux2Y := cy + r
 
-	// Jump to start (rightmost point)
-	e.gen.Jump(right.X, right.Y, e.safeZ, e.rapidSpeed)
-	commands = append(commands, e.makeCommand(idx, "J", prim.ID))
-
-	// Optional wait
-	if e.waitTime > 0 {
-		e.gen.Wait(e.waitTime)
-		commands = append(commands, e.makeCommand(idx, "WAIT", prim.ID))
+	return []Command{
+		{
+			Type:        "A",
+			CommandStr:  fmt.Sprintf("A X %s, Y %s, Z %s, I %s, J %s, V %s", g.format(midX), g.format(midY), g.format(g.workZ), g.format(aux1X), g.format(aux1Y), g.format(g.defaultSpeed)),
+			PrimitiveID: prim.ID,
+		},
+		{
+			Type:        "A",
+			CommandStr:  fmt.Sprintf("A X %s, Y %s, Z %s, I %s, J %s, V %s", g.format(startX), g.format(startY), g.format(g.workZ), g.format(aux2X), g.format(aux2Y), g.format(g.defaultSpeed)),
+			PrimitiveID: prim.ID,
+		},
 	}
-
-	// Plunge
-	e.gen.Line(right.X, right.Y, e.workZ, e.defaultSpeed)
-	commands = append(commands, e.makeCommand(idx, "L", prim.ID))
-
-	// Arc 1: right → left (CCW, top half, midpoint at top)
-	e.gen.Arc(left, center, top, false, e.workZ, e.defaultSpeed)
-	commands = append(commands, e.makeCommand(idx, "A", prim.ID))
-
-	// Arc 2: left → right (CCW, bottom half, midpoint at bottom)
-	e.gen.Arc(right, center, bottom, false, e.workZ, e.defaultSpeed)
-	commands = append(commands, e.makeCommand(idx, "A", prim.ID))
-
-	// Retract
-	e.gen.Jump(right.X, right.Y, e.safeZ, e.rapidSpeed)
-	commands = append(commands, e.makeCommand(idx, "J", prim.ID))
-
-	return commands
 }
 
-// extractRectangle generates commands for a rectangle primitive
-func (e *Extractor) extractRectangle(prim Primitive, idx *int) []Command {
-	if prim.X == nil || prim.Y == nil || prim.Width == nil || prim.Height == nil {
-		return nil
+func (g *outputGenerator) format(v float64) string {
+	if math.IsNaN(v) || math.IsInf(v, 0) {
+		return fmt.Sprintf("%.*f", g.precision, 0.0)
 	}
-
-	x, y := *prim.X, *prim.Y
-	w, h := *prim.Width, *prim.Height
-
-	// Generate 4 corners
-	points := []geom.Point{
-		{X: x, Y: y},
-		{X: x + w, Y: y},
-		{X: x + w, Y: y + h},
-		{X: x, Y: y + h},
-		{X: x, Y: y}, // Close
-	}
-
-	return e.extractPoints(points, true, prim.ID, idx)
+	return fmt.Sprintf("%.*f", g.precision, v)
 }
 
-// extractPolyline generates commands for polygon/polyline primitives
-func (e *Extractor) extractPolyline(prim Primitive, idx *int) []Command {
-	if len(prim.Points) < 2 {
-		return nil
-	}
-
-	points := prim.Points
-	closed := prim.Type == PrimitivePolygon || prim.Closed
-
-	// Close polygon if needed
-	if closed && len(points) > 0 {
-		first := points[0]
-		last := points[len(points)-1]
-		if math.Abs(first.X-last.X) > 0.001 || math.Abs(first.Y-last.Y) > 0.001 {
-			points = append(points, first)
-		}
-	}
-
-	return e.extractPoints(points, closed, prim.ID, idx)
-}
-
-// extractPoints generates commands for a sequence of points
-func (e *Extractor) extractPoints(points []geom.Point, _ bool, primID string, idx *int) []Command {
-	if len(points) < 2 {
-		return nil
-	}
-
-	commands := make([]Command, 0, len(points)+3)
-
-	// Jump to start at safe Z
-	e.gen.Jump(points[0].X, points[0].Y, e.safeZ, e.rapidSpeed)
-	commands = append(commands, e.makeCommand(idx, "J", primID))
-
-	// Optional wait after rapid
-	if e.waitTime > 0 {
-		e.gen.Wait(e.waitTime)
-		commands = append(commands, e.makeCommand(idx, "WAIT", primID))
-	}
-
-	// Plunge to work depth
-	e.gen.Line(points[0].X, points[0].Y, e.workZ, e.defaultSpeed)
-	commands = append(commands, e.makeCommand(idx, "L", primID))
-
-	// Cut through all points
-	for i := 1; i < len(points); i++ {
-		e.gen.Line(points[i].X, points[i].Y, e.workZ, e.defaultSpeed)
-		commands = append(commands, e.makeCommand(idx, "L", primID))
-	}
-
-	// Retract to safe Z
-	last := points[len(points)-1]
-	e.gen.Jump(last.X, last.Y, e.safeZ, e.rapidSpeed)
-	commands = append(commands, e.makeCommand(idx, "J", primID))
-
-	return commands
-}
-
-// makeCommand creates a Command struct and increments the index
-func (e *Extractor) makeCommand(idx *int, cmdType, primID string) Command {
-	cmds := e.gen.String()
-	// Get the last command from the generator
-	lines := splitLines(cmds)
-	lastLine := ""
-	if len(lines) > 0 {
-		lastLine = lines[len(lines)-1]
-	}
-
-	cmd := Command{
-		Index:       *idx,
-		Type:        cmdType,
-		CommandStr:  lastLine,
+func (g *outputGenerator) jumpCommand(x, y, z float64, primID string) Command {
+	return Command{
+		Type:        "J",
+		CommandStr:  fmt.Sprintf("J X %s, Y %s, Z %s, V %s", g.format(x), g.format(y), g.format(z), g.format(g.rapidSpeed)),
 		PrimitiveID: primID,
 	}
-	*idx++
-	return cmd
 }
 
-// splitLines splits a string by newlines
-func splitLines(s string) []string {
-	if s == "" {
-		return nil
+func (g *outputGenerator) lineCommand(x, y, z float64, primID string) Command {
+	return Command{
+		Type:        "L",
+		CommandStr:  fmt.Sprintf("L X %s, Y %s, Z %s, V %s", g.format(x), g.format(y), g.format(z), g.format(g.defaultSpeed)),
+		PrimitiveID: primID,
 	}
-	result := make([]string, 0)
-	start := 0
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\n' {
-			if i > start {
-				result = append(result, s[start:i])
-			}
-			start = i + 1
-		}
-	}
-	if start < len(s) {
-		result = append(result, s[start:])
-	}
-	return result
 }
 
-// calcArcMidpoint calculates the midpoint on the arc for I,J parameters
-func calcArcMidpoint(start, end, center geom.Point, clockwise bool) geom.Point {
-	dx1, dy1 := start.X-center.X, start.Y-center.Y
-	dx2, dy2 := end.X-center.X, end.Y-center.Y
-	radius := math.Sqrt(dx1*dx1 + dy1*dy1)
+func (g *outputGenerator) waitCommand(primID string) Command {
+	return Command{
+		Type:        "WAIT",
+		CommandStr:  fmt.Sprintf("WAIT %d", g.waitTime),
+		PrimitiveID: primID,
+	}
+}
 
-	startAngle := math.Atan2(dy1, dx1)
-	endAngle := math.Atan2(dy2, dx2)
+func primitiveStartXY(prim Primitive) (geom.Point, bool) {
+	switch prim.Type {
+	case PrimitiveCircle:
+		cx, cy, r := prim.GetCircleParams()
+		if r == 0 {
+			return geom.Point{}, false
+		}
+		return geom.Point{X: cx + r, Y: cy}, true
+	case PrimitiveRectangle:
+		if prim.X == nil || prim.Y == nil {
+			return geom.Point{}, false
+		}
+		return geom.Point{X: *prim.X, Y: *prim.Y}, true
+	case PrimitivePolygon, PrimitivePolyline:
+		if len(prim.Points) == 0 {
+			return geom.Point{}, false
+		}
+		return geom.Point{X: prim.Points[0].X, Y: prim.Points[0].Y}, true
+	default:
+		if prim.X1 == nil || prim.Y1 == nil {
+			return geom.Point{}, false
+		}
+		return geom.Point{X: *prim.X1, Y: *prim.Y1}, true
+	}
+}
 
-	// Calculate mid angle
-	var midAngle float64
-	if clockwise {
-		sweep := startAngle - endAngle
-		if sweep <= 0 {
-			sweep += 2 * math.Pi
+func primitiveEndXY(prim Primitive) (geom.Point, bool) {
+	switch prim.Type {
+	case PrimitiveCircle:
+		cx, cy, r := prim.GetCircleParams()
+		if r == 0 {
+			return geom.Point{}, false
 		}
-		midAngle = startAngle - sweep/2
-	} else {
-		sweep := endAngle - startAngle
-		if sweep <= 0 {
-			sweep += 2 * math.Pi
+		return geom.Point{X: cx + r, Y: cy}, true
+	case PrimitiveRectangle:
+		if prim.X == nil || prim.Y == nil {
+			return geom.Point{}, false
 		}
-		midAngle = startAngle + sweep/2
+		return geom.Point{X: *prim.X, Y: *prim.Y}, true
+	case PrimitivePolygon:
+		if len(prim.Points) == 0 {
+			return geom.Point{}, false
+		}
+		return geom.Point{X: prim.Points[0].X, Y: prim.Points[0].Y}, true
+	case PrimitivePolyline:
+		if len(prim.Points) == 0 {
+			return geom.Point{}, false
+		}
+		if prim.Closed {
+			return geom.Point{X: prim.Points[0].X, Y: prim.Points[0].Y}, true
+		}
+		last := prim.Points[len(prim.Points)-1]
+		return geom.Point{X: last.X, Y: last.Y}, true
+	default:
+		if prim.X2 == nil || prim.Y2 == nil {
+			return geom.Point{}, false
+		}
+		return geom.Point{X: *prim.X2, Y: *prim.Y2}, true
+	}
+}
+
+func arcAuxPoint(prim Primitive) geom.Point {
+	if prim.ThroughPoint != nil {
+		return *prim.ThroughPoint
+	}
+	if prim.Cx == nil || prim.Cy == nil || prim.X1 == nil || prim.Y1 == nil {
+		return geom.Point{}
 	}
 
-	return geom.Point{
-		X: center.X + radius*math.Cos(midAngle),
-		Y: center.Y + radius*math.Sin(midAngle),
+	cx, cy := *prim.Cx, *prim.Cy
+	radius := 0.0
+	if prim.Radius != nil {
+		radius = *prim.Radius
+	}
+	if radius == 0 {
+		radius = math.Hypot(*prim.X1-cx, *prim.Y1-cy)
+	}
+
+	startAngle := math.Atan2(*prim.Y1-cy, *prim.X1-cx)
+	if prim.Sweep != nil {
+		midAngle := startAngle + (*prim.Sweep)/2
+		return geom.Point{X: cx + radius*math.Cos(midAngle), Y: cy + radius*math.Sin(midAngle)}
+	}
+
+	return geom.Point{X: cx, Y: cy}
+}
+
+func pushCommand(commands *[]Command, cmd Command) {
+	if len(*commands) > 0 {
+		last := (*commands)[len(*commands)-1]
+		if last.CommandStr == cmd.CommandStr {
+			return
+		}
+	}
+	cmd.Index = len(*commands)
+	*commands = append(*commands, cmd)
+}
+
+func isSupportedPrimitive(t PrimitiveType) bool {
+	switch t {
+	case PrimitiveLine, PrimitiveArc, PrimitiveCircle, PrimitiveRectangle, PrimitivePolygon, PrimitivePolyline:
+		return true
+	default:
+		return false
 	}
 }

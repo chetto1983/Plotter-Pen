@@ -1,470 +1,923 @@
 package importservice
 
 import (
-	"bytes"
-	"fmt"
-	"math"
-	"sort"
-	"strings"
+    "bytes"
+    "fmt"
+    "math"
+    "sort"
+    "strings"
 
-	"github.com/yofu/dxf"
-	"github.com/yofu/dxf/drawing"
-	"github.com/yofu/dxf/entity"
+    "github.com/yofu/dxf"
+    "github.com/yofu/dxf/drawing"
+    "github.com/yofu/dxf/entity"
+    "github.com/yofu/dxf/table"
 )
 
-// Primitive represents a CAD primitive for JSON output
-// Note: Coordinate fields must NOT use omitempty - 0.0 is a valid coordinate!
+// Primitive represents a CAD primitive for JSON output.
+// Coordinate fields must remain, even when zero, to preserve geometry.
 type Primitive struct {
-	Type       string  `json:"type"`
-	ID         string  `json:"id,omitempty"`
-	Layer      string  `json:"layer,omitempty"`
-	StartX     float64 `json:"startX"`
-	StartY     float64 `json:"startY"`
-	EndX       float64 `json:"endX"`
-	EndY       float64 `json:"endY"`
-	CenterX    float64 `json:"centerX"`
-	CenterY    float64 `json:"centerY"`
-	Radius     float64 `json:"radius"`
-	StartAngle float64 `json:"startAngle"`
-	EndAngle   float64 `json:"endAngle"`
-	Points     []Point `json:"points,omitempty"`
-	Closed     bool    `json:"closed,omitempty"`
-	Stroke     string  `json:"stroke,omitempty"`
+    Type         string  `json:"type"`
+    ID           string  `json:"id,omitempty"`
+    Layer        string  `json:"layer,omitempty"`
+    StartX       float64 `json:"startX"`
+    StartY       float64 `json:"startY"`
+    EndX         float64 `json:"endX"`
+    EndY         float64 `json:"endY"`
+    CenterX      float64 `json:"centerX"`
+    CenterY      float64 `json:"centerY"`
+    Radius       float64 `json:"radius"`
+    StartAngle   float64 `json:"startAngle,omitempty"` // degrees (DXF export)
+    EndAngle     float64 `json:"endAngle,omitempty"`   // degrees (DXF export)
+    Sweep        float64 `json:"sweep,omitempty"`      // radians (JS-compatible)
+    ThroughPoint *Point  `json:"throughPoint,omitempty"`
+    Points       []Point `json:"points,omitempty"`
+    Closed       bool    `json:"closed,omitempty"`
+    Stroke       string  `json:"stroke,omitempty"`
+
+    // Rectangle support (frontend compatibility)
+    X      float64 `json:"x,omitempty"`
+    Y      float64 `json:"y,omitempty"`
+    Width  float64 `json:"width,omitempty"`
+    Height float64 `json:"height,omitempty"`
 }
 
-// Point represents a 2D point with optimized JSON output
+// Point represents a 2D point.
 type Point struct {
-	X float64 `json:"x"`
-	Y float64 `json:"y"`
+    X float64 `json:"x"`
+    Y float64 `json:"y"`
 }
 
-// round2 rounds to 2 decimal places (0.01mm precision - sufficient for CAD)
-// Reduces JSON size significantly: 123.45678901234567 -> 123.46
-func round2(v float64) float64 {
-	return math.Round(v*100) / 100
-}
-
-// newPoint creates a point with rounded coordinates
-func newPoint(x, y float64) Point {
-	return Point{X: round2(x), Y: round2(y)}
-}
-
-// Bounds represents bounding box
+// Bounds represents bounding box.
 type Bounds struct {
-	MinX float64 `json:"minX"`
-	MinY float64 `json:"minY"`
-	MaxX float64 `json:"maxX"`
-	MaxY float64 `json:"maxY"`
+    MinX float64 `json:"minX"`
+    MinY float64 `json:"minY"`
+    MaxX float64 `json:"maxX"`
+    MaxY float64 `json:"maxY"`
 }
 
-// ParseResult contains DXF parsing results
+// ParseResult contains DXF parsing results.
 type ParseResult struct {
-	Primitives []Primitive `json:"primitives"`
-	Bounds     *Bounds     `json:"bounds,omitempty"`
-	Stats      ParseStats  `json:"stats"`
+    Primitives []Primitive `json:"primitives"`
+    Bounds     *Bounds     `json:"bounds,omitempty"`
+    Stats      ParseStats  `json:"stats"`
 }
 
-// ParseStats contains parsing statistics
+// ParseStats contains parsing statistics.
 type ParseStats struct {
-	EntityCount int            `json:"entityCount"`
-	ByType      map[string]int `json:"byType"`
-	LayerCount  int            `json:"layerCount"`
+    EntityCount int            `json:"entityCount"`
+    ByType      map[string]int `json:"byType"`
+    LayerCount  int            `json:"layerCount"`
 }
 
-// ImportOptions configures smart import behavior
+// ImportOptions configures smart import behavior.
 type ImportOptions struct {
-	Normalize    bool    `json:"normalize"`
-	CenterOrigin bool    `json:"centerOrigin"`
-	ScaleFactor  float64 `json:"scaleFactor"`
-	ExtractPLC   bool    `json:"extractPLC"`
-	FitArcs      bool    `json:"fitArcs"`      // Convert polyline arcs to arc primitives
-	ArcTolerance float64 `json:"arcTolerance"` // Max deviation for arc fitting (mm)
+    Normalize    bool    `json:"normalize"`
+    CenterOrigin bool    `json:"centerOrigin"`
+    ScaleFactor  float64 `json:"scaleFactor"`
+    ExtractPLC   bool    `json:"extractPLC"`
+    FitArcs      bool    `json:"fitArcs"`
+    ArcTolerance float64 `json:"arcTolerance"`
 }
 
-// SmartImportResult contains enhanced import results
+// SmartImportResult contains enhanced import results.
 type SmartImportResult struct {
-	Primitives []Primitive `json:"primitives"`
-	PLCData    []PLCItem   `json:"plcData,omitempty"`
-	Bounds     *Bounds     `json:"bounds"`
-	Stats      ParseStats  `json:"stats"`
+    Primitives []Primitive `json:"primitives"`
+    PLCData    []PLCItem   `json:"plcData,omitempty"`
+    Bounds     *Bounds     `json:"bounds"`
+    Stats      ParseStats  `json:"stats"`
 }
 
-// PLCItem represents PLC-formatted primitive data
+// PLCItem represents PLC-formatted primitive data.
 type PLCItem struct {
-	Type   string    `json:"type"` // L (line), A (arc), C (circle)
-	Coords []float64 `json:"coords"`
-	Layer  string    `json:"layer,omitempty"`
+    Type   string    `json:"type"` // L (line), A (arc), C (circle)
+    Coords []float64 `json:"coords"`
+    Layer  string    `json:"layer,omitempty"`
 }
 
-// ParseDXF parses DXF content and returns primitives
+type dxfImporter struct {
+    scaleFactor float64
+}
+
+// ParseDXF parses DXF content and returns primitives.
 func ParseDXF(content string) (*ParseResult, error) {
-	d, err := dxf.FromStringData(content)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse DXF: %w", err)
-	}
+    d, err := dxf.FromStringData(content)
+    if err != nil {
+        return nil, fmt.Errorf("failed to parse DXF: %w", err)
+    }
 
-	// Detect units and get scale factor to convert to mm
-	scaleFactor := detectUnitsScale(content)
+    scaleFactor := detectUnitsScale(content)
+    importer := &dxfImporter{scaleFactor: scaleFactor}
 
-	result := &ParseResult{
-		Primitives: make([]Primitive, 0),
-		Stats:      ParseStats{ByType: make(map[string]int)},
-	}
+    result := &ParseResult{
+        Primitives: make([]Primitive, 0),
+        Stats:      ParseStats{ByType: make(map[string]int)},
+    }
 
-	bounds := &Bounds{
-		MinX: math.MaxFloat64, MinY: math.MaxFloat64,
-		MaxX: -math.MaxFloat64, MaxY: -math.MaxFloat64,
-	}
+    bounds := &Bounds{
+        MinX: math.MaxFloat64, MinY: math.MaxFloat64,
+        MaxX: -math.MaxFloat64, MaxY: -math.MaxFloat64,
+    }
 
-	layers := make(map[string]bool)
-	idx := 0
+    layers := make(map[string]bool)
+    idx := 0
 
-	for _, e := range d.Entities() {
-		prims := extractEntity(e, &idx, scaleFactor)
-		for _, p := range prims {
-			// Apply unit conversion (except polylines from splines - already scaled)
-			if scaleFactor != 1.0 {
-				scalePrimitiveInPlace(&p, scaleFactor)
-			}
-			result.Primitives = append(result.Primitives, p)
-			result.Stats.ByType[p.Type]++
-			layers[p.Layer] = true
-			updateBounds(bounds, &p)
-		}
-	}
+    for _, e := range d.Entities() {
+        prims := importer.convertEntity(e, &idx)
+        for i := range prims {
+            p := prims[i]
+            result.Primitives = append(result.Primitives, p)
+            result.Stats.ByType[p.Type]++
+            if p.Layer != "" {
+                layers[p.Layer] = true
+            }
+            updateBounds(bounds, &p)
+        }
+    }
 
-	result.Stats.EntityCount = len(result.Primitives)
-	result.Stats.LayerCount = len(layers)
+    result.Stats.EntityCount = len(result.Primitives)
+    result.Stats.LayerCount = len(layers)
 
-	if result.Stats.EntityCount > 0 {
-		result.Bounds = bounds
-	}
+    if result.Stats.EntityCount > 0 {
+        result.Bounds = bounds
+    }
 
-	return result, nil
+    return result, nil
 }
 
-// SmartImport performs intelligent DXF import with optimizations
+// SmartImport performs intelligent DXF import with optimizations.
 func SmartImport(content string, opts ImportOptions) (*SmartImportResult, error) {
-	parseResult, err := ParseDXF(content)
-	if err != nil {
-		return nil, err
-	}
+    parseResult, err := ParseDXF(content)
+    if err != nil {
+        return nil, err
+    }
 
-	result := &SmartImportResult{
-		Primitives: parseResult.Primitives,
-		Bounds:     parseResult.Bounds,
-		Stats:      parseResult.Stats,
-	}
+    result := &SmartImportResult{
+        Primitives: parseResult.Primitives,
+        Bounds:     parseResult.Bounds,
+        Stats:      parseResult.Stats,
+    }
 
-	if result.Bounds == nil {
-		return result, nil
-	}
+    if result.Bounds == nil {
+        return result, nil
+    }
 
-	if opts.CenterOrigin {
-		centerPrimitives(result.Primitives, result.Bounds)
-		result.Bounds = recalculateBounds(result.Primitives)
-	}
+    if opts.CenterOrigin {
+        centerPrimitives(result.Primitives, result.Bounds)
+        result.Bounds = recalculateBounds(result.Primitives)
+    }
 
-	if opts.ScaleFactor != 0 && opts.ScaleFactor != 1 {
-		scalePrimitives(result.Primitives, opts.ScaleFactor)
-		result.Bounds = recalculateBounds(result.Primitives)
-	}
+    if opts.ScaleFactor != 0 && opts.ScaleFactor != 1 {
+        scalePrimitives(result.Primitives, opts.ScaleFactor)
+        result.Bounds = recalculateBounds(result.Primitives)
+    }
 
-	if opts.Normalize {
-		normalizePrimitives(result.Primitives, result.Bounds)
-		result.Bounds = recalculateBounds(result.Primitives)
-	}
+    if opts.Normalize {
+        normalizePrimitives(result.Primitives, result.Bounds)
+        result.Bounds = recalculateBounds(result.Primitives)
+    }
 
-	result.Primitives = optimizePathOrder(result.Primitives)
+    if opts.ExtractPLC {
+        result.PLCData = extractPLCData(result.Primitives)
+    }
 
-	if opts.ExtractPLC {
-		result.PLCData = extractPLCData(result.Primitives)
-	}
-
-	return result, nil
+    return result, nil
 }
 
-// ExportDXF exports primitives to DXF format
+// ExportDXF exports primitives to DXF format.
 func ExportDXF(primitives []Primitive, version string) (string, error) {
-	d := dxf.NewDrawing()
+    d := dxf.NewDrawing()
 
-	layers := make(map[string]bool)
-	for _, p := range primitives {
-		if p.Layer != "" {
-			layers[p.Layer] = true
-		}
-	}
+    layers := make(map[string]bool)
+    for _, p := range primitives {
+        if p.Layer != "" {
+            layers[p.Layer] = true
+        }
+    }
 
-	for layer := range layers {
-		d.AddLayer(layer, dxf.DefaultColor, dxf.DefaultLineType, true)
-	}
+    for layer := range layers {
+        d.AddLayer(layer, dxf.DefaultColor, dxf.DefaultLineType, true)
+    }
 
-	for _, p := range primitives {
-		if p.Layer != "" {
-			d.ChangeLayer(p.Layer)
-		}
-		addPrimitiveToDrawing(d, p)
-	}
+    for _, p := range primitives {
+        if p.Layer != "" {
+            d.ChangeLayer(p.Layer)
+        }
+        addPrimitiveToDrawing(d, p)
+    }
 
-	var buf bytes.Buffer
-	if _, err := d.WriteTo(&buf); err != nil {
-		return "", fmt.Errorf("failed to write DXF: %w", err)
-	}
+    var buf bytes.Buffer
+    if _, err := d.WriteTo(&buf); err != nil {
+        return "", fmt.Errorf("failed to write DXF: %w", err)
+    }
 
-	return buf.String(), nil
+    return buf.String(), nil
 }
 
-// addPrimitiveToDrawing adds a primitive to DXF drawing
+// addPrimitiveToDrawing adds a primitive to DXF drawing.
 func addPrimitiveToDrawing(d *drawing.Drawing, p Primitive) {
-	switch p.Type {
-	case "line":
-		d.Line(p.StartX, p.StartY, 0, p.EndX, p.EndY, 0)
-	case "circle":
-		d.Circle(p.CenterX, p.CenterY, 0, p.Radius)
-	case "arc":
-		d.Arc(p.CenterX, p.CenterY, 0, p.Radius, p.StartAngle, p.EndAngle)
-	case "polyline":
-		addPolylineToDrawing(d, p)
-	}
+    switch p.Type {
+    case "line":
+        d.Line(p.StartX, p.StartY, 0, p.EndX, p.EndY, 0)
+    case "circle":
+        d.Circle(p.CenterX, p.CenterY, 0, p.Radius)
+    case "arc":
+        startAngle := math.Atan2(p.StartY-p.CenterY, p.StartX-p.CenterX) * 180 / math.Pi
+        endAngle := math.Atan2(p.EndY-p.CenterY, p.EndX-p.CenterX) * 180 / math.Pi
+        if p.Sweep < 0 {
+            startAngle, endAngle = endAngle, startAngle
+        }
+        d.Arc(p.CenterX, p.CenterY, 0, p.Radius, startAngle, endAngle)
+    case "polyline", "polygon":
+        addPolylineToDrawing(d, p)
+    }
 }
 
-// addPolylineToDrawing adds polyline as connected lines
+// addPolylineToDrawing adds polyline as connected lines.
 func addPolylineToDrawing(d *drawing.Drawing, p Primitive) {
-	if len(p.Points) < 2 {
-		return
-	}
-	for i := 0; i < len(p.Points)-1; i++ {
-		d.Line(p.Points[i].X, p.Points[i].Y, 0, p.Points[i+1].X, p.Points[i+1].Y, 0)
-	}
-	if p.Closed && len(p.Points) > 2 {
-		last := len(p.Points) - 1
-		d.Line(p.Points[last].X, p.Points[last].Y, 0, p.Points[0].X, p.Points[0].Y, 0)
-	}
+    if len(p.Points) < 2 {
+        return
+    }
+    for i := 0; i < len(p.Points)-1; i++ {
+        d.Line(p.Points[i].X, p.Points[i].Y, 0, p.Points[i+1].X, p.Points[i+1].Y, 0)
+    }
+    if p.Closed && len(p.Points) > 2 {
+        last := len(p.Points) - 1
+        d.Line(p.Points[last].X, p.Points[last].Y, 0, p.Points[0].X, p.Points[0].Y, 0)
+    }
 }
 
-// extractEntity converts DXF entity to primitives
-func extractEntity(e entity.Entity, idx *int, scaleFactor float64) []Primitive {
-	var prims []Primitive
+func (i *dxfImporter) convertEntity(e entity.Entity, idx *int) []Primitive {
+    switch ent := e.(type) {
+    case *entity.Line:
+        start := i.toModelPoint(ent.Start[0], ent.Start[1])
+        end := i.toModelPoint(ent.End[0], ent.End[1])
+        return []Primitive{newLinePrimitive(start, end, layerName(ent), nextID(idx))}
 
-	switch ent := e.(type) {
-	case *entity.Line:
-		*idx++
-		prims = append(prims, Primitive{
-			Type: "line", ID: fmt.Sprintf("dxf_%d", *idx), Layer: ent.Layer().Name(),
-			StartX: round2(ent.Start[0]), StartY: round2(ent.Start[1]),
-			EndX: round2(ent.End[0]), EndY: round2(ent.End[1]),
-		})
+    case *entity.Circle:
+        center := i.toModelPoint(ent.Center[0], ent.Center[1])
+        prim := Primitive{
+            Type:    "circle",
+            ID:      nextID(idx),
+            Layer:   layerName(ent),
+            CenterX: center.X,
+            CenterY: center.Y,
+            Radius:  ent.Radius * i.scaleFactor,
+        }
+        return []Primitive{prim}
 
-	case *entity.Circle:
-		*idx++
-		prims = append(prims, Primitive{
-			Type: "circle", ID: fmt.Sprintf("dxf_%d", *idx), Layer: ent.Layer().Name(),
-			CenterX: round2(ent.Center[0]), CenterY: round2(ent.Center[1]), Radius: round2(ent.Radius),
-		})
+    case *entity.Arc:
+        cx, cy, r := ent.Center[0], ent.Center[1], ent.Radius
+        startRad := ent.Angle[0] * (math.Pi / 180)
+        endRad := ent.Angle[1] * (math.Pi / 180)
+        sweep := endRad - startRad
+        if sweep < 0 {
+            sweep += math.Pi * 2
+        }
+        midRad := startRad + sweep/2
 
-	case *entity.Arc:
-		*idx++
-		// Calculate start and end points from center, radius, and angles
-		cx, cy, r := ent.Center[0], ent.Center[1], ent.Radius
-		startAngle, endAngle := ent.Angle[0], ent.Angle[1]
-		startX := cx + r*math.Cos(startAngle*math.Pi/180)
-		startY := cy + r*math.Sin(startAngle*math.Pi/180)
-		endX := cx + r*math.Cos(endAngle*math.Pi/180)
-		endY := cy + r*math.Sin(endAngle*math.Pi/180)
+        start := i.toModelPoint(cx+r*math.Cos(startRad), cy+r*math.Sin(startRad))
+        mid := i.toModelPoint(cx+r*math.Cos(midRad), cy+r*math.Sin(midRad))
+        end := i.toModelPoint(cx+r*math.Cos(endRad), cy+r*math.Sin(endRad))
 
-		prims = append(prims, Primitive{
-			Type: "arc", ID: fmt.Sprintf("dxf_%d", *idx), Layer: ent.Layer().Name(),
-			StartX: round2(startX), StartY: round2(startY),
-			EndX: round2(endX), EndY: round2(endY),
-			CenterX: round2(cx), CenterY: round2(cy),
-			Radius:     round2(r),
-			StartAngle: round2(startAngle), EndAngle: round2(endAngle),
-		})
+        arc := arcFromThreePoints(start, mid, end)
+        if arc == nil {
+            center := i.toModelPoint(cx, cy)
+            arc = newArcPrimitive(start, end, center, nil)
+        }
+        arc.ID = nextID(idx)
+        arc.Layer = layerName(ent)
+        return []Primitive{*arc}
 
-	case *entity.LwPolyline:
-		*idx++
-		points := make([]Point, len(ent.Vertices))
-		for i, v := range ent.Vertices {
-			points[i] = newPoint(v[0], v[1])
-		}
-		prims = append(prims, Primitive{
-			Type: "polyline", ID: fmt.Sprintf("dxf_%d", *idx), Layer: ent.Layer().Name(),
-			Points: points, Closed: ent.Closed,
-		})
+    case *entity.LwPolyline:
+        if len(ent.Vertices) < 2 {
+            return nil
+        }
+        points := make([]Point, len(ent.Vertices))
+        for i2, v := range ent.Vertices {
+            points[i2] = i.toModelPoint(v[0], v[1])
+        }
+        closed := ent.Closed
+        primType := "polyline"
+        if closed {
+            primType = "polygon"
+        }
+        prim := Primitive{
+            Type:   primType,
+            ID:     nextID(idx),
+            Layer:  layerName(ent),
+            Points: points,
+            Closed: closed,
+        }
+        return []Primitive{prim}
 
-	case *entity.Polyline:
-		*idx++
-		points := make([]Point, len(ent.Vertices))
-		for i, v := range ent.Vertices {
-			points[i] = newPoint(v.Coord[0], v.Coord[1])
-		}
-		closed := (ent.Flag & 1) != 0
-		prims = append(prims, Primitive{
-			Type: "polyline", ID: fmt.Sprintf("dxf_%d", *idx), Layer: ent.Layer().Name(),
-			Points: points, Closed: closed,
-		})
+    case *entity.Polyline:
+        if len(ent.Vertices) < 2 {
+            return nil
+        }
+        points := make([]Point, len(ent.Vertices))
+        for i2, v := range ent.Vertices {
+            points[i2] = i.toModelPoint(v.Coord[0], v.Coord[1])
+        }
+        closed := (ent.Flag & 1) != 0
+        primType := "polyline"
+        if closed {
+            primType = "polygon"
+        }
+        prim := Primitive{
+            Type:   primType,
+            ID:     nextID(idx),
+            Layer:  layerName(ent),
+            Points: points,
+            Closed: closed,
+        }
+        return []Primitive{prim}
 
-	case *entity.Spline:
-		*idx++
-		// Tessellate B-spline curve using proven De Boor algorithm
-		var points []Point
-		if len(ent.Controls) >= 2 {
-			numSamples := calculateSplineSamplesWithScale(ent.Controls, scaleFactor)
-			rawPoints := evaluateBSpline(ent.Controls, ent.Knots, ent.Degree, numSamples)
+    case *entity.Spline:
+        return i.convertSpline(ent, idx)
+    }
 
-			// Don't scale here - will be scaled with all other primitives at line 127
-			points = make([]Point, len(rawPoints))
-			for i, p := range rawPoints {
-				points[i] = newPoint(p.X, p.Y)
-			}
-		} else if len(ent.Fits) >= 2 {
-			// Fallback: use fit points if control points unavailable
-			points = make([]Point, len(ent.Fits))
-			for i, f := range ent.Fits {
-				points[i] = newPoint(f[0], f[1])
-			}
-		}
-
-		if len(points) >= 2 {
-			closed := (ent.Flag & 1) != 0
-			prims = append(prims, Primitive{
-				Type:   "polyline",
-				ID:     fmt.Sprintf("dxf_%d", *idx),
-				Layer:  ent.Layer().Name(),
-				Points: points,
-				Closed: closed,
-			})
-		}
-	}
-
-	return prims
+    return nil
 }
 
-// updateBounds updates bounding box with primitive
+func (i *dxfImporter) convertSpline(ent *entity.Spline, idx *int) []Primitive {
+    degree := ent.Degree
+    if degree <= 0 {
+        degree = 3
+    }
+
+    controls := ent.Controls
+    if len(controls) < degree+1 {
+        if len(ent.Fits) >= degree+1 {
+            controls = ent.Fits
+        } else {
+            return nil
+        }
+    }
+
+    controlPoints := make([][]float64, len(controls))
+    for j, p := range controls {
+        controlPoints[j] = []float64{p[0], p[1]}
+    }
+
+    knots := ent.Knots
+    minT, maxT := 0.0, 1.0
+    if len(knots) > 0 && degree < len(knots) {
+        minT = knots[degree]
+        maxIndex := len(knots) - 1 - degree
+        if maxIndex >= 0 && maxIndex < len(knots) {
+            maxT = knots[maxIndex]
+        }
+    }
+
+    points := make([]Point, 0, 801)
+    failed := false
+    samples := 800
+    for j := 0; j <= samples; j++ {
+        t := minT + (float64(j)/float64(samples))*(maxT-minT)
+        pt, err := bSpline(t, degree, controlPoints, knots)
+        if err != nil {
+            failed = true
+            break
+        }
+        points = append(points, i.toModelPoint(pt.X, pt.Y))
+    }
+
+    layer := layerName(ent)
+    if failed {
+        fallback := make([]Point, len(controls))
+        for j, p := range controls {
+            fallback[j] = i.toModelPoint(p[0], p[1])
+        }
+        prim := Primitive{Type: "polyline", ID: nextID(idx), Layer: layer, Points: fallback}
+        return []Primitive{prim}
+    }
+
+    if len(points) < 2 {
+        return nil
+    }
+
+    closed := (ent.Flag & 1) != 0
+    if closed {
+        if circle := detectCircle(points); circle != nil {
+            prim := Primitive{
+                Type:    "circle",
+                ID:      nextID(idx),
+                Layer:   layer,
+                CenterX: circle.Cx,
+                CenterY: circle.Cy,
+                Radius:  circle.R,
+            }
+            return []Primitive{prim}
+        }
+
+        fitted := fitArcsToPoints(points)
+        if len(fitted) > 0 && len(fitted) < len(points)/2 {
+            for j := range fitted {
+                fitted[j].ID = nextID(idx)
+                fitted[j].Layer = layer
+            }
+
+            first := fitted[0]
+            last := fitted[len(fitted)-1]
+            start := primitiveStartPoint(&first)
+            end := primitiveEndPoint(&last)
+            gap := distance(start, end)
+            if gap > 0.1 {
+                fitted = append(fitted, newLinePrimitive(end, start, layer, nextID(idx)))
+            }
+            return fitted
+        }
+
+        simplified := simplifyPoints(points, 0.02)
+        prim := Primitive{Type: "polygon", ID: nextID(idx), Layer: layer, Points: simplified, Closed: true}
+        return []Primitive{prim}
+    }
+
+    simplified := simplifyPoints(points, 0.02)
+    prim := Primitive{Type: "polyline", ID: nextID(idx), Layer: layer, Points: simplified}
+    return []Primitive{prim}
+}
+
+func (i *dxfImporter) toModelPoint(x, y float64) Point {
+    return Point{X: x * i.scaleFactor, Y: y * i.scaleFactor}
+}
+
+func nextID(idx *int) string {
+    *idx += 1
+    return fmt.Sprintf("dxf_%d", *idx)
+}
+
+func layerName(ent interface{ Layer() *table.Layer }) string {
+    if ent == nil {
+        return ""
+    }
+    layer := ent.Layer()
+    if layer == nil {
+        return ""
+    }
+    return layer.Name()
+}
+
+// updateBounds updates bounding box with primitive.
 func updateBounds(b *Bounds, p *Primitive) {
-	switch p.Type {
-	case "line":
-		b.MinX = min(b.MinX, p.StartX, p.EndX)
-		b.MinY = min(b.MinY, p.StartY, p.EndY)
-		b.MaxX = max(b.MaxX, p.StartX, p.EndX)
-		b.MaxY = max(b.MaxY, p.StartY, p.EndY)
-	case "circle", "arc":
-		b.MinX = min(b.MinX, p.CenterX-p.Radius)
-		b.MinY = min(b.MinY, p.CenterY-p.Radius)
-		b.MaxX = max(b.MaxX, p.CenterX+p.Radius)
-		b.MaxY = max(b.MaxY, p.CenterY+p.Radius)
-	case "polyline":
-		for _, pt := range p.Points {
-			b.MinX = min(b.MinX, pt.X)
-			b.MinY = min(b.MinY, pt.Y)
-			b.MaxX = max(b.MaxX, pt.X)
-			b.MaxY = max(b.MaxY, pt.Y)
-		}
-	}
+    switch p.Type {
+    case "line":
+        b.MinX = min(b.MinX, p.StartX, p.EndX)
+        b.MinY = min(b.MinY, p.StartY, p.EndY)
+        b.MaxX = max(b.MaxX, p.StartX, p.EndX)
+        b.MaxY = max(b.MaxY, p.StartY, p.EndY)
+    case "circle":
+        b.MinX = min(b.MinX, p.CenterX-p.Radius)
+        b.MinY = min(b.MinY, p.CenterY-p.Radius)
+        b.MaxX = max(b.MaxX, p.CenterX+p.Radius)
+        b.MaxY = max(b.MaxY, p.CenterY+p.Radius)
+    case "arc":
+        minX, minY, maxX, maxY := arcBounds(p)
+        b.MinX = min(b.MinX, minX)
+        b.MinY = min(b.MinY, minY)
+        b.MaxX = max(b.MaxX, maxX)
+        b.MaxY = max(b.MaxY, maxY)
+    case "polyline", "polygon":
+        for _, pt := range p.Points {
+            b.MinX = min(b.MinX, pt.X)
+            b.MinY = min(b.MinY, pt.Y)
+            b.MaxX = max(b.MaxX, pt.X)
+            b.MaxY = max(b.MaxY, pt.Y)
+        }
+    }
 }
 
-// ValidateContent checks if content looks like valid DXF
+// ValidateContent checks if content looks like valid DXF.
 func ValidateContent(content string) bool {
-	return strings.Contains(content, "SECTION") &&
-		strings.Contains(content, "ENDSEC") &&
-		strings.Contains(content, "EOF")
+    return strings.Contains(content, "SECTION") &&
+        strings.Contains(content, "ENDSEC") &&
+        strings.Contains(content, "EOF")
 }
 
-// GetLayerNames returns sorted list of layer names
+// GetLayerNames returns sorted list of layer names.
 func GetLayerNames(prims []Primitive) []string {
-	layers := make(map[string]bool)
-	for _, p := range prims {
-		layer := p.Layer
-		if layer == "" {
-			layer = "0"
-		}
-		layers[layer] = true
-	}
-	names := make([]string, 0, len(layers))
-	for name := range layers {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names
+    layers := make(map[string]bool)
+    for _, p := range prims {
+        layer := p.Layer
+        if layer == "" {
+            layer = "0"
+        }
+        layers[layer] = true
+    }
+    names := make([]string, 0, len(layers))
+    for name := range layers {
+        names = append(names, name)
+    }
+    sort.Strings(names)
+    return names
 }
 
-// GetSupportedFormats returns supported DXF versions
+// GetSupportedFormats returns supported DXF versions.
 func GetSupportedFormats() []string {
-	return []string{"AC2000"}
+    return []string{"AC2000"}
 }
 
-// detectUnitsScale parses DXF content to detect units and returns scale factor to mm
+// detectUnitsScale parses DXF content to detect units and returns scale factor to mm.
 func detectUnitsScale(content string) float64 {
-	// Look for $INSUNITS in the header
-	// $INSUNITS values: 0=Unitless, 1=Inches, 2=Feet, 3=Miles, 4=Millimeters, 5=Centimeters, 6=Meters
-	idx := strings.Index(content, "$INSUNITS")
-	if idx == -1 {
-		return 1.0 // Default: assume mm
-	}
+    idx := strings.Index(content, "$INSUNITS")
+    if idx == -1 {
+        return 1.0
+    }
 
-	// Find the 70 code value after $INSUNITS
-	sub := content[idx:]
-	lines := strings.Split(sub, "\n")
-	for i, line := range lines {
-		if strings.TrimSpace(line) == "70" && i+1 < len(lines) {
-			var units int
-			if _, err := fmt.Sscanf(strings.TrimSpace(lines[i+1]), "%d", &units); err == nil {
-				switch units {
-				case 1: // Inches
-					return 25.4
-				case 2: // Feet
-					return 304.8
-				case 5: // Centimeters
-					return 10.0
-				case 6: // Meters
-					return 1000.0
-				case 4: // Millimeters
-					return 1.0
-				default:
-					return 1.0
-				}
-			}
-			break
-		}
-	}
-	return 1.0
+    sub := content[idx:]
+    lines := strings.Split(sub, "\n")
+    for i, line := range lines {
+        if strings.TrimSpace(line) == "70" && i+1 < len(lines) {
+            var units int
+            if _, err := fmt.Sscanf(strings.TrimSpace(lines[i+1]), "%d", &units); err == nil {
+                switch units {
+                case 1:
+                    return 25.4
+                case 2:
+                    return 304.8
+                case 5:
+                    return 10.0
+                case 6:
+                    return 1000.0
+                case 4:
+                    return 1.0
+                default:
+                    return 1.0
+                }
+            }
+            break
+        }
+    }
+    return 1.0
 }
 
-// scalePrimitiveInPlace scales a primitive's coordinates in place with rounding
-func scalePrimitiveInPlace(p *Primitive, factor float64) {
-	switch p.Type {
-	case "line":
-		p.StartX = round2(p.StartX * factor)
-		p.StartY = round2(p.StartY * factor)
-		p.EndX = round2(p.EndX * factor)
-		p.EndY = round2(p.EndY * factor)
-	case "circle", "arc":
-		p.CenterX = round2(p.CenterX * factor)
-		p.CenterY = round2(p.CenterY * factor)
-		p.Radius = round2(p.Radius * factor)
-	case "polyline":
-		for i := range p.Points {
-			p.Points[i].X = round2(p.Points[i].X * factor)
-			p.Points[i].Y = round2(p.Points[i].Y * factor)
-		}
-	}
+func arcBounds(p *Primitive) (float64, float64, float64, float64) {
+    start := Point{X: p.StartX, Y: p.StartY}
+    end := Point{X: p.EndX, Y: p.EndY}
+    center := Point{X: p.CenterX, Y: p.CenterY}
+
+    radius := p.Radius
+    if radius == 0 {
+        radius = distance(start, center)
+    }
+
+    startAngle := math.Atan2(start.Y-center.Y, start.X-center.X)
+    endAngle := math.Atan2(end.Y-center.Y, end.X-center.X)
+    sweep := p.Sweep
+    if sweep == 0 {
+        sweep = calcSweep(startAngle, endAngle, center, p.ThroughPoint)
+    }
+
+    minX := min(start.X, end.X)
+    minY := min(start.Y, end.Y)
+    maxX := max(start.X, end.X)
+    maxY := max(start.Y, end.Y)
+
+    angles := []float64{0, math.Pi / 2, math.Pi, -math.Pi / 2}
+    for _, angle := range angles {
+        if angleInArc(angle, startAngle, sweep) {
+            x := center.X + radius*math.Cos(angle)
+            y := center.Y + radius*math.Sin(angle)
+            minX = min(minX, x)
+            minY = min(minY, y)
+            maxX = max(maxX, x)
+            maxY = max(maxY, y)
+        }
+    }
+
+    return minX, minY, maxX, maxY
 }
 
-// recalculateStats recalculates statistics after arc fitting
+func angleInArc(angle, startAngle, sweep float64) bool {
+    start := normalizeAngle(startAngle)
+    end := normalizeAngle(startAngle + sweep)
+    angle = normalizeAngle(angle)
+
+    if sweep >= 0 {
+        if start <= end {
+            return angle >= start && angle <= end
+        }
+        return angle >= start || angle <= end
+    }
+
+    if end <= start {
+        return angle <= start && angle >= end
+    }
+    return angle <= start || angle >= end
+}
+
+func normalizeAngle(angle float64) float64 {
+    angle = math.Mod(angle, 2*math.Pi)
+    if angle < 0 {
+        angle += 2 * math.Pi
+    }
+    return angle
+}
+
+func calcSweep(startAngle, endAngle float64, center Point, through *Point) float64 {
+    sweep := endAngle - startAngle
+    if through != nil {
+        throughAngle := math.Atan2(through.Y-center.Y, through.X-center.X)
+        normStart := normalizeAngle(startAngle)
+        normEnd := normalizeAngle(endAngle)
+        normThrough := normalizeAngle(throughAngle)
+
+        throughRel := normalizeAngle(normThrough - normStart)
+        endRel := normalizeAngle(normEnd - normStart)
+
+        if throughRel < endRel && throughRel > 0 {
+            for sweep < 0 {
+                sweep += 2 * math.Pi
+            }
+            if sweep > 2*math.Pi-1e-6 {
+                sweep -= 2 * math.Pi
+            }
+        } else {
+            for sweep > 0 {
+                sweep -= 2 * math.Pi
+            }
+            if sweep < -2*math.Pi+1e-6 {
+                sweep += 2 * math.Pi
+            }
+        }
+        return sweep
+    }
+
+    if sweep > math.Pi {
+        sweep -= 2 * math.Pi
+    }
+    if sweep < -math.Pi {
+        sweep += 2 * math.Pi
+    }
+
+    return sweep
+}
+
+type circleFit struct {
+    Cx float64
+    Cy float64
+    R  float64
+}
+
+func circleFromThreePoints(p1, p2, p3 Point) *circleFit {
+    d := 2*(p1.X*(p2.Y-p3.Y) + p2.X*(p3.Y-p1.Y) + p3.X*(p1.Y-p2.Y))
+    if math.Abs(d) < 1e-6 {
+        return nil
+    }
+
+    p1Sq := p1.X*p1.X + p1.Y*p1.Y
+    p2Sq := p2.X*p2.X + p2.Y*p2.Y
+    p3Sq := p3.X*p3.X + p3.Y*p3.Y
+
+    cx := (p1Sq*(p2.Y-p3.Y) + p2Sq*(p3.Y-p1.Y) + p3Sq*(p1.Y-p2.Y)) / d
+    cy := (p1Sq*(p3.X-p2.X) + p2Sq*(p1.X-p3.X) + p3Sq*(p2.X-p1.X)) / d
+    r := math.Sqrt((p1.X-cx)*(p1.X-cx) + (p1.Y-cy)*(p1.Y-cy))
+
+    if !isFinite(r) || r < 1e-6 {
+        return nil
+    }
+
+    return &circleFit{Cx: cx, Cy: cy, R: r}
+}
+
+func arcFromThreePoints(start, through, end Point) *Primitive {
+    circle := circleFromThreePoints(start, through, end)
+    if circle == nil {
+        return nil
+    }
+    center := Point{X: circle.Cx, Y: circle.Cy}
+    return newArcPrimitive(start, end, center, &through)
+}
+
+func newLinePrimitive(start, end Point, layer, id string) Primitive {
+    return Primitive{
+        Type:   "line",
+        ID:     id,
+        Layer:  layer,
+        StartX: start.X,
+        StartY: start.Y,
+        EndX:   end.X,
+        EndY:   end.Y,
+    }
+}
+
+func newArcPrimitive(start, end, center Point, through *Point) *Primitive {
+    radius := distance(start, center)
+    startAngle := math.Atan2(start.Y-center.Y, start.X-center.X)
+    endAngle := math.Atan2(end.Y-center.Y, end.X-center.X)
+    sweep := calcSweep(startAngle, endAngle, center, through)
+
+    return &Primitive{
+        Type:         "arc",
+        StartX:       start.X,
+        StartY:       start.Y,
+        EndX:         end.X,
+        EndY:         end.Y,
+        CenterX:      center.X,
+        CenterY:      center.Y,
+        Radius:       radius,
+        StartAngle:   startAngle * 180 / math.Pi,
+        EndAngle:     endAngle * 180 / math.Pi,
+        Sweep:        sweep,
+        ThroughPoint: through,
+    }
+}
+
+func primitiveStartPoint(p *Primitive) Point {
+    switch p.Type {
+    case "circle":
+        return Point{X: p.CenterX + p.Radius, Y: p.CenterY}
+    case "polygon", "polyline":
+        if len(p.Points) > 0 {
+            return p.Points[0]
+        }
+    default:
+        return Point{X: p.StartX, Y: p.StartY}
+    }
+    return Point{}
+}
+
+func primitiveEndPoint(p *Primitive) Point {
+    switch p.Type {
+    case "circle":
+        return Point{X: p.CenterX + p.Radius, Y: p.CenterY}
+    case "polygon":
+        if len(p.Points) > 0 {
+            return p.Points[0]
+        }
+    case "polyline":
+        if len(p.Points) > 0 {
+            if p.Closed {
+                return p.Points[0]
+            }
+            return p.Points[len(p.Points)-1]
+        }
+    default:
+        return Point{X: p.EndX, Y: p.EndY}
+    }
+    return Point{}
+}
+
+func fitArcsToPoints(points []Point) []Primitive {
+    tolerance := 0.05
+    result := []Primitive{}
+
+    i := 0
+    for i < len(points)-1 {
+        bestArcEnd := -1
+        var bestCircle *circleFit
+
+        if i+2 < len(points) {
+            for j := i + 2; j < len(points) && j < i+350; j++ {
+                mid := (i + j) / 2
+                circle := circleFromThreePoints(points[i], points[mid], points[j])
+                if circle == nil || circle.R < 0.005 || circle.R > 1000000 {
+                    continue
+                }
+
+                fits := true
+                for k := i; k <= j; k++ {
+                    dist := distance(points[k], Point{X: circle.Cx, Y: circle.Cy})
+                    if math.Abs(dist-circle.R) > tolerance {
+                        fits = false
+                        break
+                    }
+                }
+
+                if fits {
+                    bestArcEnd = j
+                    bestCircle = circle
+                }
+            }
+        }
+
+        if bestArcEnd > i+1 && bestCircle != nil {
+            midIdx := (i + bestArcEnd) / 2
+            through := points[midIdx]
+            arc := newArcPrimitive(points[i], points[bestArcEnd], Point{X: bestCircle.Cx, Y: bestCircle.Cy}, &through)
+            result = append(result, *arc)
+            i = bestArcEnd
+            continue
+        }
+
+        lineEnd := i + 1
+        for j := i + 2; j < len(points) && j < i+120; j++ {
+            fits := true
+            start := points[i]
+            end := points[j]
+
+            for k := i + 1; k < j; k++ {
+                dist := pointToSegmentDistance(points[k], start, end)
+                if dist > tolerance {
+                    fits = false
+                    break
+                }
+            }
+
+            if fits {
+                lineEnd = j
+            } else {
+                break
+            }
+        }
+
+        result = append(result, newLinePrimitive(points[i], points[lineEnd], "", ""))
+        i = lineEnd
+    }
+
+    return result
+}
+
+func detectCircle(points []Point) *circleFit {
+    if len(points) < 10 {
+        return nil
+    }
+
+    p1 := points[0]
+    p2 := points[len(points)/3]
+    p3 := points[len(points)*2/3]
+
+    circle := circleFromThreePoints(p1, p2, p3)
+    if circle == nil {
+        return nil
+    }
+    if circle.R < 0.01 || circle.R > 500000 {
+        return nil
+    }
+
+    tolerance := circle.R * 0.01
+    for _, p := range points {
+        dist := distance(p, Point{X: circle.Cx, Y: circle.Cy})
+        if math.Abs(dist-circle.R) > tolerance {
+            return nil
+        }
+    }
+
+    return circle
+}
+
+func simplifyPoints(points []Point, epsilon float64) []Point {
+    if len(points) <= 2 {
+        return points
+    }
+
+    dmax := 0.0
+    index := 0
+    end := len(points) - 1
+
+    for i := 1; i < end; i++ {
+        d := pointToSegmentDistance(points[i], points[0], points[end])
+        if d > dmax {
+            dmax = d
+            index = i
+        }
+    }
+
+    if dmax > epsilon {
+        left := simplifyPoints(points[:index+1], epsilon)
+        right := simplifyPoints(points[index:], epsilon)
+        return append(left[:len(left)-1], right...)
+    }
+
+    return []Point{points[0], points[end]}
+}
+
+func pointToSegmentDistance(pt, lineStart, lineEnd Point) float64 {
+    dx := lineEnd.X - lineStart.X
+    dy := lineEnd.Y - lineStart.Y
+    lenSq := dx*dx + dy*dy
+    if lenSq < 1e-6 {
+        return distance(pt, lineStart)
+    }
+    t := ((pt.X-lineStart.X)*dx + (pt.Y-lineStart.Y)*dy) / lenSq
+    if t < 0 {
+        t = 0
+    } else if t > 1 {
+        t = 1
+    }
+    proj := Point{X: lineStart.X + t*dx, Y: lineStart.Y + t*dy}
+    return distance(pt, proj)
+}
+
+func isFinite(v float64) bool {
+    return !math.IsNaN(v) && !math.IsInf(v, 0)
+}
+
+// recalculateStats recalculates statistics after arc fitting.
 func recalculateStats(primitives []Primitive) ParseStats {
-	stats := ParseStats{
-		EntityCount: len(primitives),
-		ByType:      make(map[string]int),
-	}
+    stats := ParseStats{
+        EntityCount: len(primitives),
+        ByType:      make(map[string]int),
+    }
 
-	layers := make(map[string]bool)
-	for _, p := range primitives {
-		stats.ByType[p.Type]++
-		if p.Layer != "" {
-			layers[p.Layer] = true
-		}
-	}
-	stats.LayerCount = len(layers)
+    layers := make(map[string]bool)
+    for _, p := range primitives {
+        stats.ByType[p.Type]++
+        if p.Layer != "" {
+            layers[p.Layer] = true
+        }
+    }
+    stats.LayerCount = len(layers)
 
-	return stats
+    return stats
 }

@@ -260,8 +260,8 @@ func TestUpdateBoundsFromCircle(t *testing.T) {
 func TestCreatePolylinePrimitive(t *testing.T) {
 	points := []Point{{X: 0, Y: 0}, {X: 10, Y: 10}}
 	prim := createPolylinePrimitive(points, true, 42)
-	if prim.Type != "polyline" {
-		t.Error("Type should be polyline")
+	if prim.Type != "polygon" {
+		t.Error("Type should be polygon")
 	}
 	if prim.ID != "svg_42" {
 		t.Errorf("ID should be svg_42, got %s", prim.ID)
