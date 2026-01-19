@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"math"
-	"plotter-pen/pkg/biarc"
 	"sort"
 	"strings"
 
@@ -16,16 +15,16 @@ import (
 // Primitive represents a CAD primitive for JSON output
 // Note: Coordinate fields must NOT use omitempty - 0.0 is a valid coordinate!
 type Primitive struct {
-	Type                string  `json:"type"`
-	ID                  string  `json:"id,omitempty"`
-	Layer               string  `json:"layer,omitempty"`
-	StartX              float64 `json:"startX"`
-	StartY              float64 `json:"startY"`
-	EndX                float64 `json:"endX"`
-	EndY                float64 `json:"endY"`
-	CenterX             float64 `json:"centerX"`
-	CenterY             float64 `json:"centerY"`
-	Radius              float64 `json:"radius"`
+	Type       string  `json:"type"`
+	ID         string  `json:"id,omitempty"`
+	Layer      string  `json:"layer,omitempty"`
+	StartX     float64 `json:"startX"`
+	StartY     float64 `json:"startY"`
+	EndX       float64 `json:"endX"`
+	EndY       float64 `json:"endY"`
+	CenterX    float64 `json:"centerX"`
+	CenterY    float64 `json:"centerY"`
+	Radius     float64 `json:"radius"`
 	StartAngle float64 `json:"startAngle"`
 	EndAngle   float64 `json:"endAngle"`
 	Points     []Point `json:"points,omitempty"`
@@ -178,7 +177,6 @@ func SmartImport(content string, opts ImportOptions) (*SmartImportResult, error)
 
 	result.Primitives = optimizePathOrder(result.Primitives)
 
-
 	if opts.ExtractPLC {
 		result.PLCData = extractPLCData(result.Primitives)
 	}
@@ -279,7 +277,7 @@ func extractEntity(e entity.Entity, idx *int, scaleFactor float64) []Primitive {
 			StartX: round2(startX), StartY: round2(startY),
 			EndX: round2(endX), EndY: round2(endY),
 			CenterX: round2(cx), CenterY: round2(cy),
-			Radius: round2(r),
+			Radius:     round2(r),
 			StartAngle: round2(startAngle), EndAngle: round2(endAngle),
 		})
 
@@ -330,11 +328,11 @@ func extractEntity(e entity.Entity, idx *int, scaleFactor float64) []Primitive {
 		if len(points) >= 2 {
 			closed := (ent.Flag & 1) != 0
 			prims = append(prims, Primitive{
-				Type:                "polyline",
-				ID:                  fmt.Sprintf("dxf_%d", *idx),
-				Layer:               ent.Layer().Name(),
-				Points:              points,
-				Closed:              closed,
+				Type:   "polyline",
+				ID:     fmt.Sprintf("dxf_%d", *idx),
+				Layer:  ent.Layer().Name(),
+				Points: points,
+				Closed: closed,
 			})
 		}
 	}
@@ -451,7 +449,6 @@ func scalePrimitiveInPlace(p *Primitive, factor float64) {
 		}
 	}
 }
-
 
 // recalculateStats recalculates statistics after arc fitting
 func recalculateStats(primitives []Primitive) ParseStats {
