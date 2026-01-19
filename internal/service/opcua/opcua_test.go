@@ -44,8 +44,8 @@ func TestNewConfigManager_Defaults(t *testing.T) {
 	if cfg.Endpoint != "opc.tcp://192.168.0.1:4840" {
 		t.Errorf("Endpoint = %v, want opc.tcp://192.168.0.1:4840", cfg.Endpoint)
 	}
-	if cfg.NamespaceID != 2 {
-		t.Errorf("NamespaceID = %v, want 2", cfg.NamespaceID)
+	if cfg.NamespaceID != 4 {
+		t.Errorf("NamespaceID = %v, want 4", cfg.NamespaceID)
 	}
 	if cfg.DataType != "string_array" {
 		t.Errorf("DataType = %v, want string_array", cfg.DataType)

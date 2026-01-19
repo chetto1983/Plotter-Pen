@@ -7,6 +7,106 @@ export class PLCOutputManager {
     this.simulator3D = null;
     this.animator3D = null;
     this._is3DInitialized = false;
+    this._saveTimeout = null;
+  }
+
+  /**
+   * Initialize simulation settings from database and wire change handlers
+   */
+  async initSimulationSettings() {
+    // Wire change handlers for simulation settings inputs
+    const inputs = [
+      'simWorkSpeed',
+      'simRapidSpeed',
+      'simSafeZ',
+      'simWorkZ',
+      'simWaitTime'
+    ];
+
+    inputs.forEach(id => {
+      const input = document.getElementById(id);
+      if (input) {
+        input.addEventListener('change', () => this.onSimSettingsChange());
+      }
+    });
+
+    // Load saved settings from database
+    await this.loadSimulationSettings();
+  }
+
+  /**
+   * Load simulation settings from database
+   */
+  async loadSimulationSettings() {
+    try {
+      const response = await fetch('/api/plc/settings');
+      if (!response.ok) return;
+
+      const result = await response.json();
+      const data = result.data;
+      if (!data) return;
+
+      // Populate UI inputs
+      const workSpeedInput = document.getElementById('simWorkSpeed');
+      const rapidInput = document.getElementById('simRapidSpeed');
+      const safeZInput = document.getElementById('simSafeZ');
+      const workZInput = document.getElementById('simWorkZ');
+      const waitInput = document.getElementById('simWaitTime');
+
+      if (workSpeedInput) workSpeedInput.value = data.workSpeed ?? 100;
+      if (rapidInput) rapidInput.value = data.rapidSpeed ?? 1000;
+      if (safeZInput) safeZInput.value = data.safeZ ?? 5;
+      if (workZInput) workZInput.value = data.workZ !== undefined ? data.workZ : 0;
+      if (waitInput) waitInput.value = data.waitTime ?? 0;
+
+      console.log('[PLC] Simulation settings loaded from database');
+    } catch (err) {
+      console.warn('[PLC] Failed to load simulation settings:', err);
+    }
+  }
+
+  /**
+   * Handle simulation settings change - save and re-extract
+   */
+  onSimSettingsChange() {
+    // Debounce saves to avoid excessive API calls
+    if (this._saveTimeout) {
+      clearTimeout(this._saveTimeout);
+    }
+
+    this._saveTimeout = setTimeout(async () => {
+      await this.saveSimulationSettings();
+      // Re-extract PLC output with new settings
+      if (this.app.primitives && this.app.primitives.length > 0) {
+        this.extractPLC();
+      }
+    }, 300);
+  }
+
+  /**
+   * Save current simulation settings to database
+   */
+  async saveSimulationSettings() {
+    const workSpeed = parseFloat(document.getElementById('simWorkSpeed')?.value) || 100;
+    const rapidSpeed = parseFloat(document.getElementById('simRapidSpeed')?.value) || 1000;
+    const safeZ = parseFloat(document.getElementById('simSafeZ')?.value) || 5;
+    const workZVal = parseFloat(document.getElementById('simWorkZ')?.value);
+    const workZ = isNaN(workZVal) ? -2 : workZVal;  // Allow 0
+    const waitTime = parseInt(document.getElementById('simWaitTime')?.value, 10) || 0;
+
+    try {
+      const response = await fetch('/api/plc/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workSpeed, rapidSpeed, safeZ, workZ, waitTime })
+      });
+
+      if (response.ok) {
+        console.log('[PLC] Simulation settings saved');
+      }
+    } catch (err) {
+      console.warn('[PLC] Failed to save simulation settings:', err);
+    }
   }
 
   /**
@@ -220,7 +320,8 @@ export class PLCOutputManager {
     const defaultSpeed = speedInput ? parseFloat(speedInput.value) : 100.0;
     const rapidSpeed = rapidInput ? parseFloat(rapidInput.value) : 1000.0;
     const safeZ = safeZInput ? parseFloat(safeZInput.value) : 5.0;
-    const workZ = workZInput ? parseFloat(workZInput.value) : -2.0;
+    const workZVal = workZInput ? parseFloat(workZInput.value) : 0;
+    const workZ = isNaN(workZVal) ? 0 : workZVal;  // Allow 0 and positive for pen plotter
     const waitTime = waitInput ? parseInt(waitInput.value, 10) : 0;
 
     // Convert primitives to API format

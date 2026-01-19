@@ -150,9 +150,10 @@ class CADApplication {
     this.input.setup();
     this.ui.setup();
 
-    // Initialize 3D PLC simulator
+    // Initialize 3D PLC simulator and simulation settings
     if (this.plcOutputManager) {
       this.plcOutputManager.init3DSimulator();
+      this.plcOutputManager.initSimulationSettings();
     }
 
     // Load persisted state

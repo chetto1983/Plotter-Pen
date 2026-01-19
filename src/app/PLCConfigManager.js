@@ -257,21 +257,27 @@ export class PLCConfigManager {
         if (this.form.securityPolicy) this.form.securityPolicy.value = data.securityPolicy ?? "None";
         if (this.form.username) this.form.username.value = data.username ?? "";
         if (this.form.password) this.form.password.value = data.password ?? "";
-        // Data nodes (correct backend field names)
-        if (this.form.dataNode) this.form.dataNode.value = data.dataNode ?? "";
-        if (this.form.dataType) this.form.dataType.value = data.dataType ?? "string_array";
-        if (this.form.triggerNode) this.form.triggerNode.value = data.triggerNode ?? "";
-        if (this.form.resetNode) this.form.resetNode.value = data.resetNode ?? "";
         // Position nodes
         if (this.form.positionXNode) this.form.positionXNode.value = data.positionXNode ?? "";
         if (this.form.positionYNode) this.form.positionYNode.value = data.positionYNode ?? "";
         if (this.form.positionZNode) this.form.positionZNode.value = data.positionZNode ?? "";
+        // Chunked transfer nodes
+        if (this.form.pointArrayNode) this.form.pointArrayNode.value = data.pointArrayNode ?? "";
+        if (this.form.endOfFileNode) this.form.endOfFileNode.value = data.endOfFileNode ?? "";
+        if (this.form.triggerWriteNode) this.form.triggerWriteNode.value = data.triggerWriteNode ?? "";
+        if (this.form.readDoneNode) this.form.readDoneNode.value = data.readDoneNode ?? "";
+        if (this.form.chunkSize) this.form.chunkSize.value = data.chunkSize ?? 20;
+        if (this.form.ackTimeout) this.form.ackTimeout.value = data.ackTimeout ?? 5000;
+        if (this.form.pollInterval) this.form.pollInterval.value = data.pollInterval ?? 100;
     }
 
     readForm() {
         if (!this.form) return null;
         const formData = new FormData(this.form);
         const base = this.cachedConfig ? { ...this.cachedConfig } : {};
+
+        const pointArr = formData.get('pointArrayNode')?.trim() || "";
+        const triggerWrite = formData.get('triggerWriteNode')?.trim() || "";
 
         return {
             ...base,
@@ -283,15 +289,23 @@ export class PLCConfigManager {
             securityPolicy: formData.get('securityPolicy') || "None",
             username: formData.get('username')?.trim() || "",
             password: formData.get('password') || "",
-            // Data nodes (correct backend field names)
-            dataNode: formData.get('dataNode')?.trim() || "",
-            dataType: formData.get('dataType') || "string_array",
-            triggerNode: formData.get('triggerNode')?.trim() || "",
-            resetNode: formData.get('resetNode')?.trim() || "",
             // Position nodes
             positionXNode: formData.get('positionXNode')?.trim() || "",
             positionYNode: formData.get('positionYNode')?.trim() || "",
             positionZNode: formData.get('positionZNode')?.trim() || "",
+            // Chunked transfer nodes (Db_Punti)
+            pointArrayNode: pointArr,
+            triggerWriteNode: triggerWrite,
+            readDoneNode: formData.get('readDoneNode')?.trim() || "",
+            endOfFileNode: formData.get('endOfFileNode')?.trim() || "",
+            chunkSize: parseInt(formData.get('chunkSize'), 10) || 20,
+            ackTimeout: parseInt(formData.get('ackTimeout'), 10) || 5000,
+            pollInterval: parseInt(formData.get('pollInterval'), 10) || 100,
+            // Legacy fields (map to chunked transfer)
+            dataNode: pointArr,
+            dataType: "string_array",
+            triggerNode: triggerWrite,
+            resetNode: triggerWrite,
         };
     }
 
@@ -321,8 +335,8 @@ export class PLCConfigManager {
     async saveConfig(event) {
         event.preventDefault();
         const payload = this.readForm();
-        if (!payload?.endpoint || !payload?.dataNode) {
-            this.showStatus("Campi obbligatori mancanti (Endpoint, Data Node).", "error");
+        if (!payload?.endpoint || !payload?.pointArrayNode) {
+            this.showStatus("Campi obbligatori mancanti (Endpoint, PointArr).", "error");
             return;
         }
 

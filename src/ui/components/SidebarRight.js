@@ -42,7 +42,7 @@ export class SidebarRight {
             </div>
             <div class="cad-speed-group">
               <label for="simWorkZ" class="cad-speed-label">WorkZ:</label>
-              <input type="number" id="simWorkZ" class="cad-number-input" min="-50" max="0" step="0.5" value="-2" placeholder="-2"><span class="cad-speed-unit">mm</span>
+              <input type="number" id="simWorkZ" class="cad-number-input" min="-50" max="50" step="0.5" value="0" placeholder="0"><span class="cad-speed-unit">mm</span>
             </div>
             <div class="cad-speed-group">
               <label for="simWaitTime" class="cad-speed-label">Wait:</label>

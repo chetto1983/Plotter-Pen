@@ -228,47 +228,58 @@ export class Modals {
           </div>
         </div>
         </fieldset>
-        <!-- Data Nodes Section -->
-        <fieldset class="cad-fieldset"><legend>Nodi Dati</legend>
-        <div class="cad-modal-cols-2">
+        <!-- Position Nodes Section -->
+        <fieldset class="cad-fieldset"><legend>Nodi Posizione (Lettura)</legend>
+        <div class="cad-modal-cols-3">
           <div class="cad-input-row">
-            <label for="dataNode">Node ID Dati</label>
-            <input type="text" id="dataNode" name="dataNode" required placeholder="ns=2;s=Data" class="cad-modal-input" />
+            <label for="positionXNode">Pos.X</label>
+            <input type="text" id="positionXNode" name="positionXNode" placeholder="ns=4;i=80" class="cad-modal-input" />
           </div>
           <div class="cad-input-row">
-            <label for="dataType">Tipo Dati</label>
-            <select id="dataType" name="dataType" class="cad-modal-select">
-              <option value="string_array">String Array</option>
-              <option value="string">String</option>
-              <option value="int32">Int32</option>
-              <option value="float">Float</option>
-            </select>
-          </div>
-        </div>
-        <div class="cad-modal-cols-2">
-          <div class="cad-input-row">
-            <label for="triggerNode">Node ID Trigger</label>
-            <input type="text" id="triggerNode" name="triggerNode" placeholder="ns=2;s=Trigger" class="cad-modal-input" />
+            <label for="positionYNode">Pos.Y</label>
+            <input type="text" id="positionYNode" name="positionYNode" placeholder="ns=4;i=81" class="cad-modal-input" />
           </div>
           <div class="cad-input-row">
-            <label for="resetNode">Node ID Reset</label>
-            <input type="text" id="resetNode" name="resetNode" placeholder="ns=2;s=Reset" class="cad-modal-input" />
+            <label for="positionZNode">Pos.Z</label>
+            <input type="text" id="positionZNode" name="positionZNode" placeholder="ns=4;i=82" class="cad-modal-input" />
           </div>
         </div>
         </fieldset>
-        <!-- Position Nodes Section -->
-        <fieldset class="cad-fieldset"><legend>Nodi Posizione (Lettura)</legend>
-        <div class="cad-input-row">
-          <label for="positionXNode">Posizione X</label>
-          <input type="text" id="positionXNode" name="positionXNode" placeholder="ns=3;s=&quot;DB_Position&quot;.X" class="cad-modal-input" />
+        <!-- Chunked Transfer Nodes Section -->
+        <fieldset class="cad-fieldset"><legend>Nodi Trasferimento Chunk (Db_Punti)</legend>
+        <div class="cad-modal-cols-2">
+          <div class="cad-input-row">
+            <label for="pointArrayNode">PointArr (String[20])</label>
+            <input type="text" id="pointArrayNode" name="pointArrayNode" required placeholder="ns=4;i=93" class="cad-modal-input" />
+          </div>
+          <div class="cad-input-row">
+            <label for="triggerWriteNode">TriggerWrite</label>
+            <input type="text" id="triggerWriteNode" name="triggerWriteNode" placeholder="ns=4;i=12" class="cad-modal-input" />
+          </div>
+        </div>
+        <div class="cad-modal-cols-2">
+          <div class="cad-input-row">
+            <label for="readDoneNode">Trigger_read_done</label>
+            <input type="text" id="readDoneNode" name="readDoneNode" placeholder="ns=4;i=23" class="cad-modal-input" />
+          </div>
+          <div class="cad-input-row">
+            <label for="endOfFileNode">End_Of_File</label>
+            <input type="text" id="endOfFileNode" name="endOfFileNode" placeholder="ns=4;i=34" class="cad-modal-input" />
+          </div>
+        </div>
+        <div class="cad-modal-cols-2">
+          <div class="cad-input-row">
+            <label for="chunkSize">Chunk Size</label>
+            <input type="number" id="chunkSize" name="chunkSize" min="1" max="100" value="20" class="cad-modal-input" />
+          </div>
+          <div class="cad-input-row">
+            <label for="ackTimeout">ACK Timeout (ms)</label>
+            <input type="number" id="ackTimeout" name="ackTimeout" min="100" max="30000" value="5000" class="cad-modal-input" />
+          </div>
         </div>
         <div class="cad-input-row">
-          <label for="positionYNode">Posizione Y</label>
-          <input type="text" id="positionYNode" name="positionYNode" placeholder="ns=3;s=&quot;DB_Position&quot;.Y" class="cad-modal-input" />
-        </div>
-        <div class="cad-input-row">
-          <label for="positionZNode">Posizione Z</label>
-          <input type="text" id="positionZNode" name="positionZNode" placeholder="ns=3;s=&quot;DB_Position&quot;.Z" class="cad-modal-input" />
+          <label for="pollInterval">Poll Interval (ms)</label>
+          <input type="number" id="pollInterval" name="pollInterval" min="10" max="1000" value="100" class="cad-modal-input" />
         </div>
         </fieldset>
         <!-- Security Certificates -->

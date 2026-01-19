@@ -41,6 +41,10 @@ func (h *PersistenceHandler) RegisterRoutes(r *gin.RouterGroup) {
 	// CAM Settings
 	r.GET("/cam/settings", h.GetCAMSettings)
 	r.POST("/cam/settings", h.SaveCAMSettings)
+
+	// PLC Simulation Settings
+	r.GET("/plc/settings", h.GetPLCSimSettings)
+	r.POST("/plc/settings", h.SavePLCSimSettings)
 }
 
 // === App State ===
@@ -283,6 +287,45 @@ func (h *PersistenceHandler) SaveCAMSettings(c *gin.Context) {
 	}
 
 	if err := h.db.Model(&persistence.CAMSettings{}).Where("id = 1").Update("data", req.Data).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+// === PLC Simulation Settings ===
+
+func (h *PersistenceHandler) GetPLCSimSettings(c *gin.Context) {
+	var settings persistence.PLCSimulationSettings
+	if err := h.db.First(&settings).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": settings})
+}
+
+func (h *PersistenceHandler) SavePLCSimSettings(c *gin.Context) {
+	var req struct {
+		WorkSpeed  float64 `json:"workSpeed"`
+		RapidSpeed float64 `json:"rapidSpeed"`
+		SafeZ      float64 `json:"safeZ"`
+		WorkZ      float64 `json:"workZ"`
+		WaitTime   int     `json:"waitTime"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	updates := map[string]interface{}{
+		"work_speed":  req.WorkSpeed,
+		"rapid_speed": req.RapidSpeed,
+		"safe_z":      req.SafeZ,
+		"work_z":      req.WorkZ,
+		"wait_time":   req.WaitTime,
+	}
+
+	if err := h.db.Model(&persistence.PLCSimulationSettings{}).Where("id = 1").Updates(updates).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

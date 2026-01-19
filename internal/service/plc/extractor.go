@@ -31,9 +31,7 @@ func NewExtractor(req ExtractRequest) *Extractor {
 		safeZ = 5.0
 	}
 	workZ := req.WorkZ
-	if workZ >= 0 {
-		workZ = -2.0
-	}
+	// workZ can be 0 or positive for pen plotters (pen touching/pressing surface)
 	waitTime := req.WaitTime
 	if waitTime < 0 {
 		waitTime = 0
@@ -87,6 +85,7 @@ type outputGenerator struct {
 
 func (g *outputGenerator) generate(primitives []Primitive) []Command {
 	commands := make([]Command, 0)
+	lastPoint := geom.Point{X: 0, Y: 0}
 
 	for _, prim := range primitives {
 		if !isSupportedPrimitive(prim.Type) {
@@ -103,11 +102,14 @@ func (g *outputGenerator) generate(primitives []Primitive) []Command {
 			continue
 		}
 
-		pushCommand(&commands, g.jumpCommand(start.X, start.Y, g.safeZ, prim.ID))
-		if g.waitTime > 0 {
-			pushCommand(&commands, g.waitCommand(prim.ID))
+		needsJump := math.Abs(lastPoint.X-start.X) > 0.01 || math.Abs(lastPoint.Y-start.Y) > 0.01
+		if needsJump {
+			pushCommand(&commands, g.jumpCommand(start.X, start.Y, g.safeZ, prim.ID))
+			pushCommand(&commands, g.lineCommand(start.X, start.Y, g.workZ, prim.ID))
+			if g.waitTime > 0 {
+				pushCommand(&commands, g.waitCommand(prim.ID))
+			}
 		}
-		pushCommand(&commands, g.lineCommand(start.X, start.Y, g.workZ, prim.ID))
 
 		for _, cmd := range primCmds {
 			pushCommand(&commands, cmd)
@@ -117,7 +119,11 @@ func (g *outputGenerator) generate(primitives []Primitive) []Command {
 		if !ok {
 			end = start
 		}
-		pushCommand(&commands, g.jumpCommand(end.X, end.Y, g.safeZ, prim.ID))
+		lastPoint = end
+	}
+
+	if len(commands) > 0 {
+		pushCommand(&commands, g.jumpCommand(lastPoint.X, lastPoint.Y, g.safeZ, ""))
 	}
 
 	return commands

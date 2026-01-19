@@ -320,21 +320,22 @@ func (cm *ConfigManager) Merge(override *Config) Config {
 }
 
 // defaultConfig returns default OPC UA configuration
+// NodeIDs from OPC Ua Interface.xml: TriggerWrite=12, ReadDone=23, EOF=34, PointArr=93
 func defaultConfig() Config {
 	return Config{
 		Endpoint:             "opc.tcp://192.168.0.1:4840",
-		NamespaceID:          2,
-		TriggerNode:          "ns=2;i=12",
-		ResetNode:            "ns=2;i=23",
-		DataNode:             "ns=2;i=93",
+		NamespaceID:          4,
+		TriggerNode:          "ns=4;i=12",
+		ResetNode:            "ns=4;i=12",
+		DataNode:             "ns=4;i=93",
 		DataType:             "string_array",
-		PositionXNode:        "ns=2;i=80",
-		PositionYNode:        "ns=2;i=81",
-		PositionZNode:        "ns=2;i=82",
-		PointArrayNode:       "ns=2;i=93",
-		TriggerWriteNode:     "ns=2;i=12",
-		ReadDoneNode:         "ns=2;i=23",
-		EndOfFileNode:        "ns=2;i=34",
+		PositionXNode:        "ns=4;i=80",
+		PositionYNode:        "ns=4;i=81",
+		PositionZNode:        "ns=4;i=82",
+		PointArrayNode:       "ns=4;i=93",
+		TriggerWriteNode:     "ns=4;i=12",
+		ReadDoneNode:         "ns=4;i=23",
+		EndOfFileNode:        "ns=4;i=34",
 		ChunkSize:            20,
 		AckTimeout:           5000,
 		PollInterval:         100,

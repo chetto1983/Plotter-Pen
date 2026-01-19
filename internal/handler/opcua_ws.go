@@ -58,6 +58,29 @@ type WSClient struct {
 	mu       sync.Mutex
 }
 
+func (wc *WSClient) safeSend(msg opcua.WSMessage) {
+	if wc == nil || wc.send == nil {
+		return
+	}
+	defer func() {
+		_ = recover()
+	}()
+	wc.send <- msg
+}
+
+func (wc *WSClient) safeTrySend(msg opcua.WSMessage) {
+	if wc == nil || wc.send == nil {
+		return
+	}
+	defer func() {
+		_ = recover()
+	}()
+	select {
+	case wc.send <- msg:
+	default:
+	}
+}
+
 // InboundMessage represents messages from client
 type InboundMessage struct {
 	Type string          `json:"type"`
@@ -204,14 +227,10 @@ func (wc *WSClient) handleSubscribe(h *OpcuaHandler, data json.RawMessage) {
 	// Start streaming in background
 	ctx := context.Background()
 	go wc.stream.Start(ctx, func(m opcua.WSMessage) {
-		select {
-		case wc.send <- m:
-		default:
-			// Channel full, drop message
-		}
+		wc.safeTrySend(m)
 	})
 
-	wc.send <- opcua.NewWSMessage("subscribed", map[string]int{"interval": req.Interval})
+	wc.safeSend(opcua.NewWSMessage("subscribed", map[string]int{"interval": req.Interval}))
 }
 
 // handleUnsubscribe stops position streaming
@@ -346,7 +365,7 @@ func (wc *WSClient) handleTransfer(h *OpcuaHandler, data json.RawMessage) {
 	})
 
 	// Start async transfer with progress callback
-	// Use safeSend to prevent panic on closed channel if client disconnects
+	// Use safeTrySend to prevent panic on closed channel if client disconnects
 	err := wc.transfer.SendAsync(ctx, req.Commands, func(progress opcua.TransferProgress) {
 		var msg opcua.WSMessage
 		if progress.Error != "" {
@@ -356,12 +375,7 @@ func (wc *WSClient) handleTransfer(h *OpcuaHandler, data json.RawMessage) {
 		} else {
 			msg = opcua.NewWSMessage("transfer_progress", progress)
 		}
-		// Non-blocking send to avoid panic on closed channel
-		select {
-		case wc.send <- msg:
-		default:
-			// Channel closed or full, ignore
-		}
+		wc.safeTrySend(msg)
 	})
 
 	if err != nil {

@@ -128,28 +128,36 @@ export class PLCSimulator3D {
     createDefaultTool(diameter, height) {
         const group = new THREE.Group();
         const radius = diameter / 2;
+        const tipHeight = height * 0.25;
+        const bodyHeight = height * 0.6;
+        const holderHeight = height * 0.15;
 
-        // Cylinder body
-        const bodyGeom = new THREE.CylinderGeometry(radius, radius, height * 0.7, 32);
-        const bodyMat = new THREE.MeshPhongMaterial({ color: 0x888888, shininess: 80 });
-        const body = new THREE.Mesh(bodyGeom, bodyMat);
-        body.position.z = height * 0.35;
-        body.rotation.x = Math.PI / 2;
-        group.add(body);
-
-        // Cone tip
-        const tipGeom = new THREE.ConeGeometry(radius, height * 0.3, 32);
-        const tipMat = new THREE.MeshPhongMaterial({ color: 0xcccccc, shininess: 100 });
+        // Cone tip - BLUE
+        // ConeGeometry: tip at +Y, base at -Y (centered at origin)
+        // We want tip pointing DOWN (-Z) with tip point at local Z=0
+        const tipGeom = new THREE.ConeGeometry(radius, tipHeight, 32);
+        const tipMat = new THREE.MeshPhongMaterial({ color: 0x2266ff, shininess: 100 });
         const tip = new THREE.Mesh(tipGeom, tipMat);
+        // Shift geometry so tip vertex is at local origin
+        tipGeom.translate(0, -tipHeight / 2, 0);
+        // Rotate -90° around X to point tip down (-Z), base goes to +Z
         tip.rotation.x = -Math.PI / 2;
         group.add(tip);
 
-        // Holder cylinder
-        const holderGeom = new THREE.CylinderGeometry(radius * 1.5, radius * 1.5, height * 0.2, 32);
+        // Cylinder body - SILVER/GRAY (above the tip)
+        const bodyGeom = new THREE.CylinderGeometry(radius, radius, bodyHeight, 32);
+        const bodyMat = new THREE.MeshPhongMaterial({ color: 0xaaaaaa, shininess: 80 });
+        const body = new THREE.Mesh(bodyGeom, bodyMat);
+        body.rotation.x = -Math.PI / 2;
+        body.position.z = tipHeight + bodyHeight / 2;
+        group.add(body);
+
+        // Holder cylinder - DARK
+        const holderGeom = new THREE.CylinderGeometry(radius * 1.5, radius * 1.5, holderHeight, 32);
         const holderMat = new THREE.MeshPhongMaterial({ color: 0x333333 });
         const holder = new THREE.Mesh(holderGeom, holderMat);
-        holder.position.z = height * 0.8;
-        holder.rotation.x = Math.PI / 2;
+        holder.rotation.x = -Math.PI / 2;
+        holder.position.z = tipHeight + bodyHeight + holderHeight / 2;
         group.add(holder);
 
         return group;
