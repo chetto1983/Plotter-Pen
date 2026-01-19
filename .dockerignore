@@ -1,11 +1,42 @@
-node_modules
+# Dependencies
+node_modules/
 npm-debug.log
+
+# Build artifacts
+*.exe
+plotter_pen.db
+database.sqlite
+
+# Docker
 Dockerfile
+docker-compose.yml
 .dockerignore
-.git
+
+# Git
+.git/
 .gitignore
-.vscode
-*.log
-DXF
-Example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Documentation
 *.md
+docs/
+
+# Test files
+DXF/
+Example/
+*_test.go
+
+# Logs
+*.log
+
+# Temp files
+*.tmp
+*.bak
+
+# Claude
+.claude/

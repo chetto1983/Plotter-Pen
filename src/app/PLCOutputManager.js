@@ -91,7 +91,7 @@ export class PLCOutputManager {
     const rapidSpeed = parseFloat(document.getElementById('simRapidSpeed')?.value) || 1000;
     const safeZ = parseFloat(document.getElementById('simSafeZ')?.value) || 5;
     const workZVal = parseFloat(document.getElementById('simWorkZ')?.value);
-    const workZ = isNaN(workZVal) ? -2 : workZVal;  // Allow 0
+    const workZ = isNaN(workZVal) ? 0 : workZVal;  // Allow 0
     const waitTime = parseInt(document.getElementById('simWaitTime')?.value, 10) || 0;
 
     try {
@@ -390,7 +390,8 @@ export class PLCOutputManager {
       req.x = p.x; req.y = p.y;
       req.width = p.width; req.height = p.height;
     } else if (p.type === "polygon" || p.type === "polyline") {
-      req.points = p.points;
+      // Serialize points to plain {x, y} objects for JSON
+      req.points = p.points.map(pt => ({ x: pt.x, y: pt.y }));
       req.closed = p.closed;
     }
 

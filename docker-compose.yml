@@ -1,27 +1,62 @@
-version: "3.8"
+# Plotter-Pen Docker Compose
+# CAD editor for pen plotters with PLC integration via OPC UA
+
 services:
   plotter:
     build:
       context: .
       dockerfile: Dockerfile
-    image: "plotter-pen:latest"
+    image: plotter-pen:latest
     container_name: plotter-pen
-    restart: always
+    restart: unless-stopped
+
     environment:
-      HOST: 0.0.0.0
-      PORT: 8000
+      # Server
+      HOST: "0.0.0.0"
+      PORT: "8000"
+      GIN_MODE: "release"
+
+      # Database
+      DB_PATH: "/app/data/plotter.db"
+
+      # OPC UA Configuration
       OPCUA_ENDPOINT: "opc.tcp://192.168.0.1:4840"
-      OPCUA_NODE_ID: ns=4;i=12
-      OPCUA_TRIGGER_NODE_ID: ns=4;i=535
-      OPCUA_TRIGGER_VALUE: "true"
-      OPCUA_TRIGGER_RESET_VALUE: "false"
-      OPCUA_TRIGGER_RESET_DELAY_MS: "250"
-      OPCUA_VALUE_TYPE: string_array
-      OPCUA_ARRAY_LENGTH: "512"
-      DB_PATH: "/cfg-data/database.sqlite"
+      OPCUA_NODE_ID: "ns=4;s=Data"
+      OPCUA_SECURITY_MODE: "SignAndEncrypt"
+      OPCUA_SECURITY_POLICY: "Basic256Sha256"
+
+      # Optional: API authentication
+      # API_TOKEN: "your-secret-token"
+
     ports:
       - "41880:8000"
-    mem_limit: 512m
+
     volumes:
-      - "./publish/:/publish/"
-      - "./cfg-data/:/cfg-data/"
+      # Persistent data (SQLite database)
+      - plotter-data:/app/data
+
+      # OPC UA certificates (mount your certs here)
+      - ./certs:/app/certs:ro
+
+      # Optional: custom config override
+      # - ./opcua_config.json:/app/opcua_config.json:ro
+
+    mem_limit: 512m
+    cpus: 1.0
+
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  plotter-data:
+    driver: local

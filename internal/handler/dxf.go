@@ -22,6 +22,7 @@ func NewDXFHandler() *DXFHandler {
 func (h *DXFHandler) RegisterRoutes(r *gin.RouterGroup) {
 	r.POST("/parse-dxf", h.ParseDXF)
 	r.POST("/smart-import", h.SmartImport)
+	r.POST("/smart-import-svg", h.SmartImportSVG)
 	r.POST("/export-dxf", h.ExportDXF)
 	r.POST("/parse-svg", h.ParseSVG)
 	r.POST("/parse-stl", h.ParseSTL)
@@ -142,6 +143,70 @@ func (h *DXFHandler) SmartImport(c *gin.Context) {
 		"bounds":     result.Bounds,
 		"stats":      result.Stats,
 		"layers":     importservice.GetLayerNames(result.Primitives),
+	})
+}
+
+// SmartImportSVG performs intelligent SVG import with optimizations (same route as DXF)
+func (h *DXFHandler) SmartImportSVG(c *gin.Context) {
+	var content string
+	var opts importservice.ImportOptions
+
+	contentType := c.GetHeader("Content-Type")
+
+	// Handle raw text body (efficient for large SVG files)
+	if strings.HasPrefix(contentType, "text/plain") || strings.HasPrefix(contentType, "image/svg+xml") {
+		body, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
+			return
+		}
+		content = string(body)
+		// Use default options - same as DXF smart import
+		opts = importservice.ImportOptions{
+			Normalize:    false,
+			CenterOrigin: true,
+			ExtractPLC:   false,
+			FitArcs:      false, // SVG doesn't need arc fitting (already has clean geometry)
+			ArcTolerance: 0.1,
+		}
+	} else {
+		// Handle JSON body
+		var req ParseSVGRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		content = req.Content
+		opts = importservice.ImportOptions{
+			Normalize:    false,
+			CenterOrigin: true,
+			ExtractPLC:   false,
+			FitArcs:      false,
+			ArcTolerance: 0.1,
+		}
+	}
+
+	// Validate content
+	if !importservice.ValidateSVGContent(content) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid SVG content"})
+		return
+	}
+
+	result, err := importservice.SmartImportSVG(content, opts)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "SVG smart import failed",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":    true,
+		"primitives": result.Primitives,
+		"plcData":    result.PLCData,
+		"bounds":     result.Bounds,
+		"stats":      result.Stats,
 	})
 }
 

@@ -3,6 +3,8 @@ package importservice
 import (
 	"fmt"
 	"math"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/rustyoz/svg"
@@ -18,13 +20,68 @@ type SVGResult struct {
 	ViewBox    []float64   `json:"viewBox,omitempty"`
 }
 
+// parseSVGDimension parses an SVG dimension string and converts to mm
+// Supported units: px, pt, mm, cm, in, pc (pica), em (treated as px)
+// Default unit is px if no unit specified
+func parseSVGDimension(dim string) float64 {
+	if dim == "" {
+		return 0
+	}
+
+	// Regex to extract number and unit
+	re := regexp.MustCompile(`^([+-]?[0-9]*\.?[0-9]+)\s*(px|pt|mm|cm|in|pc|em|%)?$`)
+	matches := re.FindStringSubmatch(strings.TrimSpace(dim))
+
+	if len(matches) < 2 {
+		return 0
+	}
+
+	value, err := strconv.ParseFloat(matches[1], 64)
+	if err != nil {
+		return 0
+	}
+
+	unit := "px"
+	if len(matches) >= 3 && matches[2] != "" {
+		unit = matches[2]
+	}
+
+	// Convert to mm (assuming 96 DPI for screen)
+	// 1 inch = 25.4 mm
+	// 1 px = 1/96 inch at 96 DPI
+	// 1 pt = 1/72 inch
+	// 1 pc = 12 pt = 1/6 inch
+	switch unit {
+	case "mm":
+		return value
+	case "cm":
+		return value * 10
+	case "in":
+		return value * 25.4
+	case "pt":
+		return value * 25.4 / 72
+	case "pc":
+		return value * 25.4 / 6
+	case "px", "em":
+		// Default: 96 DPI
+		return value * 25.4 / 96
+	case "%":
+		// Can't handle percentage without context, return as-is
+		return value
+	default:
+		// Assume px
+		return value * 25.4 / 96
+	}
+}
+
 // ParseSVG parses SVG content and returns primitives
+// Coordinates are converted to mm and Y-axis is flipped (SVG Y-down to CAD Y-up)
 func ParseSVG(content string, scale float64) (*SVGResult, error) {
 	if scale <= 0 {
 		scale = 1.0
 	}
 
-	parsed, err := svg.ParseSvg(content, "input", scale)
+	parsed, err := svg.ParseSvg(content, "input", 1.0) // Parse at 1:1 scale, we'll handle unit conversion
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse SVG: %w", err)
 	}
@@ -37,13 +94,60 @@ func ParseSVG(content string, scale float64) (*SVGResult, error) {
 	}
 
 	// Parse viewBox
+	var viewBox []float64
 	if vb, err := parsed.ViewBoxValues(); err == nil && len(vb) >= 4 {
+		viewBox = vb
 		result.ViewBox = vb
 	}
+
+	// Determine SVG height for Y-axis flipping
+	// Priority: viewBox height > height attribute
+	var svgHeight float64
+	if len(viewBox) >= 4 {
+		svgHeight = viewBox[3] // viewBox: minX, minY, width, height
+	} else if parsed.Height != "" {
+		svgHeight = parseSVGDimension(parsed.Height)
+	}
+
+	// Determine unit conversion factor to mm
+	// If viewBox exists, coordinates are in viewBox units
+	// Map viewBox to actual dimensions (width/height attributes)
+	var unitScale float64 = 1.0
+	if len(viewBox) >= 4 && viewBox[2] > 0 {
+		// viewBox exists - calculate scale from viewBox to mm
+		actualWidth := parseSVGDimension(parsed.Width)
+		if actualWidth > 0 {
+			unitScale = actualWidth / viewBox[2]
+		} else {
+			// No width attribute, assume viewBox units are in px
+			unitScale = 25.4 / 96
+		}
+	} else if parsed.Width != "" {
+		// No viewBox, use width attribute units directly
+		unitScale = 25.4 / 96 // Assume px by default
+	}
+
+	// Apply user scale
+	unitScale *= scale
 
 	bounds := &Bounds{
 		MinX: math.MaxFloat64, MinY: math.MaxFloat64,
 		MaxX: -math.MaxFloat64, MaxY: -math.MaxFloat64,
+	}
+
+	// Helper to transform coordinates: apply unit scale and flip Y-axis
+	transformX := func(x float64) float64 {
+		return x * unitScale
+	}
+	transformY := func(y float64) float64 {
+		// Flip Y-axis: SVG Y-down to CAD Y-up
+		if svgHeight > 0 {
+			return (svgHeight - y) * unitScale
+		}
+		return y * unitScale
+	}
+	transformPoint := func(x, y float64) Point {
+		return Point{X: transformX(x), Y: transformY(y)}
 	}
 
 	// Get drawing instructions
@@ -57,40 +161,58 @@ func ParseSVG(content string, scale float64) (*SVGResult, error) {
 		}
 	}()
 
+	// Helper: flush path with arc fitting (same as DXF spline handling)
+	flushPathWithArcFitting := func(path []Point) {
+		if len(path) < 2 {
+			return
+		}
+		updateBoundsFromPoints(bounds, path)
+		// Use arc fitting like DXF does for splines
+		fitted := fitArcsToPoints(path)
+		for _, prim := range fitted {
+			idx++
+			prim.ID = fmt.Sprintf("svg_%d", idx)
+			result.Primitives = append(result.Primitives, prim)
+			result.Stats.ByType[prim.Type]++
+		}
+	}
+
 	// Process instructions into primitives
 	var currentPath []Point
 	var lastPoint Point
+	var lastPointRaw Point // Raw coordinates for bezier calculations
 
 	for inst := range instructions {
 		switch inst.Kind {
 		case svg.MoveInstruction:
-			// Flush current path if any
-			if len(currentPath) > 1 {
-				idx++
-				prim := createPolylinePrimitive(currentPath, false, idx)
-				result.Primitives = append(result.Primitives, prim)
-				result.Stats.ByType["polyline"]++
-				updateBoundsFromPoints(bounds, currentPath)
-			}
+			// Flush current path with arc fitting
+			flushPathWithArcFitting(currentPath)
 			currentPath = nil
 			if inst.M != nil {
-				lastPoint = Point{X: inst.M[0], Y: inst.M[1]}
+				lastPointRaw = Point{X: inst.M[0], Y: inst.M[1]}
+				lastPoint = transformPoint(inst.M[0], inst.M[1])
 				currentPath = append(currentPath, lastPoint)
 			}
 
 		case svg.LineInstruction:
 			if inst.M != nil {
-				lastPoint = Point{X: inst.M[0], Y: inst.M[1]}
+				lastPointRaw = Point{X: inst.M[0], Y: inst.M[1]}
+				lastPoint = transformPoint(inst.M[0], inst.M[1])
 				currentPath = append(currentPath, lastPoint)
 			}
 
 		case svg.CurveInstruction:
 			if inst.CurvePoints != nil && inst.CurvePoints.T != nil {
-				// Flatten bezier curve to line segments
-				curvePoints := flattenBezier(lastPoint, inst.CurvePoints, 0.5)
-				currentPath = append(currentPath, curvePoints...)
+				// Flatten bezier curve to line segments (in raw coordinates)
+				curvePoints := flattenBezier(lastPointRaw, inst.CurvePoints, 0.5)
+				// Transform each point
+				for _, p := range curvePoints {
+					transformed := transformPoint(p.X, p.Y)
+					currentPath = append(currentPath, transformed)
+					lastPoint = transformed
+				}
 				if len(curvePoints) > 0 {
-					lastPoint = curvePoints[len(curvePoints)-1]
+					lastPointRaw = curvePoints[len(curvePoints)-1]
 				}
 			}
 
@@ -100,9 +222,9 @@ func ParseSVG(content string, scale float64) (*SVGResult, error) {
 				prim := Primitive{
 					Type:    "circle",
 					ID:      fmt.Sprintf("svg_%d", idx),
-					CenterX: inst.M[0],
-					CenterY: inst.M[1],
-					Radius:  *inst.Radius,
+					CenterX: transformX(inst.M[0]),
+					CenterY: transformY(inst.M[1]),
+					Radius:  *inst.Radius * unitScale,
 				}
 				result.Primitives = append(result.Primitives, prim)
 				result.Stats.ByType["circle"]++
@@ -111,30 +233,16 @@ func ParseSVG(content string, scale float64) (*SVGResult, error) {
 
 		case svg.CloseInstruction:
 			if len(currentPath) > 2 {
-				// Close the path
+				// Close the path and apply arc fitting
 				currentPath = append(currentPath, currentPath[0])
-				idx++
-				prim := createPolylinePrimitive(currentPath, true, idx)
-				result.Primitives = append(result.Primitives, prim)
-				if prim.Type == "polygon" {
-					result.Stats.ByType["polygon"]++
-				} else {
-					result.Stats.ByType["polyline"]++
-				}
-				updateBoundsFromPoints(bounds, currentPath)
+				flushPathWithArcFitting(currentPath)
 			}
 			currentPath = nil
 		}
 	}
 
-	// Flush any remaining path
-	if len(currentPath) > 1 {
-		idx++
-		prim := createPolylinePrimitive(currentPath, false, idx)
-		result.Primitives = append(result.Primitives, prim)
-		result.Stats.ByType["polyline"]++
-		updateBoundsFromPoints(bounds, currentPath)
-	}
+	// Flush any remaining path with arc fitting
+	flushPathWithArcFitting(currentPath)
 
 	result.Stats.EntityCount = len(result.Primitives)
 	result.Stats.LayerCount = 1
@@ -259,4 +367,43 @@ func updateBoundsFromCircle(b *Bounds, c Primitive) {
 func ValidateSVGContent(content string) bool {
 	lower := strings.ToLower(content)
 	return strings.Contains(lower, "<svg") && strings.Contains(lower, "</svg>")
+}
+
+// SmartImportSVG performs intelligent SVG import with optimizations (same as DXF smart import)
+func SmartImportSVG(content string, opts ImportOptions) (*SmartImportResult, error) {
+	parseResult, err := ParseSVG(content, 1.0)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &SmartImportResult{
+		Primitives: parseResult.Primitives,
+		Bounds:     parseResult.Bounds,
+		Stats:      parseResult.Stats,
+	}
+
+	if result.Bounds == nil {
+		return result, nil
+	}
+
+	if opts.CenterOrigin {
+		centerPrimitives(result.Primitives, result.Bounds)
+		result.Bounds = recalculateBounds(result.Primitives)
+	}
+
+	if opts.ScaleFactor != 0 && opts.ScaleFactor != 1 {
+		scalePrimitives(result.Primitives, opts.ScaleFactor)
+		result.Bounds = recalculateBounds(result.Primitives)
+	}
+
+	if opts.Normalize {
+		normalizePrimitives(result.Primitives, result.Bounds)
+		result.Bounds = recalculateBounds(result.Primitives)
+	}
+
+	if opts.ExtractPLC {
+		result.PLCData = extractPLCData(result.Primitives)
+	}
+
+	return result, nil
 }

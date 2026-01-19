@@ -194,35 +194,14 @@ func (g *outputGenerator) primitiveToCommands(prim Primitive) []Command {
 			pts = append(pts, pts[0])
 		}
 
-		fitted := fitArcsAndLines(pts, 0.5)
-		cmds := make([]Command, 0, len(fitted))
-		for _, seg := range fitted {
-			if seg.Type == "arc" {
-				startAngle := math.Atan2(seg.Y1-seg.Cy, seg.X1-seg.Cx)
-				endAngle := math.Atan2(seg.Y2-seg.Cy, seg.X2-seg.Cx)
-				sweep := endAngle - startAngle
-				if sweep > math.Pi {
-					sweep -= 2 * math.Pi
-				}
-				if sweep < -math.Pi {
-					sweep += 2 * math.Pi
-				}
-				midAngle := startAngle + sweep/2
-				auxX := seg.Cx + seg.R*math.Cos(midAngle)
-				auxY := seg.Cy + seg.R*math.Sin(midAngle)
-
-				cmds = append(cmds, Command{
-					Type:        "A",
-					CommandStr:  fmt.Sprintf("A X %s, Y %s, Z %s, I %s, J %s, V %s", g.format(seg.X2), g.format(seg.Y2), g.format(g.workZ), g.format(auxX), g.format(auxY), g.format(g.defaultSpeed)),
-					PrimitiveID: prim.ID,
-				})
-			} else {
-				cmds = append(cmds, Command{
-					Type:        "L",
-					CommandStr:  fmt.Sprintf("L X %s, Y %s, Z %s, V %s", g.format(seg.X2), g.format(seg.Y2), g.format(g.workZ), g.format(g.defaultSpeed)),
-					PrimitiveID: prim.ID,
-				})
-			}
+		// Output simple line commands for each segment (no arc fitting)
+		cmds := make([]Command, 0, len(pts)-1)
+		for i := 0; i < len(pts)-1; i++ {
+			cmds = append(cmds, Command{
+				Type:        "L",
+				CommandStr:  fmt.Sprintf("L X %s, Y %s, Z %s, V %s", g.format(pts[i+1].X), g.format(pts[i+1].Y), g.format(g.workZ), g.format(g.defaultSpeed)),
+				PrimitiveID: prim.ID,
+			})
 		}
 		return cmds
 	}

@@ -1,5 +1,8 @@
 # syntax=docker/dockerfile:1
 
+# Plotter-Pen Docker Build
+# Go backend with JavaScript frontend for pen plotter CAD with OPC UA integration
+
 # Stage 1: Build Go server
 FROM --platform=$BUILDPLATFORM golang:1.23-alpine AS builder
 WORKDIR /app
@@ -9,6 +12,7 @@ RUN apk add --no-cache gcc musl-dev sqlite-dev
 
 # Copy go.mod and download dependencies
 COPY go.mod go.sum ./
+ENV GOTOOLCHAIN=auto
 RUN go mod download
 
 # Copy source code
@@ -36,7 +40,7 @@ RUN set -eux; \
     go build -ldflags="-s -w" -o server cmd/server/main.go
 
 # Stage 2: Final runtime image
-FROM --platform=$TARGETPLATFORM alpine:latest AS runner
+FROM alpine:latest AS runner
 
 # Install runtime dependencies
 RUN apk add --no-cache sqlite-libs ca-certificates wget
@@ -52,8 +56,8 @@ WORKDIR /app
 # Create non-root user
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
-# Create data directory for SQLite
-RUN mkdir -p /app/data && chown -R appuser:appgroup /app/data
+# Create directories
+RUN mkdir -p /app/data /app/certs && chown -R appuser:appgroup /app/data /app/certs
 
 # Copy Go binary
 COPY --from=builder --chown=appuser:appgroup /app/server ./server
@@ -62,16 +66,18 @@ RUN chmod +x ./server
 # Copy frontend files
 COPY --chown=appuser:appgroup plotter_pen.html ./
 COPY --chown=appuser:appgroup src/ ./src/
-COPY --chown=appuser:appgroup styles/ ./styles/
+COPY --chown=appuser:appgroup assets/ ./assets/
+COPY --chown=appuser:appgroup new_tabs.css ./
+COPY --chown=appuser:appgroup favicon.ico ./
 
-# Copy config files if needed
+# Copy config files (optional, can be overridden by volume)
 COPY --chown=appuser:appgroup opcua_config.json ./
 
 USER appuser
 
 EXPOSE 8000
 
-# Health check
+# Health check using Go server's health endpoint
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD wget -q --spider http://localhost:8000/healthz || exit 1
 

@@ -4,7 +4,8 @@ import "math"
 
 // Point represents a 2D point
 type Point struct {
-	X, Y float64
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
 }
 
 // Distance returns the distance to another point via Pythagoras
