@@ -109,14 +109,34 @@ export class StateManager {
 
     const workspace = this.app.renderer ? { ...this.app.renderer.workspace } : null;
     const grid = this.app.renderer ? { ...this.app.renderer.grid } : null;
+    if (grid) {
+      grid.spacing = this.app.gridSpacing;
+      grid.show = this.app.showGrid;
+      grid.snapToGrid = this.app.snapToGrid;
+    }
+
+    const snapSettings = {
+      gridEnabled: this.app.snapToGrid,
+      objectSnapEnabled: this.app.snapToObjects,
+      gridSpacing: this.app.gridSpacing
+    };
+
+    const toNumber = (value, fallback) => {
+      const num = parseFloat(value);
+      return Number.isFinite(num) ? num : fallback;
+    };
+    const toInt = (value, fallback) => {
+      const num = parseInt(value, 10);
+      return Number.isFinite(num) ? num : fallback;
+    };
 
     // PLC settings from UI inputs
     const plcSettings = {
-      workSpeed: parseFloat(document.getElementById('simWorkSpeed')?.value) || 100,
-      rapidSpeed: parseFloat(document.getElementById('simRapidSpeed')?.value) || 1000,
-      safeZ: parseFloat(document.getElementById('simSafeZ')?.value) || 5,
-      workZ: parseFloat(document.getElementById('simWorkZ')?.value) || -2,
-      waitTime: parseInt(document.getElementById('simWaitTime')?.value) || 0
+      workSpeed: toNumber(document.getElementById('simWorkSpeed')?.value, 100),
+      rapidSpeed: toNumber(document.getElementById('simRapidSpeed')?.value, 1000),
+      safeZ: toNumber(document.getElementById('simSafeZ')?.value, 5),
+      workZ: toNumber(document.getElementById('simWorkZ')?.value, -2),
+      waitTime: toInt(document.getElementById('simWaitTime')?.value, 0)
     };
 
     const state = {
@@ -125,7 +145,8 @@ export class StateManager {
       view,
       workspace,
       grid,
-      plcSettings
+      plcSettings,
+      snapSettings
     };
     return JSON.stringify(state);
   }
@@ -353,10 +374,39 @@ export class StateManager {
       this.app.renderer.setGridOptions(data.grid);
       this.app.gridSpacing = data.grid.spacing ?? 10;
       this.app.showGrid = data.grid.show ?? true;
-      this.app.snapToGrid = data.grid.snapToGrid ?? false;
-      const gridInput = document.getElementById('gridSpacing');
-      if (gridInput) gridInput.value = this.app.gridSpacing;
+      this.app.snapToGrid = data.grid.snapToGrid ?? this.app.snapToGrid ?? false;
     }
+    if (data.snapSettings) {
+      if (data.snapSettings.gridEnabled !== undefined) {
+        this.app.snapToGrid = data.snapSettings.gridEnabled;
+      }
+      if (data.snapSettings.objectSnapEnabled !== undefined) {
+        this.app.snapToObjects = data.snapSettings.objectSnapEnabled;
+      }
+      if (data.snapSettings.gridSpacing !== undefined) {
+        this.app.gridSpacing = data.snapSettings.gridSpacing;
+      }
+    }
+    const gridInput = document.getElementById('gridSpacing');
+    if (gridInput) gridInput.value = this.app.gridSpacing;
+    if (this.app.renderer) {
+      this.app.renderer.grid.snapToGrid = this.app.snapToGrid;
+      this.app.renderer.grid.spacing = this.app.gridSpacing;
+      this.app.renderer.grid.show = this.app.showGrid;
+    }
+    if (this.app.snapManager) {
+      this.app.snapManager.configure({
+        gridEnabled: this.app.snapToGrid,
+        objectSnapEnabled: this.app.snapToObjects,
+        gridSpacing: this.app.gridSpacing
+      });
+    }
+    const showGridInput = document.getElementById('showGrid');
+    if (showGridInput) showGridInput.checked = this.app.showGrid;
+    const snapGridInput = document.getElementById('snapGrid');
+    if (snapGridInput) snapGridInput.checked = this.app.snapToGrid;
+    const snapObjectsInput = document.getElementById('snapObjects');
+    if (snapObjectsInput) snapObjectsInput.checked = this.app.snapToObjects;
     if (data.view && this.app.renderer) {
       this.app.renderer.view = { ...data.view };
       this.app.renderer.isCacheDirty = true;

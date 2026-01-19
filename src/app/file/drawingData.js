@@ -28,11 +28,8 @@ export function applyDrawingData(app, data) {
 
     app.renderer.setWorkspaceSize(app.workspaceWidth, app.workspaceHeight);
 
-    if (app.snapManager?.options) {
-      app.snapManager.options.gridSpacing = app.gridSpacing;
-    }
-    if (app.snapManager?.gridSize !== undefined) {
-      app.snapManager.gridSize = app.gridSpacing;
+    if (app.snapManager) {
+      app.snapManager.configure({ gridSpacing: app.gridSpacing });
     }
 
     const widthInput = document.getElementById("workspaceWidth");

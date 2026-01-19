@@ -297,3 +297,122 @@ func TestParseSVG_ZeroScale(t *testing.T) {
 	}
 	// Zero scale should default to 1.0
 }
+
+func TestParseSVG_RealFile_ArcFitting(t *testing.T) {
+	// Try to find the real test file
+	testFiles := []string{
+		"../../../DXF/DXF/m1dgw2d1/Laser Cut Modern Love Theme Wall Clock.svg",
+		"DXF/DXF/m1dgw2d1/Laser Cut Modern Love Theme Wall Clock.svg",
+	}
+
+	var content []byte
+	var err error
+	var foundPath string
+
+	for _, path := range testFiles {
+		content, err = os.ReadFile(path)
+		if err == nil {
+			foundPath = path
+			break
+		}
+	}
+
+	if content == nil {
+		t.Skipf("Test SVG file not found: tried %v", testFiles)
+	}
+
+	t.Logf("Using test file: %s (%d bytes)", foundPath, len(content))
+
+	// Test ParseSVG with arc fitting
+	result, err := ParseSVG(string(content), 1.0)
+	if err != nil {
+		t.Fatalf("ParseSVG failed: %v", err)
+	}
+
+	t.Logf("Parsed %d primitives", len(result.Primitives))
+	t.Logf("Stats: %+v", result.Stats)
+
+	if len(result.Primitives) == 0 {
+		t.Error("Expected at least one primitive")
+	}
+
+	// Count primitive types
+	typeCounts := make(map[string]int)
+	for _, p := range result.Primitives {
+		typeCounts[p.Type]++
+	}
+
+	t.Logf("Primitive types: %v", typeCounts)
+
+	// Check that we have arcs (from arc fitting)
+	if arcCount, ok := typeCounts["arc"]; ok && arcCount > 0 {
+		t.Logf("SUCCESS: Found %d arc primitives (arc fitting working)", arcCount)
+	} else {
+		t.Error("FAILED: No arc primitives found - arc fitting may not be working")
+	}
+
+	if lineCount, ok := typeCounts["line"]; ok && lineCount > 0 {
+		t.Logf("Found %d line primitives", lineCount)
+	}
+}
+
+func TestCompareSVGvsDXF_ArcFitting(t *testing.T) {
+	// Find test files
+	baseDir := "../../../DXF/DXF/m1dgw2d1"
+	svgPath := filepath.Join(baseDir, "Laser Cut Modern Love Theme Wall Clock.svg")
+	dxfPath := filepath.Join(baseDir, "Laser Cut Modern Love Theme Wall Clock.dxf")
+
+	svgContent, err := os.ReadFile(svgPath)
+	if err != nil {
+		t.Skipf("SVG test file not found: %v", err)
+	}
+
+	dxfContent, err := os.ReadFile(dxfPath)
+	if err != nil {
+		t.Skipf("DXF test file not found: %v", err)
+	}
+
+	// Parse SVG
+	svgResult, err := ParseSVG(string(svgContent), 1.0)
+	if err != nil {
+		t.Fatalf("ParseSVG failed: %v", err)
+	}
+
+	// Parse DXF
+	dxfResult, err := ParseDXF(string(dxfContent))
+	if err != nil {
+		t.Fatalf("ParseDXF failed: %v", err)
+	}
+
+	t.Logf("SVG: %d primitives", len(svgResult.Primitives))
+	t.Logf("DXF: %d primitives", len(dxfResult.Primitives))
+
+	// Count types for SVG
+	svgTypes := make(map[string]int)
+	for _, p := range svgResult.Primitives {
+		svgTypes[p.Type]++
+	}
+
+	// Count types for DXF
+	dxfTypes := make(map[string]int)
+	for _, p := range dxfResult.Primitives {
+		dxfTypes[p.Type]++
+	}
+
+	t.Logf("SVG types: %v", svgTypes)
+	t.Logf("DXF types: %v", dxfTypes)
+
+	// Both should have arcs if arc fitting is working
+	svgArcs := svgTypes["arc"]
+	dxfArcs := dxfTypes["arc"]
+
+	t.Logf("SVG arcs: %d, DXF arcs: %d", svgArcs, dxfArcs)
+
+	if svgArcs == 0 && dxfArcs > 0 {
+		t.Error("SVG has no arcs but DXF does - arc fitting not working for SVG")
+	}
+
+	if svgArcs > 0 {
+		t.Logf("SUCCESS: SVG arc fitting is working (%d arcs)", svgArcs)
+	}
+}

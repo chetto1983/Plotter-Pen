@@ -426,20 +426,20 @@ export class FileManager {
     this.app.ui.updateStatus(`Salvataggio "${name}" nel database...`);
 
     try {
-      const data = buildDrawingData(this.app);
+      const data = JSON.stringify(buildDrawingData(this.app));
 
       // Generate preview
-      let preview = null;
+      let previewImg = null;
       if (this.app.renderer && this.app.renderer.canvas) {
         // Temporarily render without grid/ui for clean preview? 
         // For now, simple snapshot
-        preview = this.app.renderer.canvas.toDataURL('image/jpeg', 0.5);
+        previewImg = this.app.renderer.canvas.toDataURL('image/jpeg', 0.5);
       }
 
       const response = await fetch('/api/drawings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, data, preview })
+        body: JSON.stringify({ name, data, previewImg })
       });
 
       if (!response.ok) {
@@ -461,7 +461,8 @@ export class FileManager {
       const response = await fetch('/api/drawings');
       if (!response.ok) throw new Error('Failed to fetch list');
       const res = await response.json();
-      return res.data || [];
+      if (Array.isArray(res)) return res;
+      return Array.isArray(res.data) ? res.data : [];
     } catch (err) {
       console.error('DB List error:', err);
       this.app.ui.updateStatus('Errore recupero lista disegni');
@@ -469,19 +470,22 @@ export class FileManager {
     }
   }
 
-  async loadFromDatabase(name) {
-    this.app.ui.updateStatus(`Caricamento "${name}"...`);
+  async loadFromDatabase(id, name = '') {
+    if (!id) return false;
+    const label = name || `ID ${id}`;
+    this.app.ui.updateStatus(`Caricamento "${label}"...`);
     try {
-      const response = await fetch(`/api/drawings/${encodeURIComponent(name)}`);
+      const response = await fetch(`/api/drawings/${encodeURIComponent(id)}`);
       if (!response.ok) throw new Error('Failed to load drawing');
 
-      const res = await response.json();
-      const data = res.data;
-
-      if (!data) throw new Error('Empty data');
+      const drawing = await response.json();
+      const rawData = drawing.data;
+      if (!rawData) throw new Error('Empty data');
+      const data = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
 
       applyDrawingData(this.app, data);
-      this.app.ui.updateStatus(`Disegno "${name}" caricato`);
+      const displayName = drawing.name || label;
+      this.app.ui.updateStatus(`Disegno "${displayName}" caricato`);
       return true;
     } catch (err) {
       console.error('DB Load error:', err);
@@ -490,13 +494,15 @@ export class FileManager {
     }
   }
 
-  async deleteDrawing(name) {
+  async deleteDrawing(id, name = '') {
     try {
-      const response = await fetch(`/api/drawings/${encodeURIComponent(name)}`, {
+      if (!id) throw new Error('Missing drawing id');
+      const response = await fetch(`/api/drawings/${encodeURIComponent(id)}`, {
         method: 'DELETE'
       });
       if (!response.ok) throw new Error('Delete failed');
-      this.app.ui.updateStatus(`Disegno "${name}" eliminato`);
+      const label = name || `ID ${id}`;
+      this.app.ui.updateStatus(`Disegno "${label}" eliminato`);
       return true;
     } catch (err) {
       console.error('DB Delete error:', err);

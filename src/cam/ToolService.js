@@ -12,6 +12,7 @@ export class ToolService {
             });
             if (!res.ok) throw new Error('Failed to fetch tools');
             const json = await res.json();
+            if (Array.isArray(json)) return json;
             return json.data || [];
         } catch (err) {
             console.error(err);
@@ -21,14 +22,17 @@ export class ToolService {
 
     async saveTool(tool) {
         try {
-            const res = await fetch(this.baseUrl, {
-                method: 'POST',
+            const isUpdate = tool && Number.isFinite(tool.id) && tool.id > 0;
+            const url = isUpdate ? `${this.baseUrl}/${tool.id}` : this.baseUrl;
+            const res = await fetch(url, {
+                method: isUpdate ? 'PUT' : 'POST',
                 headers: this._headers(),
                 body: JSON.stringify(tool)
             });
             if (!res.ok) throw new Error('Failed to save tool');
             const json = await res.json();
-            return json.id;
+            if (isUpdate) return tool.id;
+            return json.id ?? json?.data?.id ?? null;
         } catch (err) {
             console.error(err);
             return null;

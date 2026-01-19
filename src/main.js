@@ -432,14 +432,14 @@ class CADApplication {
           const el = document.createElement('div');
           el.className = 'cad-drawing-item';
           el.innerHTML = `
-            <div class="cad-drawing-preview ${!item.preview_img ? 'placeholder' : ''}">
-              ${item.preview_img
-              ? `<img src="${item.preview_img}" alt="Preview">`
+            <div class="cad-drawing-preview ${!item.previewImg ? 'placeholder' : ''}">
+              ${item.previewImg
+              ? `<img src="${item.previewImg}" alt="Preview">`
               : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="width:40px;height:40px;opacity:0.5"><image x="2" y="2" width="20" height="20" rx="2"/><circle cx="12" cy="12" r="5"/></svg>'}
             </div>
             <div class="cad-drawing-info">
               <div class="cad-drawing-name" title="${item.name}">${item.name}</div>
-              <div class="cad-drawing-date">${new Date(item.updated_at).toLocaleString()}</div>
+              <div class="cad-drawing-date">${new Date(item.updatedAt).toLocaleString()}</div>
             </div>
             <div class="cad-drawing-actions">
               <button class="cad-drawing-btn delete" title="Elimina">
@@ -453,7 +453,7 @@ class CADApplication {
           // Click to Load
           el.addEventListener('click', (e) => {
             if (e.target.closest('.delete')) return; // Ignore if delete btn clicked
-            this.fileManager.loadFromDatabase(item.name);
+            this.fileManager.loadFromDatabase(item.id, item.name);
             loadModal.hidden = true;
           });
 
@@ -461,7 +461,7 @@ class CADApplication {
           el.querySelector('.delete').addEventListener('click', async (e) => {
             e.stopPropagation();
             if (confirm(`Eliminare "${item.name}"?`)) {
-              await this.fileManager.deleteDrawing(item.name);
+              await this.fileManager.deleteDrawing(item.id, item.name);
               refreshList(); // Reload list
             }
           });
@@ -481,6 +481,7 @@ class CADApplication {
     // Update renderer settings
     this.renderer.grid.show = this.showGrid;
     this.renderer.grid.spacing = this.gridSpacing;
+    this.renderer.grid.snapToGrid = this.snapToGrid;
 
     // Update floating toolbar visibility
     if (this.ui) {

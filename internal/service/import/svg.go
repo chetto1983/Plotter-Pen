@@ -100,15 +100,6 @@ func ParseSVG(content string, scale float64) (*SVGResult, error) {
 		result.ViewBox = vb
 	}
 
-	// Determine SVG height for Y-axis flipping
-	// Priority: viewBox height > height attribute
-	var svgHeight float64
-	if len(viewBox) >= 4 {
-		svgHeight = viewBox[3] // viewBox: minX, minY, width, height
-	} else if parsed.Height != "" {
-		svgHeight = parseSVGDimension(parsed.Height)
-	}
-
 	// Determine unit conversion factor to mm
 	// If viewBox exists, coordinates are in viewBox units
 	// Map viewBox to actual dimensions (width/height attributes)
@@ -135,15 +126,11 @@ func ParseSVG(content string, scale float64) (*SVGResult, error) {
 		MaxX: -math.MaxFloat64, MaxY: -math.MaxFloat64,
 	}
 
-	// Helper to transform coordinates: apply unit scale and flip Y-axis
+	// Helper to transform coordinates: apply unit scale (NO Y-flip - same as DXF)
 	transformX := func(x float64) float64 {
 		return x * unitScale
 	}
 	transformY := func(y float64) float64 {
-		// Flip Y-axis: SVG Y-down to CAD Y-up
-		if svgHeight > 0 {
-			return (svgHeight - y) * unitScale
-		}
 		return y * unitScale
 	}
 	transformPoint := func(x, y float64) Point {
@@ -247,11 +234,45 @@ func ParseSVG(content string, scale float64) (*SVGResult, error) {
 	result.Stats.EntityCount = len(result.Primitives)
 	result.Stats.LayerCount = 1
 
+	// AFTER arc fitting, flip Y-axis for correct SVG->CAD orientation
+	// This must happen AFTER arc fitting so through-points are calculated correctly
 	if result.Stats.EntityCount > 0 {
+		flipYAxis(result.Primitives, bounds)
+		// Recalculate bounds after flip
+		bounds = recalculateBounds(result.Primitives)
 		result.Bounds = bounds
 	}
 
 	return result, nil
+}
+
+// flipYAxis mirrors all primitives vertically around the center of the bounding box
+// This converts from SVG Y-down to CAD Y-up coordinate system
+func flipYAxis(prims []Primitive, bounds *Bounds) {
+	if bounds == nil {
+		return
+	}
+	// Mirror around the vertical center
+	centerY := (bounds.MinY + bounds.MaxY) / 2
+
+	for i := range prims {
+		p := &prims[i]
+
+		// Flip Y coordinates
+		p.StartY = 2*centerY - p.StartY
+		p.EndY = 2*centerY - p.EndY
+		p.CenterY = 2*centerY - p.CenterY
+
+		// Flip through point if present
+		if p.ThroughPoint != nil {
+			p.ThroughPoint.Y = 2*centerY - p.ThroughPoint.Y
+		}
+
+		// Flip points array
+		for j := range p.Points {
+			p.Points[j].Y = 2*centerY - p.Points[j].Y
+		}
+	}
 }
 
 // createPolylinePrimitive creates a polyline primitive from points

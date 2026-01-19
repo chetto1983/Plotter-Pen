@@ -81,10 +81,13 @@ export class CAMService {
      */
     async saveSettings(settings) {
         try {
+            const data = typeof settings === 'string'
+                ? settings
+                : JSON.stringify(settings ?? {});
             await fetch('/api/cam/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(settings)
+                body: JSON.stringify({ data })
             });
         } catch (e) {
             console.error('Failed to save CAM settings', e);

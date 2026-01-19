@@ -290,12 +290,25 @@ export class UIController {
 
     document.getElementById('snapGrid')?.addEventListener('change', (e) => {
       this.app.snapToGrid = e.target.checked;
-      this.app.snapManager.gridEnabled = this.app.snapToGrid;
+      if (this.app.renderer) {
+        this.app.renderer.grid.snapToGrid = this.app.snapToGrid;
+      }
+      if (this.app.snapManager) {
+        this.app.snapManager.configure({ gridEnabled: this.app.snapToGrid });
+      }
+      if (this.app.persistenceManager) {
+        this.app.persistenceManager.triggerAutoSave();
+      }
     });
 
     document.getElementById('snapObjects')?.addEventListener('change', (e) => {
       this.app.snapToObjects = e.target.checked;
-      this.app.snapManager.objectSnapEnabled = this.app.snapToObjects;
+      if (this.app.snapManager) {
+        this.app.snapManager.configure({ objectSnapEnabled: this.app.snapToObjects });
+      }
+      if (this.app.persistenceManager) {
+        this.app.persistenceManager.triggerAutoSave();
+      }
     });
   }
 
