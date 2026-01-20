@@ -167,6 +167,7 @@ go test ./internal/service/plc/... -bench=.
 
 | Parameter | Value | Location |
 |-----------|-------|----------|
+
 | Spline samples | 800 | dxf.go |
 | Arc tolerance | 0.05 | fit.go |
 | Arc search range | 350 | fit.go |

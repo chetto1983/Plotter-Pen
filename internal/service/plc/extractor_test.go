@@ -155,7 +155,9 @@ func TestExtract_Polyline(t *testing.T) {
 
 	t.Logf("Generated %d commands", len(result.Commands))
 
-	// Polyline with 3 points should produce 2 line commands
+	// Polyline with 3 points should produce:
+	// - 1 L for initial pen down (Z positioning)
+	// - 2 L for drawing segments (3 points = 2 segments)
 	lineCount := 0
 	for _, cmd := range result.Commands {
 		if cmd.Type == "L" && cmd.PrimitiveID == "poly1" {
@@ -163,8 +165,8 @@ func TestExtract_Polyline(t *testing.T) {
 		}
 	}
 
-	if lineCount != 2 {
-		t.Errorf("Expected 2 line commands for polyline, got %d", lineCount)
+	if lineCount != 3 {
+		t.Errorf("Expected 3 line commands for polyline (1 pen down + 2 segments), got %d", lineCount)
 	}
 }
 

@@ -1,152 +1,155 @@
-# CAM Engine Roadmap v2.0
+# CAM Engine Roadmap v2.1
 
-## Priority: Biarc Fitting in Go
-
-| File | Status | Change |
-|------|--------|--------|
-| `server/cam-engine/biarc.go` | TODO | Port `fitArcsAndLines()` from JS |
-| `server/cam-engine/profile.go` | TODO | Use biarc in `writeClosedPath/writeOpenPath` |
-| `server/cam-engine/geometry.go` | TODO | Add `PathSegment` struct with arc data |
-
-**Goal**: G2/G3 output instead of G1-only. ~100 lines vs ~1000s.
-
-## Architecture
+## Current Architecture (Go Backend)
 
 ```
-Go CAM Engine (server/cam-engine/)
-├── main.go      - HTTP API, settings
-├── gcode.go     - G0/G1/G2/G3/M codes ✓
-├── geometry.go  - Loops, segments, spatial grid
-├── bspline.go   - B-Spline evaluation (De Boor) ✓
-├── biarc.go     - Arc fitting (TODO)
-├── profile.go   - Profile toolpaths
-├── pocket.go    - Pocket strategies
-└── clipper.go   - Boolean ops
+cmd/server/
+└── main.go                    # Entry point, Gin router
+
+internal/
+├── handler/                   # HTTP API endpoints
+│   ├── cam.go                # POST /api/cam/process, /api/cam/parse
+│   ├── dxf.go                # POST /api/parse-dxf, /api/smart-import, /api/export-dxf
+│   ├── plc.go                # POST /api/plc/extract
+│   ├── opcua.go              # OPC UA config & transfer
+│   ├── persistence.go        # State/drawings/tools CRUD
+│   └── health.go             # Health checks
+│
+├── middleware/               # CORS, logging, security
+│
+├── persistence/
+│   └── db.go                 # GORM models (AppState, Drawing, Tool, etc.)
+│
+└── service/
+    ├── import/
+    │   ├── dxf.go            # ★ DXF parsing + arc fitting (924 lines)
+    │   ├── spline.go         # B-spline De Boor algorithm
+    │   ├── stl.go            # STL mesh parsing
+    │   └── transform.go      # Scale, center, normalize
+    │
+    ├── plc/
+    │   ├── types.go          # Primitive, Command structs
+    │   ├── extractor.go      # ★ J/L/A/WAIT command generation
+    │   ├── fit.go            # Arc/line fitting algorithm
+    │   └── optimizer.go      # Nearest-neighbor TSP
+    │
+    ├── cam/
+    │   ├── profile.go        # Profile toolpath generation
+    │   └── pocket.go         # Pocket toolpath generation
+    │
+    └── opcua/
+        ├── client.go         # OPC UA client
+        ├── config.go         # Multi-PLC config
+        └── transfer.go       # Chunked async transfer
+
+pkg/
+├── geom/types.go             # Point, Circle, Path
+├── gcode/generator.go        # G-code string builder
+├── plc/generator.go          # PLC command builder
+└── clipper/adapter.go        # Clipper2 polygon offsetting
 ```
+
+---
+
+## Component Status
+
+### Core Engine (✅ Complete)
+
+| Component | File | Status | Description |
+|-----------|------|--------|-------------|
+| DXF Import | `internal/service/import/dxf.go` | ✅ | Parse entities, arc fitting, unit detection |
+| DXF Export | `internal/service/import/dxf.go` | ✅ | Export primitives to DXF format |
+| B-Spline | `internal/service/import/spline.go` | ✅ | De Boor algorithm, 800-point sampling |
+| Arc Fitting | `internal/service/plc/fit.go` | ✅ | 3-point circle, tolerance-based fitting |
+| Path Optimizer | `internal/service/plc/optimizer.go` | ✅ | Nearest-neighbor TSP |
+| PLC Extractor | `internal/service/plc/extractor.go` | ✅ | J/L/A/WAIT with Z-axis |
+| G-Code Gen | `pkg/gcode/generator.go` | ✅ | G0/G1/G2/G3/M codes |
+| Clipper2 | `pkg/clipper/adapter.go` | ✅ | Polygon offsetting |
+
+### CAM Operations (✅ Complete)
+
+| Component | File | Status | Description |
+|-----------|------|--------|-------------|
+| Profile | `internal/service/cam/profile.go` | ✅ | Inside/outside/on-line offset |
+| Pocket | `internal/service/cam/pocket.go` | ✅ | Concentric stepover |
+
+### OPC UA (✅ Complete)
+
+| Component | File | Status | Description |
+|-----------|------|--------|-------------|
+| Client | `internal/service/opcua/client.go` | ✅ | Auto-discovery, secure endpoints |
+| Config | `internal/service/opcua/config.go` | ✅ | Multi-PLC support |
+| Transfer | `internal/service/opcua/transfer.go` | ✅ | Chunked async with ACK |
+| WebSocket | `internal/handler/opcua_ws.go` | ✅ | Real-time position streaming |
+
+### Persistence (✅ Complete)
+
+| Model | Status | Description |
+|-------|--------|-------------|
+| AppState | ✅ | Singleton autosave |
+| Drawing | ✅ | Saved designs CRUD |
+| Tool | ✅ | Tool library |
+| PLCSimulationSettings | ✅ | Speed, Z heights, wait |
+| OPCUAConfig | ✅ | Multi-PLC with auth |
+| MachineConfig | ✅ | Multi-machine support |
+
+---
+
+## Critical Values
+
+### Arc Fitting (`fit.go`, `dxf.go`)
+```go
+tolerance := 0.05           // mm - default fit tolerance
+arcSearchRange := 350       // points ahead to search
+lineSearchRange := 120      // points ahead for lines
+minRadius := 0.005          // mm
+maxRadius := 1000000.0      // mm
+circleDetectionTol := 0.01  // 1% radius tolerance
+```
+
+### Spline Sampling (`dxf.go`)
+```go
+splineSamples := 800  // points per spline curve
+```
+
+### Z-Axis (`extractor.go`)
+```go
+safeZ := 5.0   // rapid move height (default)
+workZ := 0.0   // cutting height (can be 0 or positive)
+```
+
+### PLC Command Format
+```
+J X {x}, Y {y}, Z {z}, V {speed}              # Jump (rapid)
+L X {x}, Y {y}, Z {z}, V {speed}              # Line (cut)
+A X {x}, Y {y}, Z {z}, I {aux_x}, J {aux_y}, V {speed}  # Arc (through-point)
+WAIT {ms}                                      # Dwell
+```
+
+---
 
 ## Backlog
 
-| Priority | Feature | File |
-|----------|---------|------|
-| P0 | Biarc fitting | biarc.go |
-| P1 | Drilling cycles G81/82/83 | drilling.go |
-| P2 | Lead-in/lead-out | leadin.go |
-| P3 | Adaptive clearing | pocket.go |
-| P4 | Post-processor profiles | postprocessor.go |
+### Priority P1 - Drilling Cycles
 
----
-
-## Current State Assessment
-
-### Go CAM Engine (88ms for 100 pockets ✓)
-
-| Component | Status | Issues |
-|-----------|--------|--------|
-| `gcode.go` | ✓ Complete | Full G0-G92, M0-M30 coverage |
-| `geometry.go` | ✓ Working | Spatial grid, segment connection (configurable tolerance) |
-| `clipper.go` | ✓ Robust | Magic winding flip removed. Predictable offsetting. |
-| `pocket.go` | ✓ Advanced | Biarc fitting (G2/G3). Strict area check + adaptive reversal to prevent expansion loops. |
-| `profile.go` | ✓ Advanced | Biarc fitting enabled (G2/G3). Configurable tolerance. |
-| `bspline.go` | ✓ Complete | Native De Boor algorithm for Spline support |
-
-### Frontend UI
-
-| Component | Status | Issues |
-|-----------|--------|--------|
-| Operations panel | ⚠️ Basic | No per-operation settings |
-| Settings modal | ✓ Enhanced | Global settings + Tolerance path stitching |
-| Tool selection | ❌ Missing | Hardcoded tool ID |
-| Strategy picker | ❌ Missing | No strategy options |
-
----
-
-## Phase 1: G-Code Commands (Sprint 1)
-
-### 1.1 Drilling Canned Cycles
-
-**File**: `server/cam-engine/drilling.go` (NEW)
+**Status**: ❌ TODO
+**File**: `internal/service/cam/drilling.go` (NEW)
 
 ```go
 // G81 - Standard drilling
-func (g *GCodeGenerator) G81(x, y, z, r, f float64)
+func G81(x, y, z, r, f float64)
 
 // G82 - Spot drilling (with dwell)
-func (g *GCodeGenerator) G82(x, y, z, r, p, f float64)
+func G82(x, y, z, r, p, f float64)
 
 // G83 - Peck drilling (chip breaking)
-func (g *GCodeGenerator) G83(x, y, z, r, q, f float64)
-
-// G84 - Tapping
-func (g *GCodeGenerator) G84(x, y, z, r, f float64)
-
-// G85 - Boring (feed out)
-func (g *GCodeGenerator) G85(x, y, z, r, f float64)
+func G83(x, y, z, r, q, f float64)
 ```
 
-### 1.2 Arc Improvements
+### Priority P2 - Lead-in/Lead-out
 
-**File**: `server/cam-engine/gcode.go`
-
-- G2/G3 with Z (helical interpolation)
-- Full circle support (I/J format for >180°)
-- Arc tolerance validation
-
----
-
-## Phase 2: Toolpath Strategies (Sprint 2)
-
-### 2.1 Pocket Strategies
-
-**File**: `server/cam-engine/pocket.go`
-
-| Strategy | Algorithm | Use Case |
-|----------|-----------|----------|
-| **Constant Stepover** | Offset inward by fixed % | ✓ Current |
-| **Adaptive Clearing** | Maintain constant chip load | Roughing |
-| **Trochoidal** | Circular moves + linear step | HSM |
-| **Spiral** | Continuous inside-out path | Finishing |
-
-```go
-type PocketStrategy string
-const (
-    StrategyConstant   PocketStrategy = "constant"
-    StrategyAdaptive   PocketStrategy = "adaptive"
-    StrategyTrochoidal PocketStrategy = "trochoidal"
-    StrategySpiral     PocketStrategy = "spiral"
-)
-```
-
-### 2.2 Profile Strategies
-
-**File**: `server/cam-engine/profile.go`
-
-| Feature | Description |
-|---------|-------------|
-| **Side selection** | Inside / Outside / On-line |
-| **Climb vs Conventional** | Cut direction control |
-| **Lead-in/Lead-out** | Arc, ramp, or direct entry |
-| **Multiple passes** | Roughing + finishing offset |
-
-### 2.3 Drilling Strategy
-
-**File**: `server/cam-engine/drilling.go`
-
-```go
-type DrillStrategy struct {
-    Type       string  // "standard", "peck", "deep", "tap"
-    PeckDepth  float64 // Q value for G83
-    Dwell      float64 // P value for G82
-    Retract    string  // "rapid" or "feed"
-}
-```
-
----
-
-## Phase 3: Entry/Exit Motions (Sprint 2)
-
-### 3.1 Lead-In Types
-
-**File**: `server/cam-engine/leadin.go` (NEW)
+**Status**: ❌ TODO
+**File**: `internal/service/cam/leadin.go` (NEW)
 
 | Type | G-code | Parameters |
 |------|--------|------------|
@@ -155,250 +158,112 @@ type DrillStrategy struct {
 | Helix | G2/G3 + Z | Radius, pitch |
 | Arc | G2/G3 | Radius |
 
-```go
-type LeadIn struct {
-    Type     string  // "direct", "ramp", "helix", "arc"
-    Angle    float64 // For ramp (degrees)
-    Radius   float64 // For helix/arc (mm)
-    Distance float64 // Approach distance (mm)
-}
-```
+### Priority P3 - Adaptive Clearing
 
-### 3.2 Lead-Out Types
+**Status**: ❌ TODO
+**File**: `internal/service/cam/pocket.go`
 
-| Type | Description |
-|------|-------------|
-| Direct | Retract vertically |
-| Arc | Tangent departure |
-| Overcut | Pass start point |
+| Strategy | Algorithm | Status |
+|----------|-----------|--------|
+| Constant Stepover | Offset by fixed % | ✅ Done |
+| Adaptive Clearing | Constant chip load | ❌ TODO |
+| Trochoidal | Circular + linear | ❌ TODO |
+| Spiral | Continuous inside-out | ❌ TODO |
 
----
+### Priority P4 - Post-Processor Profiles
 
-## Phase 4: Tool Management (Sprint 3)
-
-### 4.1 Tool Library Schema
-
-**File**: `server/cam-engine/tools.go` (NEW)
-
-```go
-type Tool struct {
-    ID           int     `json:"id"`
-    Name         string  `json:"name"`
-    Type         string  `json:"type"` // endmill, drill, ball, chamfer
-    Diameter     float64 `json:"diameter"`
-    FluteLength  float64 `json:"fluteLength"`
-    TotalLength  float64 `json:"totalLength"`
-    NumberFlutes int     `json:"numberOfFlutes"`
-    Material     string  `json:"material"` // hss, carbide, diamond
-    MaxRPM       float64 `json:"maxRPM"`
-    MaxFeedXY    float64 `json:"maxFeedXY"`
-    MaxFeedZ     float64 `json:"maxFeedZ"`
-}
-```
-
-### 4.2 Tool Selection Logic
-
-```go
-func SelectTool(feature Feature, tools []Tool) *Tool {
-    // 1. Filter by type (pocket → endmill, hole → drill)
-    // 2. Filter by diameter (tool < feature width)
-    // 3. Filter by reach (flute length > depth)
-    // 4. Sort by diameter (largest first for roughing)
-    // 5. Return best match
-}
-```
-
----
-
-## Phase 5: UI/UX Improvements (Sprint 3)
-
-### 5.1 Operation Panel Redesign
-
-**File**: `plotter_pen.html` (lines 662-727)
-
-```html
-<div class="cam-operation">
-  <div class="op-header">
-    <span class="op-icon">🔄</span>
-    <span class="op-name">Profile #1</span>
-    <span class="op-tool">T1 - 3mm End Mill</span>
-  </div>
-  <div class="op-details">
-    <span>Depth: -5mm</span>
-    <span>Feed: 800mm/min</span>
-  </div>
-  <div class="op-actions">
-    <button class="btn-edit">Edit</button>
-    <button class="btn-delete">Delete</button>
-    <button class="btn-up">↑</button>
-    <button class="btn-down">↓</button>
-  </div>
-</div>
-```
-
-### 5.2 Per-Operation Settings Modal
-
-**File**: `plotter_pen.html` (NEW modal)
-
-| Section | Controls |
-|---------|----------|
-| **Tool** | Dropdown with tool library |
-| **Strategy** | Radio: Constant/Adaptive/Trochoidal |
-| **Side** | Radio: Outside/Inside/On-line |
-| **Depths** | Start Z, Target Z, Step Down |
-| **Feeds** | Feed XY, Feed Z, Spindle RPM |
-| **Entry** | Dropdown: Direct/Ramp/Helix/Arc |
-
-### 5.3 Strategy Visualization
-
-- Show toolpath preview before generation
-- Color-code by operation type
-- Animation of tool movement
-
-### 5.4 Progress Feedback
-
-```javascript
-// Show progress during generation
-CAMManager.onProgress = (percent, message) => {
-    progressBar.style.width = percent + '%';
-    statusText.textContent = message;
-};
-```
-
----
-
-## Phase 6: Post-Processor System (Sprint 4)
-
-### 6.1 Machine Profiles
-
-**File**: `server/cam-engine/postprocessor.go` (NEW)
+**Status**: ❌ TODO
+**File**: `internal/service/cam/postprocessor.go` (NEW)
 
 ```go
 type MachineProfile struct {
     Name          string
     LineNumbers   bool
-    LineIncrement int
-    ArcFormat     string // "R" or "IJ"
-    CommentStyle  string // ";" or "()"
-    Precision     int    // Decimal places
-    SafeStart     []string // G-codes at program start
-    SafeEnd       []string // G-codes at program end
+    ArcFormat     string  // "R" or "IJ"
+    CommentStyle  string  // ";" or "()"
+    Precision     int
 }
 
 var Profiles = map[string]MachineProfile{
     "generic": {Name: "Generic 3-Axis", ArcFormat: "R"},
     "fanuc":   {Name: "Fanuc", LineNumbers: true, ArcFormat: "IJ"},
-    "haas":    {Name: "Haas", LineNumbers: true, ArcFormat: "R"},
     "grbl":    {Name: "GRBL/LinuxCNC", ArcFormat: "R"},
 }
 ```
 
-### 6.2 Post-Processor Options
+---
 
-| Option | Values |
-|--------|--------|
-| Line numbers | On/Off, increment |
-| Arc format | R (radius) / IJ (center) |
-| Comments | ; semicolon / () parentheses |
-| Precision | 2-6 decimal places |
-| Units | mm (G21) / inch (G20) |
+## Frontend UI Backlog
+
+| Component | Status | Priority |
+|-----------|--------|----------|
+| Per-operation settings modal | ❌ | P1 |
+| Tool selection dropdown | ❌ | P1 |
+| Strategy picker | ❌ | P2 |
+| Toolpath preview animation | ❌ | P3 |
+| Operation reordering | ❌ | P3 |
 
 ---
 
-## Phase 7: Safety & Validation (Sprint 4)
+## Testing
 
-### 7.1 Collision Detection
+```bash
+# Run all tests
+go test ./...
 
-```go
-func CheckCollisions(toolpath []Point, stock BoundingBox, tool Tool) []Warning {
-    // 1. Rapid moves stay above stock top
-    // 2. Tool fits within stock boundaries
-    // 3. Z depth within stock height
-    // 4. Tool reach covers required depth
-}
-```
+# Run PLC tests with verbose output
+go test ./internal/service/plc/... -v
 
-### 7.2 Geometry Validation
+# Run with race detector
+go test -race ./...
 
-```go
-func ValidateGeometry(primitive Primitive) error {
-    // 1. Check for self-intersecting polygons
-    // 2. Minimum feature size > tool diameter
-    // 3. Internal corners accessible by tool radius
-    // 4. Closed paths for pocketing operations
-}
+# Benchmark
+go test ./internal/service/plc/... -bench=.
 ```
 
 ---
 
-## Implementation Priority
+## Build & Run
 
-### Sprint 1 (Foundation)
+```bash
+# Build
+go build -o plotter-pen.exe ./cmd/server
 
-1. ☐ Add drilling canned cycles (G81/82/83)
-2. ☐ Implement helical interpolation (G2/G3+Z)
-3. ☐ Per-operation settings in UI
-4. ☐ Tool selection dropdown
+# Run
+./plotter-pen.exe
 
-### Sprint 2 (Strategies)
-
-1. ☐ Adaptive clearing algorithm
-2. ☐ Trochoidal milling
-3. ☐ Lead-in/lead-out implementation
-4. ☐ Strategy selector in UI
-
-### Sprint 3 (Polish)
-
-1. ☐ Tool library management UI
-2. ☐ Operation reordering
-3. ☐ Progress indicators
-4. ☐ Toolpath preview enhancement
-
-### Sprint 4 (Production)
-
-1. ☐ Post-processor selection
-2. ☐ Collision detection basics
-3. ☐ Geometry validation
-4. ☐ Machine profile system
+# Docker
+docker build -t plotter-pen .
+docker compose up --build
+```
 
 ---
 
-## Files to Create
+## Removed (Legacy)
 
-| File | Purpose |
-|------|---------|
-| `server/cam-engine/drilling.go` | Drilling strategies & canned cycles |
-| `server/cam-engine/leadin.go` | Entry/exit motion generation |
-| `server/cam-engine/tools.go` | Tool library management |
-| `server/cam-engine/postprocessor.go` | Machine-specific output |
-| `server/cam-engine/validate.go` | Geometry & collision checks |
+The following JavaScript files were removed (backend now 100% Go):
 
-## Files to Modify
-
-| File | Changes |
-|------|---------|
-| `server/cam-engine/gcode.go` | Helical arcs, line numbers |
-| `server/cam-engine/pocket.go` | Strategy selection |
-| `server/cam-engine/profile.go` | Lead-in/lead-out |
-| `server/cam-engine/main.go` | Tool library, post-processor |
-| `plotter_pen.html` | Per-operation UI, strategy picker |
-| `src/cam/CAMManager.js` | Operation editing, tool selection |
-| `src/cam/ToolLibrary.js` | UI integration |
+- ~~`server.js`~~ - Node.js server
+- ~~`src/import/DXFImporter.js`~~ - JS DXF parser
+- ~~`src/geometry/biarc.js`~~ - JS arc fitting
+- ~~`src/geometry/b-spline.js`~~ - JS B-spline
+- ~~`src/lib/dxf-parser.js`~~ - JS DXF library
+- ~~`internal/service/import/svg.go`~~ - SVG import (broken, removed)
 
 ---
 
-## Verification Plan
+## Code Metrics
 
-1. **Unit Tests**: Each G-code command validates output format
-2. **Integration Test**: 100 circle pocket < 500ms
-3. **Visual Test**: Preview matches generated toolpath
-4. **Simulation**: Run through G-code simulator (CAMotics)
-5. **Machine Test**: Cut test part on actual CNC
+| Category | Files | Lines |
+|----------|-------|-------|
+| Handlers | 10 | ~1,500 |
+| Services | 15 | ~3,000 |
+| Packages | 8 | ~600 |
+| Middleware | 6 | ~400 |
+| Persistence | 2 | ~600 |
+| Tests | 15+ | ~2,000 |
+| **Total Go** | **~56** | **~9,800** |
 
 ---
 
-## Sources
-
-- [Autodesk PowerMill Features](https://www.autodesk.com/products/powermill/features)
-- [CNC Cookbook - CAM Toolpaths](https://www.cnccookbook.com/complete-guide-to-cam-toolpaths-and-operations-for-milling/)
-- [Hurco - Toolpath Strategies](https://blog.hurco.com/mastering-toolpath-strategies-a-cnc-machinists-guide-to-efficiency)
+*Last updated: 2026-01-20*

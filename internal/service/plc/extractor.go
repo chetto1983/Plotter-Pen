@@ -87,6 +87,7 @@ func (g *outputGenerator) generate(primitives []Primitive) []Command {
 	commands := make([]Command, 0)
 	lastPoint := geom.Point{X: 0, Y: 0}
 
+	isFirst := true
 	for _, prim := range primitives {
 		if !isSupportedPrimitive(prim.Type) {
 			continue
@@ -103,8 +104,17 @@ func (g *outputGenerator) generate(primitives []Primitive) []Command {
 		}
 
 		needsJump := math.Abs(lastPoint.X-start.X) > 0.01 || math.Abs(lastPoint.Y-start.Y) > 0.01
-		if needsJump {
+
+		// Always position for first primitive, or when XY position changes
+		if isFirst || needsJump {
+			// Raise Z at current position BEFORE moving XY (prevents pen drag)
+			// Skip for first primitive since we assume starting at safe height
+			if !isFirst {
+				pushCommand(&commands, g.jumpCommand(lastPoint.X, lastPoint.Y, g.safeZ, prim.ID))
+			}
+			// Move XY to start position at safe height
 			pushCommand(&commands, g.jumpCommand(start.X, start.Y, g.safeZ, prim.ID))
+			// Lower to work height
 			pushCommand(&commands, g.lineCommand(start.X, start.Y, g.workZ, prim.ID))
 			if g.waitTime > 0 {
 				pushCommand(&commands, g.waitCommand(prim.ID))
@@ -120,10 +130,14 @@ func (g *outputGenerator) generate(primitives []Primitive) []Command {
 			end = start
 		}
 		lastPoint = end
+		isFirst = false
 	}
 
 	if len(commands) > 0 {
+		// Raise Z at last position
 		pushCommand(&commands, g.jumpCommand(lastPoint.X, lastPoint.Y, g.safeZ, ""))
+		// Return to home position (0,0)
+		pushCommand(&commands, g.jumpCommand(0, 0, g.safeZ, ""))
 	}
 
 	return commands

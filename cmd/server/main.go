@@ -48,6 +48,7 @@ func main() {
 	staticGroup.Static("/assets", cfg.StaticDir+"/assets")
 	r.StaticFile("/", cfg.StaticDir+"/plotter_pen.html")
 	r.StaticFile("/plotter_pen.html", cfg.StaticDir+"/plotter_pen.html")
+	r.StaticFile("/favicon.ico", cfg.StaticDir+"/favicon.ico")
 
 	// API routes with Gzip compression (70-90% payload reduction)
 	api := r.Group("/api")
