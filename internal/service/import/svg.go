@@ -10,13 +10,19 @@ import (
 )
 
 const (
-	svgCurveSamples    = 20
-	svgArcStepRadians  = math.Pi / 8
-	svgArcMinSteps     = 4
-	svgSimplifyEpsilon = 0.02
-	svgPxPerInch       = 96.0
-	svgMmPerInch       = 25.4
+	svgCurveSamples   = 20
+	svgArcStepRadians = math.Pi / 8
+	svgArcMinSteps    = 4
+	svgPxPerInch      = 96.0
+	svgMmPerInch      = 25.4
 )
+
+// svgSimplifyEpsilon uses shared constant from dxf.go for consistency
+var svgSimplifyEpsilon = PointSimplifyTolerance
+
+type svgParseOptions struct {
+	simplifyEpsilon float64
+}
 
 // SVGImportOptions configures SVG import behavior.
 type SVGImportOptions struct {
@@ -35,12 +41,17 @@ func ValidateSVGContent(content string) bool {
 
 // ParseSVG parses SVG content and returns primitives.
 func ParseSVG(content string) (*ParseResult, error) {
-	return parseSVGContent(content)
+	return parseSVGContent(content, svgParseOptions{simplifyEpsilon: svgSimplifyEpsilon})
 }
 
 // SmartImportSVG performs SVG import with transformations similar to DXF.
 func SmartImportSVG(content string, opts SVGImportOptions) (*SmartImportResult, error) {
-	parseResult, err := ParseSVG(content)
+	parseOpts := svgParseOptions{simplifyEpsilon: svgSimplifyEpsilon}
+	if opts.FitArcs {
+		parseOpts.simplifyEpsilon = 0
+	}
+
+	parseResult, err := parseSVGContent(content, parseOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -72,6 +83,12 @@ func SmartImportSVG(content string, opts SVGImportOptions) (*SmartImportResult, 
 
 	if opts.FitArcs {
 		result.Primitives = fitSVGPrimitives(result.Primitives)
+		result.Bounds = recalculateBounds(result.Primitives)
+		result.Stats = recalculateStats(result.Primitives)
+	}
+
+	if parseOpts.simplifyEpsilon == 0 && svgSimplifyEpsilon > 0 {
+		simplifySVGPrimitives(result.Primitives, svgSimplifyEpsilon)
 		result.Bounds = recalculateBounds(result.Primitives)
 		result.Stats = recalculateStats(result.Primitives)
 	}
@@ -117,7 +134,7 @@ func fitSVGPrimitives(prims []Primitive) []Primitive {
 			}
 		}
 
-		fitted := fitArcsToPoints(points)
+		fitted := fitArcsToPointsSVG(points)
 		if len(fitted) == 0 || len(fitted) >= len(points)/2 {
 			out = append(out, prim)
 			continue
@@ -145,7 +162,19 @@ func fitSVGPrimitives(prims []Primitive) []Primitive {
 	return out
 }
 
-func parseSVGContent(content string) (*ParseResult, error) {
+func simplifySVGPrimitives(prims []Primitive, epsilon float64) {
+	if epsilon <= 0 {
+		return
+	}
+	for i := range prims {
+		switch prims[i].Type {
+		case "polyline", "polygon":
+			prims[i].Points = simplifyPoints(prims[i].Points, epsilon)
+		}
+	}
+}
+
+func parseSVGContent(content string, opts svgParseOptions) (*ParseResult, error) {
 	decoder := xml.NewDecoder(strings.NewReader(content))
 	result := &ParseResult{
 		Primitives: make([]Primitive, 0),
@@ -168,7 +197,7 @@ func parseSVGContent(content string) (*ParseResult, error) {
 		}
 		if start, ok := token.(xml.StartElement); ok && strings.EqualFold(start.Name.Local, "svg") {
 			rootTransform := svgRootTransform(start.Attr)
-			if err := parseSVGElement(decoder, start, rootTransform, &idx, result, bounds, layers); err != nil {
+			if err := parseSVGElement(decoder, start, rootTransform, &idx, result, bounds, layers, opts); err != nil {
 				return nil, err
 			}
 			result.Stats.EntityCount = len(result.Primitives)
@@ -183,34 +212,32 @@ func parseSVGContent(content string) (*ParseResult, error) {
 
 func svgRootTransform(attrs []xml.Attr) svgTransform {
 	pxToMm := svgMmPerInch / svgPxPerInch
-	scaleX := pxToMm
-	scaleY := pxToMm
 
 	minX, minY, vbW, vbH, hasViewBox := parseViewBoxAttr(getAttr(attrs, "viewBox"))
 	widthMM, hasW := parseLengthToMM(getAttr(attrs, "width"))
 	heightMM, hasH := parseLengthToMM(getAttr(attrs, "height"))
 
 	if hasViewBox && vbW > 0 && vbH > 0 {
+		var scale float64
 		if hasW && hasH {
-			scale := min(widthMM/vbW, heightMM/vbH)
-			scaleX = scale
-			scaleY = scale
+			scale = min(widthMM/vbW, heightMM/vbH)
 		} else if hasW {
-			scale := widthMM / vbW
-			scaleX = scale
-			scaleY = scale
+			scale = widthMM / vbW
 		} else if hasH {
-			scale := heightMM / vbH
-			scaleX = scale
-			scaleY = scale
+			scale = heightMM / vbH
+		} else {
+			// No explicit dimensions - assume viewBox units are mm (1:1 scale)
+			// This is common for CAD/plotter SVGs where viewBox = physical dimensions
+			scale = 1.0
 		}
-		return scaleTransform(scaleX, scaleY).Multiply(translateTransform(-minX, -minY))
+		return scaleTransform(scale, scale).Multiply(translateTransform(-minX, -minY))
 	}
 
-	return scaleTransform(scaleX, scaleY)
+	// No viewBox - use pixel to mm conversion
+	return scaleTransform(pxToMm, pxToMm)
 }
 
-func parseSVGElement(decoder *xml.Decoder, start xml.StartElement, parentTransform svgTransform, idx *int, result *ParseResult, bounds *Bounds, layers map[string]bool) error {
+func parseSVGElement(decoder *xml.Decoder, start xml.StartElement, parentTransform svgTransform, idx *int, result *ParseResult, bounds *Bounds, layers map[string]bool, opts svgParseOptions) error {
 	name := strings.ToLower(start.Name.Local)
 	elementTransform := parseTransformAttr(getAttr(start.Attr, "transform"))
 	transform := parentTransform.Multiply(elementTransform)
@@ -224,7 +251,7 @@ func parseSVGElement(decoder *xml.Decoder, start xml.StartElement, parentTransfo
 			}
 			switch tok := token.(type) {
 			case xml.StartElement:
-				if err := parseSVGElement(decoder, tok, transform, idx, result, bounds, layers); err != nil {
+				if err := parseSVGElement(decoder, tok, transform, idx, result, bounds, layers, opts); err != nil {
 					return err
 				}
 			case xml.EndElement:
@@ -242,7 +269,7 @@ func parseSVGElement(decoder *xml.Decoder, start xml.StartElement, parentTransfo
 		}
 		for _, seg := range segments {
 			applyTransformToSegment(&seg, transform)
-			prims := segmentToPrimitives(seg, idx)
+			prims := segmentToPrimitives(seg, idx, opts.simplifyEpsilon)
 			for i := range prims {
 				addPrimitive(result, bounds, layers, prims[i])
 			}
@@ -268,7 +295,7 @@ func parseSVGElement(decoder *xml.Decoder, start xml.StartElement, parentTransfo
 		w, okW := parseFloatAttr(start.Attr, "width")
 		h, okH := parseFloatAttr(start.Attr, "height")
 		if okW && okH {
-			prims := rectToPrimitives(x, y, w, h, transform, idx)
+			prims := rectToPrimitives(x, y, w, h, transform, idx, opts.simplifyEpsilon)
 			for i := range prims {
 				addPrimitive(result, bounds, layers, prims[i])
 			}
@@ -280,7 +307,7 @@ func parseSVGElement(decoder *xml.Decoder, start xml.StartElement, parentTransfo
 		cy, okY := parseFloatAttr(start.Attr, "cy")
 		r, okR := parseFloatAttr(start.Attr, "r")
 		if okX && okY && okR {
-			prims := circleToPrimitives(Point{X: cx, Y: cy}, r, transform, idx)
+			prims := circleToPrimitives(Point{X: cx, Y: cy}, r, transform, idx, opts.simplifyEpsilon)
 			for i := range prims {
 				addPrimitive(result, bounds, layers, prims[i])
 			}
@@ -293,7 +320,7 @@ func parseSVGElement(decoder *xml.Decoder, start xml.StartElement, parentTransfo
 		rx, okRX := parseFloatAttr(start.Attr, "rx")
 		ry, okRY := parseFloatAttr(start.Attr, "ry")
 		if okX && okY && okRX && okRY {
-			prim := ellipseToPrimitive(Point{X: cx, Y: cy}, rx, ry, transform, idx)
+			prim := ellipseToPrimitive(Point{X: cx, Y: cy}, rx, ry, transform, idx, opts.simplifyEpsilon)
 			if prim != nil {
 				addPrimitive(result, bounds, layers, *prim)
 			}
@@ -307,7 +334,7 @@ func parseSVGElement(decoder *xml.Decoder, start xml.StartElement, parentTransfo
 			prim := Primitive{
 				Type:   "polyline",
 				ID:     nextSVGID(idx),
-				Points: simplifyPoints(points, svgSimplifyEpsilon),
+				Points: svgSimplifyPoints(points, opts.simplifyEpsilon),
 				Closed: false,
 			}
 			addPrimitive(result, bounds, layers, prim)
@@ -321,7 +348,7 @@ func parseSVGElement(decoder *xml.Decoder, start xml.StartElement, parentTransfo
 			prim := Primitive{
 				Type:   "polygon",
 				ID:     nextSVGID(idx),
-				Points: simplifyPoints(points, svgSimplifyEpsilon),
+				Points: svgSimplifyPoints(points, opts.simplifyEpsilon),
 				Closed: true,
 			}
 			addPrimitive(result, bounds, layers, prim)
@@ -340,6 +367,13 @@ func addPrimitive(result *ParseResult, bounds *Bounds, layers map[string]bool, p
 		layers[prim.Layer] = true
 	}
 	updateBounds(bounds, &prim)
+}
+
+func svgSimplifyPoints(points []Point, epsilon float64) []Point {
+	if epsilon <= 0 {
+		return points
+	}
+	return simplifyPoints(points, epsilon)
 }
 
 func parsePointsAttr(value string) []Point {
@@ -580,7 +614,7 @@ func transformFromName(name string, nums []float64) svgTransform {
 
 // ---- Shape helpers ----
 
-func rectToPrimitives(x, y, w, h float64, transform svgTransform, idx *int) []Primitive {
+func rectToPrimitives(x, y, w, h float64, transform svgTransform, idx *int, simplifyEpsilon float64) []Primitive {
 	if w == 0 || h == 0 {
 		return nil
 	}
@@ -605,13 +639,13 @@ func rectToPrimitives(x, y, w, h float64, transform svgTransform, idx *int) []Pr
 	prim := Primitive{
 		Type:   "polygon",
 		ID:     nextSVGID(idx),
-		Points: simplifyPoints(corners, svgSimplifyEpsilon),
+		Points: svgSimplifyPoints(corners, simplifyEpsilon),
 		Closed: true,
 	}
 	return []Primitive{prim}
 }
 
-func circleToPrimitives(center Point, radius float64, transform svgTransform, idx *int) []Primitive {
+func circleToPrimitives(center Point, radius float64, transform svgTransform, idx *int, simplifyEpsilon float64) []Primitive {
 	if radius == 0 {
 		return nil
 	}
@@ -631,13 +665,13 @@ func circleToPrimitives(center Point, radius float64, transform svgTransform, id
 	prim := Primitive{
 		Type:   "polygon",
 		ID:     nextSVGID(idx),
-		Points: simplifyPoints(points, svgSimplifyEpsilon),
+		Points: svgSimplifyPoints(points, simplifyEpsilon),
 		Closed: true,
 	}
 	return []Primitive{prim}
 }
 
-func ellipseToPrimitive(center Point, rx, ry float64, transform svgTransform, idx *int) *Primitive {
+func ellipseToPrimitive(center Point, rx, ry float64, transform svgTransform, idx *int, simplifyEpsilon float64) *Primitive {
 	if rx == 0 || ry == 0 {
 		return nil
 	}
@@ -646,7 +680,7 @@ func ellipseToPrimitive(center Point, rx, ry float64, transform svgTransform, id
 	prim := Primitive{
 		Type:   "polygon",
 		ID:     nextSVGID(idx),
-		Points: simplifyPoints(points, svgSimplifyEpsilon),
+		Points: svgSimplifyPoints(points, simplifyEpsilon),
 		Closed: true,
 	}
 	return &prim
@@ -710,6 +744,12 @@ func applyTransformToSegment(seg *svgPathSegment, transform svgTransform) {
 	for i := range seg.Points {
 		seg.Points[i] = transform.Apply(seg.Points[i])
 	}
+	// Also transform SubSegments (used for line/curve distinction)
+	for i := range seg.SubSegments {
+		for j := range seg.SubSegments[i].Points {
+			seg.SubSegments[i].Points[j] = transform.Apply(seg.SubSegments[i].Points[j])
+		}
+	}
 }
 
 func flipPrimitivesY(prims []Primitive, baseline float64) {
@@ -752,9 +792,22 @@ type pathToken struct {
 	num  float64
 }
 
+// svgPathSegment represents a parsed SVG path segment.
+// Instead of merging all commands into one polyline, we now track
+// individual sub-segments for each SVG command (line, cubic, etc.)
+// This preserves the semantic distinction between lines and curves.
 type svgPathSegment struct {
 	Points []Point
 	Closed bool
+	// SubSegments contains the individual command results.
+	// Each sub-segment has its own points and type info.
+	SubSegments []svgSubSegment
+}
+
+// svgSubSegment represents points from a single SVG path command.
+type svgSubSegment struct {
+	Points []Point
+	IsLine bool // true if from L/l/H/h/V/v command (definitely a line)
 }
 
 type svgPathParser struct {
@@ -1182,6 +1235,11 @@ func (p *svgPathParser) ensureSegment() {
 
 func (p *svgPathParser) lineTo(pt Point) {
 	p.ensureSegment()
+	// Track as sub-segment with IsLine=true
+	p.segment.SubSegments = append(p.segment.SubSegments, svgSubSegment{
+		Points: []Point{p.curr, pt},
+		IsLine: true,
+	})
 	p.segment.Points = appendPoint(p.segment.Points, pt)
 	p.curr = pt
 	p.lastCubicCtrl = nil
@@ -1190,29 +1248,89 @@ func (p *svgPathParser) lineTo(pt Point) {
 
 func (p *svgPathParser) cubicTo(c1, c2, end Point) {
 	p.ensureSegment()
-	for _, pt := range cubicSample(p.curr, c1, c2, end, svgCurveSamples) {
+	samples := cubicSample(p.curr, c1, c2, end, svgCurveSamples)
+	// Check if cubic bezier is actually a straight line (control points collinear with endpoints)
+	isLinear := isCubicLinear(p.curr, c1, c2, end)
+	// Track as sub-segment
+	subPoints := []Point{p.curr}
+	for _, pt := range samples {
 		p.segment.Points = appendPoint(p.segment.Points, pt)
+		subPoints = append(subPoints, pt)
 	}
+	p.segment.SubSegments = append(p.segment.SubSegments, svgSubSegment{
+		Points: subPoints,
+		IsLine: isLinear,
+	})
 	p.curr = end
 	p.lastCubicCtrl = &c2
 	p.lastQuadCtrl = nil
 }
 
+// isCubicLinear checks if a cubic bezier is effectively a straight line
+// by testing if control points are collinear with endpoints.
+func isCubicLinear(p0, c1, c2, p3 Point) bool {
+	// Calculate distance from control points to the line p0-p3
+	lineLen := distance(p0, p3)
+	if lineLen < 1e-9 {
+		return true // Degenerate case
+	}
+	dist1 := pointToSegmentDistance(c1, p0, p3)
+	dist2 := pointToSegmentDistance(c2, p0, p3)
+	// If both control points are within 0.1% of line length from the line, it's linear
+	threshold := lineLen * 0.001
+	if threshold < 0.01 {
+		threshold = 0.01
+	}
+	return dist1 < threshold && dist2 < threshold
+}
+
 func (p *svgPathParser) quadraticTo(c1, end Point) {
 	p.ensureSegment()
-	for _, pt := range quadraticSample(p.curr, c1, end, svgCurveSamples) {
+	samples := quadraticSample(p.curr, c1, end, svgCurveSamples)
+	// Check if quadratic bezier is actually a straight line (control point collinear)
+	isLinear := isQuadraticLinear(p.curr, c1, end)
+	// Track as sub-segment
+	subPoints := []Point{p.curr}
+	for _, pt := range samples {
 		p.segment.Points = appendPoint(p.segment.Points, pt)
+		subPoints = append(subPoints, pt)
 	}
+	p.segment.SubSegments = append(p.segment.SubSegments, svgSubSegment{
+		Points: subPoints,
+		IsLine: isLinear,
+	})
 	p.curr = end
 	p.lastQuadCtrl = &c1
 	p.lastCubicCtrl = nil
 }
 
+// isQuadraticLinear checks if a quadratic bezier is effectively a straight line.
+func isQuadraticLinear(p0, c1, p2 Point) bool {
+	lineLen := distance(p0, p2)
+	if lineLen < 1e-9 {
+		return true
+	}
+	dist := pointToSegmentDistance(c1, p0, p2)
+	threshold := lineLen * 0.001
+	if threshold < 0.01 {
+		threshold = 0.01
+	}
+	return dist < threshold
+}
+
 func (p *svgPathParser) arcTo(rx, ry, angle float64, largeArc, sweep bool, end Point) {
 	p.ensureSegment()
-	for _, pt := range arcSample(p.curr, end, rx, ry, angle, largeArc, sweep) {
+	samples := arcSample(p.curr, end, rx, ry, angle, largeArc, sweep)
+	// Track as sub-segment (arcs are curves, not lines)
+	subPoints := []Point{p.curr}
+	for _, pt := range samples {
 		p.segment.Points = appendPoint(p.segment.Points, pt)
+		subPoints = append(subPoints, pt)
 	}
+	p.segment.SubSegments = append(p.segment.SubSegments, svgSubSegment{
+		Points: subPoints,
+		IsLine: false,
+	})
 	p.curr = end
 	p.lastCubicCtrl = nil
 	p.lastQuadCtrl = nil
@@ -1250,7 +1368,13 @@ func appendPoint(points []Point, pt Point) []Point {
 	return append(points, pt)
 }
 
-func segmentToPrimitives(seg svgPathSegment, idx *int) []Primitive {
+func segmentToPrimitives(seg svgPathSegment, idx *int, simplifyEpsilon float64) []Primitive {
+	// If we have sub-segments, use them for better line/curve distinction
+	if len(seg.SubSegments) > 0 {
+		return subSegmentsToPrimitives(seg, idx, simplifyEpsilon)
+	}
+
+	// Fallback to old behavior if no sub-segments tracked
 	points := seg.Points
 	if len(points) < 2 {
 		return nil
@@ -1270,7 +1394,7 @@ func segmentToPrimitives(seg svgPathSegment, idx *int) []Primitive {
 		return []Primitive{{
 			Type:   "polygon",
 			ID:     nextSVGID(idx),
-			Points: simplifyPoints(points, svgSimplifyEpsilon),
+			Points: svgSimplifyPoints(points, simplifyEpsilon),
 			Closed: true,
 		}}
 	}
@@ -1282,8 +1406,70 @@ func segmentToPrimitives(seg svgPathSegment, idx *int) []Primitive {
 	return []Primitive{{
 		Type:   "polyline",
 		ID:     nextSVGID(idx),
-		Points: simplifyPoints(points, svgSimplifyEpsilon),
+		Points: svgSimplifyPoints(points, simplifyEpsilon),
 	}}
+}
+
+// subSegmentsToPrimitives converts SVG sub-segments to primitives,
+// preserving the line/curve distinction from the original SVG commands.
+func subSegmentsToPrimitives(seg svgPathSegment, idx *int, simplifyEpsilon float64) []Primitive {
+	var result []Primitive
+
+	// Group consecutive curve sub-segments into polylines for arc fitting,
+	// but output line sub-segments directly as Line primitives
+	var curvePoints []Point
+
+	flushCurve := func() {
+		if len(curvePoints) < 2 {
+			curvePoints = nil
+			return
+		}
+		if len(curvePoints) == 2 {
+			result = append(result, newLinePrimitive(curvePoints[0], curvePoints[1], "", nextSVGID(idx)))
+		} else {
+			result = append(result, Primitive{
+				Type:   "polyline",
+				ID:     nextSVGID(idx),
+				Points: svgSimplifyPoints(curvePoints, simplifyEpsilon),
+			})
+		}
+		curvePoints = nil
+	}
+
+	for _, sub := range seg.SubSegments {
+		if sub.IsLine {
+			// Flush any pending curve points
+			flushCurve()
+			// Output line directly - this preserves the line from l/L/h/H/v/V commands
+			if len(sub.Points) >= 2 {
+				result = append(result, newLinePrimitive(sub.Points[0], sub.Points[len(sub.Points)-1], "", nextSVGID(idx)))
+			}
+		} else {
+			// Curve command - accumulate points for potential arc fitting
+			if len(curvePoints) == 0 && len(sub.Points) > 0 {
+				curvePoints = append(curvePoints, sub.Points[0])
+			}
+			for i := 1; i < len(sub.Points); i++ {
+				curvePoints = appendPoint(curvePoints, sub.Points[i])
+			}
+		}
+	}
+
+	// Flush remaining curve points
+	flushCurve()
+
+	// Handle closed paths - add closing line if needed
+	if seg.Closed && len(result) > 0 {
+		first := result[0]
+		last := result[len(result)-1]
+		startPt := primitiveStartPoint(&first)
+		endPt := primitiveEndPoint(&last)
+		if distance(startPt, endPt) > 0.1 {
+			result = append(result, newLinePrimitive(endPt, startPt, "", nextSVGID(idx)))
+		}
+	}
+
+	return result
 }
 
 func cubicSample(p0, p1, p2, p3 Point, steps int) []Point {
@@ -1447,4 +1633,12 @@ func nearlyZero(v float64) bool {
 func nextSVGID(idx *int) string {
 	*idx += 1
 	return fmt.Sprintf("svg_%d", *idx)
+}
+
+// fitArcsToPointsSVG fits arcs and lines to curve polylines from SVG.
+// Since lines are now separated at parse time (IsLine subsegments become Line primitives),
+// this function only receives actual curve data and uses the standard DXF arc fitting.
+func fitArcsToPointsSVG(points []Point) []Primitive {
+	// Delegate to the proven DXF arc fitting algorithm
+	return fitArcsToPoints(points)
 }
