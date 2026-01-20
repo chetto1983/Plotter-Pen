@@ -19,8 +19,6 @@ import { LayerPanel } from './ui/LayerPanel.js';
 import { PersistenceManager } from './app/PersistenceManager.js';
 import { OPCUAWebSocketService } from './services/OPCUAWebSocketService.js';
 import { log } from './lib/logger.js';
-// import { CAMManager } from './cam/CAMManager.js'; // Converted to dynamic
-
 log('MAIN: Loading main.js...');
 
 /**
@@ -131,17 +129,6 @@ class CADApplication {
     this.viewManager = new ViewManager(this);
     this.toolController = new ToolController(this);
     this.persistenceManager = new PersistenceManager(this);
-
-    log('MAIN: DynImporting CAMManager...');
-    import('./cam/CAMManager.js')
-      .then(module => {
-        log('MAIN: CAMManager module loaded.');
-        this.camManager = new module.CAMManager(this);
-        log('MAIN: CAMManager instantiated.');
-      })
-      .catch(err => {
-        log('MAIN: Failed to load CAMManager!', err);
-      });
 
     // Initialize layer panel UI
     this.layerPanel = new LayerPanel(this.layerManager, 'layerPanel');

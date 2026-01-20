@@ -63,17 +63,9 @@ export class App {
         });
     }
 
-    handleTabChange(tab) {
-        // Legacy Logic from plotter_pen.html
+    handleTabChange() {
+        // Tab change handler - PLC panel always visible
         const plcPanel = document.getElementById('plcPanel');
-        const camPanel = document.getElementById('camPanel');
-
-        if (tab === 'cam') {
-            if (plcPanel) plcPanel.style.display = 'none';
-            if (camPanel) camPanel.style.display = 'flex';
-        } else {
-            if (plcPanel) plcPanel.style.display = 'flex';
-            if (camPanel) camPanel.style.display = 'none';
-        }
+        if (plcPanel) plcPanel.style.display = 'flex';
     }
 }

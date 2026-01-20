@@ -11,7 +11,6 @@ export class Ribbon {
     <div class="cad-ribbon-tabs">
       <button class="ribbon-tab active" data-tab="home">Home</button>
       <button class="ribbon-tab" data-tab="view">Vista & File</button>
-      <button class="ribbon-tab" data-tab="cam">CAM & CNC</button>
     </div>
 
     <div class="cad-ribbon-content">
@@ -106,12 +105,16 @@ export class Ribbon {
              <span class="cad-toolbar-label">Annotazioni</span>
         </div>
         
-         <!-- Output Simple (Old) -->
+         <!-- Output -->
          <div class="cad-toolbar-group">
             <div class="cad-toolbar-buttons">
                 <button type="button" class="cad-tool-btn" id="btnSendPLC" title="Invia a PLC">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
                     <span>PLC</span>
+                </button>
+                <button type="button" class="cad-tool-btn" id="btnOpenPLCConfig" title="Config PLC/OPC UA">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M9 9h6" /><path d="M9 13h6" /><path d="M9 17h4" /></svg>
+                    <span>Config</span>
                 </button>
             </div>
             <span class="cad-toolbar-label">Output</span>
@@ -141,61 +144,6 @@ export class Ribbon {
                 <button type="button" class="cad-tool-btn" id="btnClear" title="Pulisci"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="9" y1="9" x2="15" y2="15" /><line x1="15" y1="9" x2="9" y2="15" /></svg><span>Pulisci</span></button>
             </div>
             <span class="cad-toolbar-label">File</span>
-         </div>
-      </div>
-
-      <!-- CAM TAB -->
-      <div id="tab-cam" class="ribbon-panel">
-         <!-- CAM Selection -->
-         <div class="cad-toolbar-group">
-            <div class="cad-toolbar-buttons">
-                <button type="button" class="cad-tool-btn" id="btnCamSelectAll" data-tool="select" title="Seleziona (S)">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 12l2 2 4-4" /></svg>
-                    <span>Seleziona</span>
-                </button>
-            </div>
-            <span class="cad-toolbar-label">Selezione</span>
-         </div>
-         <!-- CAM Ops -->
-         <div class="cad-toolbar-group">
-            <div class="cad-toolbar-buttons">
-                <button type="button" class="cad-tool-btn" id="btnCamProfile" title="Profilo">
-                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2" stroke-dasharray="4 4" /><path d="M4 4 L20 4 L20 20 L4 20 Z" stroke="blue" stroke-width="3" /></svg>
-                     <span>Profilo</span>
-                </button>
-                <button type="button" class="cad-tool-btn" id="btnCamPocket" title="Tasca">
-                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 8h8M8 12h8M8 16h8" stroke="currentColor" stroke-width="1" /></svg>
-                     <span>Tasca</span>
-                </button>
-            </div>
-            <span class="cad-toolbar-label">Operazioni</span>
-         </div>
-         <!-- Output -->
-         <div class="cad-toolbar-group">
-            <div class="cad-toolbar-buttons">
-                <button type="button" class="cad-tool-btn" id="btnCamGenerate" title="Genera G-Code">
-                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3-3a1 1 0 0 0-1.4-1.4l-2.3 2.3-1-1a1 1 0 0 0-1.3 0.1z" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /></svg>
-                     <span>Genera</span>
-                </button>
-                 <button type="button" class="cad-tool-btn" id="btnCamSettings" title="Setup">
-                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-                     <span>Setup</span>
-                </button>
-                <button type="button" class="cad-tool-btn" id="btnOpenPLCConfig" title="Config">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M9 9h6" /><path d="M9 13h6" /><path d="M9 17h4" /></svg>
-                    <span>PLC Config</span>
-                </button>
-            </div>
-            <span class="cad-toolbar-label">Setup</span>
-         </div>
-          <div class="cad-toolbar-group">
-            <div class="cad-toolbar-buttons">
-                <button type="button" class="cad-tool-btn" id="btnCamDownload" title="Scarica">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 15v4c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2v-4M17 9l-5 5-5-5M12 12.8V2.5" /></svg>
-                    <span>Download</span>
-                </button>
-            </div>
-            <span class="cad-toolbar-label">Output</span>
          </div>
       </div>
     </div>

@@ -92,14 +92,6 @@ func registerHandlers(api *gin.RouterGroup, db *gorm.DB) {
 	persistHandler := handler.NewPersistenceHandler(db)
 	persistHandler.RegisterRoutes(api)
 
-	// Machine handlers
-	machineHandler := handler.NewMachineHandler(db)
-	machineHandler.RegisterRoutes(api)
-
-	// CAM handlers
-	camHandler := handler.NewCAMHandler()
-	camHandler.RegisterRoutes(api)
-
 	// PLC handlers
 	plcHandler := handler.NewPLCHandler()
 	plcHandler.RegisterRoutes(api)

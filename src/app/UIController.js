@@ -129,13 +129,6 @@ export class UIController {
   updateFloatingToolbar() {
     if (!this.floatToolbar) return;
 
-    // User Request: Do NOT show floating toolbar if we are in CAM mode
-    const camTabActive = document.querySelector('.ribbon-tab[data-tab="cam"].active');
-    if (camTabActive) {
-      this.floatToolbar.classList.remove('visible');
-      return;
-    }
-
     if (this.app.selectedPrimitives.size > 0) {
       this.floatToolbar.classList.add('visible');
     } else {

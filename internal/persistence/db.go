@@ -25,21 +25,14 @@ type Drawing struct {
 	UpdatedAt  time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
 }
 
-// Tool represents a CAM tool
+// Tool represents a drawing tool (pen, marker, etc.)
 type Tool struct {
 	ID          int64     `gorm:"primaryKey;autoIncrement" json:"id"`
 	Name        string    `gorm:"not null" json:"name"`
-	Type        string    `gorm:"default:'endmill'" json:"type"`
+	Type        string    `gorm:"default:'pen'" json:"type"`
 	Diameter    float64   `gorm:"not null" json:"diameter"`
 	Description string    `json:"description,omitempty"`
 	CreatedAt   time.Time `gorm:"autoCreateTime" json:"createdAt"`
-}
-
-// CAMSettings stores CAM configuration (singleton)
-type CAMSettings struct {
-	ID        int64     `gorm:"primaryKey;check:id = 1" json:"id"`
-	Data      string    `gorm:"type:text;not null" json:"data"`
-	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
 }
 
 // PLCSimulationSettings stores PLC simulation parameters (singleton)
@@ -147,7 +140,6 @@ func InitDBWithConfig(dbPath string, cfg DBConfig) (*gorm.DB, error) {
 		&AppState{},
 		&Drawing{},
 		&Tool{},
-		&CAMSettings{},
 		&PLCSimulationSettings{},
 		&MachineConfig{},
 		&OPCUAConfig{},
@@ -176,12 +168,6 @@ func initSingletons(db *gorm.DB) {
 	var appState AppState
 	if db.First(&appState).Error != nil {
 		db.Create(&AppState{ID: 1, Data: "{}"})
-	}
-
-	// CAMSettings singleton
-	var camSettings CAMSettings
-	if db.First(&camSettings).Error != nil {
-		db.Create(&CAMSettings{ID: 1, Data: "{}"})
 	}
 
 	// PLCSimulationSettings singleton with defaults
