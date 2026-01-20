@@ -107,7 +107,7 @@ func registerHandlers(api *gin.RouterGroup, db *gorm.DB) {
 	opcuaHandler := handler.NewOpcuaHandler(db)
 	opcuaHandler.RegisterRoutes(api)
 
-	// DXF/SVG/STL handlers
+	// DXF/STL handlers
 	dxfHandler := handler.NewDXFHandler()
 	dxfHandler.RegisterRoutes(api)
 }

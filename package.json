@@ -5,22 +5,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js",
-    "validate": "node test/validate-all.mjs"
+    "lint": "eslint src/"
   },
   "dependencies": {
-    "@polar3d/gcode-viewer": "^2.1.1",
-    "b-spline": "^2.0.2",
-    "dxf-parser": "^1.1.2",
-    "dxf-writer": "^1.18.4",
-    "express": "^5.2.1",
-    "node-opcua-client": "^2.159.0",
-    "sqlite3": "^5.1.7",
     "three": "^0.182.0"
-  },
-  "engines": {
-    "node": ">=18.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
