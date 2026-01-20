@@ -226,7 +226,7 @@ export class FileManager {
       }
 
       if (!primitives || primitives.length === 0) {
-        this.app.ui.updateStatus("SVG senza entità importabili");
+        this.app.ui.updateStatus("SVG senza entita importabili");
         return;
       }
 

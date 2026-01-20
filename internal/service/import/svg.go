@@ -102,8 +102,7 @@ func parseSVGContent(content string) (*ParseResult, error) {
 			return nil, err
 		}
 		if start, ok := token.(xml.StartElement); ok && strings.EqualFold(start.Name.Local, "svg") {
-			rootTransform := parseTransformAttr(getAttr(start.Attr, "transform"))
-			if err := parseSVGElement(decoder, start, rootTransform, &idx, result, bounds, layers); err != nil {
+			if err := parseSVGElement(decoder, start, identityTransform(), &idx, result, bounds, layers); err != nil {
 				return nil, err
 			}
 			result.Stats.EntityCount = len(result.Primitives)
