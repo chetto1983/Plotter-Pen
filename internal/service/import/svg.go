@@ -14,6 +14,8 @@ const (
 	svgArcStepRadians  = math.Pi / 8
 	svgArcMinSteps     = 4
 	svgSimplifyEpsilon = 0.02
+	svgPxPerInch       = 96.0
+	svgMmPerInch       = 25.4
 )
 
 // SVGImportOptions configures SVG import behavior.
@@ -102,7 +104,8 @@ func parseSVGContent(content string) (*ParseResult, error) {
 			return nil, err
 		}
 		if start, ok := token.(xml.StartElement); ok && strings.EqualFold(start.Name.Local, "svg") {
-			if err := parseSVGElement(decoder, start, identityTransform(), &idx, result, bounds, layers); err != nil {
+			rootTransform := svgRootTransform(start.Attr)
+			if err := parseSVGElement(decoder, start, rootTransform, &idx, result, bounds, layers); err != nil {
 				return nil, err
 			}
 			result.Stats.EntityCount = len(result.Primitives)
@@ -113,6 +116,35 @@ func parseSVGContent(content string) (*ParseResult, error) {
 			return result, nil
 		}
 	}
+}
+
+func svgRootTransform(attrs []xml.Attr) svgTransform {
+	pxToMm := svgMmPerInch / svgPxPerInch
+	scaleX := pxToMm
+	scaleY := pxToMm
+
+	minX, minY, vbW, vbH, hasViewBox := parseViewBoxAttr(getAttr(attrs, "viewBox"))
+	widthMM, hasW := parseLengthToMM(getAttr(attrs, "width"))
+	heightMM, hasH := parseLengthToMM(getAttr(attrs, "height"))
+
+	if hasViewBox && vbW > 0 && vbH > 0 {
+		if hasW && hasH {
+			scale := min(widthMM/vbW, heightMM/vbH)
+			scaleX = scale
+			scaleY = scale
+		} else if hasW {
+			scale := widthMM / vbW
+			scaleX = scale
+			scaleY = scale
+		} else if hasH {
+			scale := heightMM / vbH
+			scaleX = scale
+			scaleY = scale
+		}
+		return scaleTransform(scaleX, scaleY).Multiply(translateTransform(-minX, -minY))
+	}
+
+	return scaleTransform(scaleX, scaleY)
 }
 
 func parseSVGElement(decoder *xml.Decoder, start xml.StartElement, parentTransform svgTransform, idx *int, result *ParseResult, bounds *Bounds, layers map[string]bool) error {
@@ -266,6 +298,49 @@ func parseFloatAttr(attrs []xml.Attr, name string) (float64, bool) {
 	}
 	num, ok := parseFirstNumber(value)
 	return num, ok
+}
+
+func parseViewBoxAttr(value string) (float64, float64, float64, float64, bool) {
+	values := parseFloatList(value)
+	if len(values) < 4 {
+		return 0, 0, 0, 0, false
+	}
+	return values[0], values[1], values[2], values[3], true
+}
+
+func parseLengthToMM(value string) (float64, bool) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, false
+	}
+	num, next, ok := scanNumber(value, 0)
+	if !ok {
+		return 0, false
+	}
+	unit := strings.ToLower(strings.TrimSpace(value[next:]))
+	if strings.Contains(unit, "%") {
+		return 0, false
+	}
+
+	pxToMm := svgMmPerInch / svgPxPerInch
+	switch unit {
+	case "", "px":
+		return num * pxToMm, true
+	case "mm":
+		return num, true
+	case "cm":
+		return num * 10, true
+	case "in":
+		return num * svgMmPerInch, true
+	case "pt":
+		return num * (svgMmPerInch / 72), true
+	case "pc":
+		return num * (svgMmPerInch / 6), true
+	case "q":
+		return num * 0.25, true
+	default:
+		return num * pxToMm, true
+	}
 }
 
 func parseFirstNumber(value string) (float64, bool) {
