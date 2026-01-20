@@ -1,6 +1,7 @@
 package persistence
 
 import (
+	"log"
 	"time"
 
 	"github.com/glebarez/sqlite"
@@ -167,20 +168,24 @@ func initSingletons(db *gorm.DB) {
 	// AppState singleton
 	var appState AppState
 	if db.First(&appState).Error != nil {
-		db.Create(&AppState{ID: 1, Data: "{}"})
+		if err := db.Create(&AppState{ID: 1, Data: "{}"}).Error; err != nil {
+			log.Printf("Failed to create AppState singleton: %v", err)
+		}
 	}
 
 	// PLCSimulationSettings singleton with defaults
 	var plcSettings PLCSimulationSettings
 	if db.First(&plcSettings).Error != nil {
-		db.Create(&PLCSimulationSettings{
+		if err := db.Create(&PLCSimulationSettings{
 			ID:         1,
 			WorkSpeed:  100,
 			RapidSpeed: 1000,
 			SafeZ:      5,
 			WorkZ:      0,
 			WaitTime:   0,
-		})
+		}).Error; err != nil {
+			log.Printf("Failed to create PLCSimulationSettings singleton: %v", err)
+		}
 	}
 }
 
@@ -199,7 +204,9 @@ func seedDefaultTools(db *gorm.DB) {
 	}
 
 	for _, tool := range defaultTools {
-		db.Create(&tool)
+		if err := db.Create(&tool).Error; err != nil {
+			log.Printf("Failed to seed tool %s: %v", tool.Name, err)
+		}
 	}
 }
 
@@ -255,7 +262,9 @@ func seedDefaultMachines(db *gorm.DB) {
 	}
 
 	for _, machine := range defaultMachines {
-		db.Create(&machine)
+		if err := db.Create(&machine).Error; err != nil {
+			log.Printf("Failed to seed machine %s: %v", machine.Name, err)
+		}
 	}
 }
 
@@ -291,5 +300,7 @@ func seedOPCUAConfig(db *gorm.DB) {
 		SecurityMode:         "SignAndEncrypt",
 		SecurityPolicy:       "Basic256Sha256",
 	}
-	db.Create(&defaultCfg)
+	if err := db.Create(&defaultCfg).Error; err != nil {
+		log.Printf("Failed to seed OPC UA config: %v", err)
+	}
 }

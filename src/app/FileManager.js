@@ -46,7 +46,6 @@ export class FileManager {
       this.app.ui.updateStatus("File scaricato (Legacy mode)");
     } catch (err) {
       if (err.name !== "AbortError") {
-        console.error("Save failed:", err);
         this.app.ui.updateStatus("Errore durante il salvataggio");
       }
     }
@@ -67,20 +66,19 @@ export class FileManager {
         const file = await handle.getFile();
         await this.processFile(file);
       } else {
-        const file = await pickFileLegacy(".json,.dxf");
+        const file = await pickFileLegacy(".json,.dxf,.svg");
         this.fileHandle = null;
         if (file) await this.processFile(file);
       }
     } catch (err) {
       if (err.name !== "AbortError") {
-        console.error("Load failed:", err);
         this.app.ui.updateStatus("Errore durante il caricamento");
       }
     }
   }
 
   /**
-   * Process a selected file (JSON or DXF)
+   * Process a selected file (JSON, DXF, or SVG)
    * @param {File} file
    */
   async processFile(file) {
@@ -92,11 +90,12 @@ export class FileManager {
 
       if (fileName.endsWith(".dxf") || this.looksLikeDXF(content)) {
         await this.loadFromDXF(file, content);
+      } else if (fileName.endsWith(".svg") || this.looksLikeSVG(content)) {
+        await this.loadFromSVG(file, content);
       } else {
         await this.loadFromJSON(file, content);
       }
     } catch (err) {
-      console.error("File processing failed:", err);
       this.app.ui.updateStatus(`Errore elaborazione file: ${err.message}`);
       throw err;
     }
@@ -157,13 +156,9 @@ export class FileManager {
         return;
       }
 
-      // Optimize history for large files
+      // Optimize history for large files - skip undo state for large imports
       if (primitives.length < 10000) {
         this.app.state.pushState();
-      } else {
-        console.warn('Import too large for Undo history, skipping pushState');
-        // We don't push state, but we should probably clear previous history to avoid mixed state issues
-        // or just accept that "Undo" won't go back to "Empty".
       }
       this.app.primitives = primitives;
 
@@ -195,7 +190,76 @@ export class FileManager {
       }
 
     } catch (error) {
-      console.error('DXF import error:', error);
+      this.app.ui.updateStatus(`Errore: ${error.message}`);
+    }
+  }
+
+  async loadFromSVG(file, contentOverride = null) {
+    const requestId = ++this.importRequestId;
+    this.app.ui.updateStatus(`Caricamento SVG ${file.name}...`);
+    const content = contentOverride ?? await file.text();
+
+    try {
+      this.app.ui.updateStatus('Elaborazione backend (SVG Import)...');
+
+      const response = await fetch('/api/smart-import-svg', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: content
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.message || 'Import failed');
+      }
+
+      this.app.ui.updateStatus('Download risultati...');
+      const result = await response.json();
+      if (requestId !== this.importRequestId) {
+        return;
+      }
+
+      this.app.ui.updateStatus(`Ricevute ${result.primitives.length} primitive. Ricostruzione oggetti...`);
+      const primitives = await this.createPrimitivesFromDataAsync(result.primitives);
+      if (requestId !== this.importRequestId) {
+        return;
+      }
+
+      if (!primitives || primitives.length === 0) {
+        this.app.ui.updateStatus("SVG senza entità importabili");
+        return;
+      }
+
+      if (primitives.length < 10000) {
+        this.app.state.pushState();
+      } else {
+        console.warn('Import too large for Undo history, skipping pushState');
+      }
+      this.app.primitives = primitives;
+
+      this.app.selectedPrimitives.clear();
+      this.app.highlightedPrimitive = null;
+
+      this.app.ui.updateStatus('Applicazione bounds...');
+      await this.applyDXFBoundsAsync(result.bounds);
+
+      this.app.ui.updateStats();
+      this.app.ui.updateStatus(`Rendering...`);
+      await new Promise(r => setTimeout(r, 0));
+
+      if (this.app.renderer) this.app.renderer.invalidateCache();
+      if (this.app.snapManager) this.app.snapManager.setPrimitives(this.app.primitives);
+      this.app.render();
+
+      this.app.renderer.resetView();
+      this.app.ui.updateStatus(`SVG importato: ${primitives.length} primitive`);
+
+      if (this.app.plcOutputManager && primitives.length > 0) {
+        setTimeout(() => this.app.plcOutputManager.extractPLC(), 100);
+      }
+
+    } catch (error) {
+      console.error('SVG import error:', error);
       this.app.ui.updateStatus(`Errore: ${error.message}`);
     }
   }
@@ -286,6 +350,11 @@ export class FileManager {
     return /(^|\r?\n)\s*0\s*\r?\n\s*SECTION\b/i.test(head);
   }
 
+  looksLikeSVG(content) {
+    const head = content.slice(0, 4096).toLowerCase();
+    return head.includes('<svg');
+  }
+
   /**
    * Export current drawing to DXF file via backend
    */
@@ -329,8 +398,7 @@ export class FileManager {
       URL.revokeObjectURL(url);
 
       this.app.ui.updateStatus(`Esportato ${filename}`);
-    } catch (err) {
-      console.error('DXF export error:', err);
+    } catch {
       this.app.ui.updateStatus('Errore esportazione DXF');
     }
   }
@@ -368,7 +436,6 @@ export class FileManager {
       this.app.ui.updateStatus(`Disegno "${name}" salvato`);
       return true;
     } catch (err) {
-      console.error('DB Save error:', err);
       this.app.ui.updateStatus(`Errore salvataggio: ${err.message}`);
       return false;
     }
@@ -381,8 +448,7 @@ export class FileManager {
       const res = await response.json();
       if (Array.isArray(res)) return res;
       return Array.isArray(res.data) ? res.data : [];
-    } catch (err) {
-      console.error('DB List error:', err);
+    } catch {
       this.app.ui.updateStatus('Errore recupero lista disegni');
       return [];
     }
@@ -406,7 +472,6 @@ export class FileManager {
       this.app.ui.updateStatus(`Disegno "${displayName}" caricato`);
       return true;
     } catch (err) {
-      console.error('DB Load error:', err);
       this.app.ui.updateStatus(`Errore caricamento: ${err.message}`);
       return false;
     }
@@ -423,7 +488,6 @@ export class FileManager {
       this.app.ui.updateStatus(`Disegno "${label}" eliminato`);
       return true;
     } catch (err) {
-      console.error('DB Delete error:', err);
       this.app.ui.updateStatus(`Errore eliminazione: ${err.message}`);
       return false;
     }

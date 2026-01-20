@@ -136,7 +136,9 @@ func (c *Client) StopPositionPolling() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.stopCh != nil {
-		close(c.stopCh)
+		c.stopOnce.Do(func() {
+			close(c.stopCh)
+		})
 		c.stopCh = nil
 	}
 }

@@ -1,5 +1,6 @@
 import { PLCSimulator3D } from '../plc/PLCSimulator3D.js';
 import { PLC3DAnimator } from '../plc/PLC3DAnimator.js';
+import { getPLCSettingsFromUI, setPLCSettingsToUI } from './plcSettingsUtils.js';
 
 export class PLCOutputManager {
   constructor(app) {
@@ -43,25 +44,11 @@ export class PLCOutputManager {
       if (!response.ok) return;
 
       const result = await response.json();
-      const data = result.data;
-      if (!data) return;
-
-      // Populate UI inputs
-      const workSpeedInput = document.getElementById('simWorkSpeed');
-      const rapidInput = document.getElementById('simRapidSpeed');
-      const safeZInput = document.getElementById('simSafeZ');
-      const workZInput = document.getElementById('simWorkZ');
-      const waitInput = document.getElementById('simWaitTime');
-
-      if (workSpeedInput) workSpeedInput.value = data.workSpeed ?? 100;
-      if (rapidInput) rapidInput.value = data.rapidSpeed ?? 1000;
-      if (safeZInput) safeZInput.value = data.safeZ ?? 5;
-      if (workZInput) workZInput.value = data.workZ !== undefined ? data.workZ : 0;
-      if (waitInput) waitInput.value = data.waitTime ?? 0;
-
-      console.log('[PLC] Simulation settings loaded from database');
-    } catch (err) {
-      console.warn('[PLC] Failed to load simulation settings:', err);
+      if (result.data) {
+        setPLCSettingsToUI(result.data);
+      }
+    } catch {
+      // Silent fail - settings will use defaults
     }
   }
 
@@ -87,25 +74,15 @@ export class PLCOutputManager {
    * Save current simulation settings to database
    */
   async saveSimulationSettings() {
-    const workSpeed = parseFloat(document.getElementById('simWorkSpeed')?.value) || 100;
-    const rapidSpeed = parseFloat(document.getElementById('simRapidSpeed')?.value) || 1000;
-    const safeZ = parseFloat(document.getElementById('simSafeZ')?.value) || 5;
-    const workZVal = parseFloat(document.getElementById('simWorkZ')?.value);
-    const workZ = isNaN(workZVal) ? 0 : workZVal;  // Allow 0
-    const waitTime = parseInt(document.getElementById('simWaitTime')?.value, 10) || 0;
-
+    const settings = getPLCSettingsFromUI();
     try {
-      const response = await fetch('/api/plc/settings', {
+      await fetch('/api/plc/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workSpeed, rapidSpeed, safeZ, workZ, waitTime })
+        body: JSON.stringify(settings)
       });
-
-      if (response.ok) {
-        console.log('[PLC] Simulation settings saved');
-      }
-    } catch (err) {
-      console.warn('[PLC] Failed to save simulation settings:', err);
+    } catch {
+      // Silent fail - non-critical operation
     }
   }
 
@@ -118,35 +95,22 @@ export class PLCOutputManager {
     const canvas = document.getElementById('plcSimulation3DCanvas');
     const overlay = document.getElementById('plc3dOverlay');
 
-    // Log DOM state for debugging
-    console.log('[PLC3D] init3DSimulator called');
-    console.log('[PLC3D] canvas:', canvas ? 'found' : 'NOT FOUND');
-    console.log('[PLC3D] overlay:', overlay ? 'found' : 'NOT FOUND');
-
     if (!canvas || !overlay) {
-      console.error('[PLC3D] Missing DOM elements, cannot initialize');
       return;
     }
 
-    // Create simulator and animator with error handling
+    // Create simulator and animator
     try {
       this.simulator3D = new PLCSimulator3D(canvas);
       this.animator3D = new PLC3DAnimator(this.simulator3D);
-      console.log('[PLC3D] Simulator created successfully');
-    } catch (err) {
-      console.error('[PLC3D] Failed to create simulator:', err);
+    } catch {
       // Continue to wire buttons even if 3D fails
     }
 
     // Wire 3D toggle button (in sidebar)
     const btnToggle = document.getElementById('btn3DToggle');
-    console.log('[PLC3D] btn3DToggle:', btnToggle ? 'found' : 'NOT FOUND');
     if (btnToggle) {
-      btnToggle.addEventListener('click', () => {
-        console.log('[PLC3D] Toggle button clicked!');
-        this.toggle3DView();
-      });
-      console.log('[PLC3D] Toggle button wired');
+      btnToggle.addEventListener('click', () => this.toggle3DView());
     }
 
     // Wire close button (in overlay)
@@ -230,25 +194,20 @@ export class PLCOutputManager {
     });
 
     this._is3DInitialized = true;
-    console.log('[PLC3D] init3DSimulator completed successfully');
   }
 
   /**
    * Toggle 3D view visibility (main canvas overlay)
    */
   toggle3DView() {
-    console.log('[PLC3D] toggle3DView called');
     const overlay = document.getElementById('plc3dOverlay');
     const btnToggle = document.getElementById('btn3DToggle');
 
-    console.log('[PLC3D] overlay in toggle:', overlay ? 'found' : 'NOT FOUND');
     if (!overlay) {
-      console.error('[PLC3D] Cannot toggle - overlay not found!');
       return;
     }
 
     const isVisible = overlay.style.display !== 'none';
-    console.log('[PLC3D] isVisible:', isVisible, '-> setting to:', isVisible ? 'none' : 'block');
     overlay.style.display = isVisible ? 'none' : 'block';
 
     if (btnToggle) {
@@ -273,8 +232,7 @@ export class PLCOutputManager {
     try {
       await this.simulator3D.loadToolSTL(file);
       this.app.ui.updateStatus('Modello STL caricato');
-    } catch (err) {
-      console.error('STL load failed:', err);
+    } catch {
       this.app.ui.updateStatus('Errore caricamento STL');
     }
   }
@@ -311,18 +269,8 @@ export class PLCOutputManager {
     }
 
     // Get config from UI
-    const speedInput = document.getElementById('simWorkSpeed');
-    const rapidInput = document.getElementById('simRapidSpeed');
-    const safeZInput = document.getElementById('simSafeZ');
-    const workZInput = document.getElementById('simWorkZ');
-    const waitInput = document.getElementById('simWaitTime');
-
-    const defaultSpeed = speedInput ? parseFloat(speedInput.value) : 100.0;
-    const rapidSpeed = rapidInput ? parseFloat(rapidInput.value) : 1000.0;
-    const safeZ = safeZInput ? parseFloat(safeZInput.value) : 5.0;
-    const workZVal = workZInput ? parseFloat(workZInput.value) : 0;
-    const workZ = isNaN(workZVal) ? 0 : workZVal;  // Allow 0 and positive for pen plotter
-    const waitTime = waitInput ? parseInt(waitInput.value, 10) : 0;
+    const settings = getPLCSettingsFromUI();
+    const { workSpeed: defaultSpeed, rapidSpeed, safeZ, workZ, waitTime } = settings;
 
     // Convert primitives to API format
     const supportedTypes = new Set(["line", "arc", "circle", "rectangle", "polygon", "polyline"]);
@@ -363,7 +311,6 @@ export class PLCOutputManager {
       // Update 3D simulation if visible
       this.update3DSimulation();
     } catch (err) {
-      console.error("PLC extraction failed:", err);
       this.app.ui.updateStatus(`Errore estrazione PLC: ${err.message}`);
     }
   }
@@ -407,8 +354,7 @@ export class PLCOutputManager {
     try {
       await navigator.clipboard.writeText(this.app.plcOutput.join("\n"));
       this.app.ui.updateStatus("Output copiato negli appunti");
-    } catch (err) {
-      console.error(err);
+    } catch {
       this.app.ui.updateStatus("Errore nella copia");
     }
   }

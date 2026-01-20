@@ -29,6 +29,7 @@ type PositionStream struct {
 	client   *Client
 	interval time.Duration
 	stopCh   chan struct{}
+	stopOnce sync.Once // protects stopCh close
 	mu       sync.Mutex
 	running  bool
 }
@@ -59,6 +60,7 @@ func (s *PositionStream) Start(ctx context.Context, send func(WSMessage)) {
 	}
 	s.running = true
 	s.stopCh = make(chan struct{})
+	s.stopOnce = sync.Once{} // Reset for new streaming lifecycle
 	s.mu.Unlock()
 
 	ticker := time.NewTicker(s.interval)
@@ -98,7 +100,9 @@ func (s *PositionStream) Stop() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.running && s.stopCh != nil {
-		close(s.stopCh)
+		s.stopOnce.Do(func() {
+			close(s.stopCh)
+		})
 		s.running = false
 	}
 }

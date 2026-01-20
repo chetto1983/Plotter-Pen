@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -13,10 +14,15 @@ import (
 	"gorm.io/gorm"
 )
 
+// Default directories for certificate storage
+const (
+	DefaultCertsDir = "certs"
+)
+
 // OpcuaHandler handles OPC UA communication endpoints
 type OpcuaHandler struct {
 	configMgr *opcua.ConfigManager
-	client    *opcua.Client
+	client    opcua.OPCUAClient
 }
 
 // NewOpcuaHandler creates a new OPC UA handler with database backing
@@ -24,6 +30,15 @@ func NewOpcuaHandler(db *gorm.DB) *OpcuaHandler {
 	configMgr := opcua.NewConfigManager(db)
 	client := opcua.NewClient(configMgr)
 
+	return &OpcuaHandler{
+		configMgr: configMgr,
+		client:    client,
+	}
+}
+
+// NewOpcuaHandlerWithClient creates a handler with a custom client (for testing)
+func NewOpcuaHandlerWithClient(db *gorm.DB, client opcua.OPCUAClient) *OpcuaHandler {
+	configMgr := opcua.NewConfigManager(db)
 	return &OpcuaHandler{
 		configMgr: configMgr,
 		client:    client,
@@ -283,7 +298,9 @@ func (h *OpcuaHandler) ActivatePLC(c *gin.Context) {
 	// Disconnect current PLC before switching
 	if h.client.IsConnected() {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
-		h.client.Disconnect(ctx)
+		if err := h.client.Disconnect(ctx); err != nil {
+			log.Printf("Warning: failed to disconnect previous PLC: %v", err)
+		}
 		cancel()
 	}
 	if err := h.configMgr.SetActive(id); err != nil {
@@ -302,10 +319,10 @@ type CertRequest struct {
 func (h *OpcuaHandler) GenerateCertificate(c *gin.Context) {
 	var req CertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		req.OutputDir = "certs"
+		req.OutputDir = DefaultCertsDir
 	}
 	if req.OutputDir == "" {
-		req.OutputDir = "certs"
+		req.OutputDir = DefaultCertsDir
 	}
 	certPath := req.OutputDir + "/client.pem"
 	keyPath := req.OutputDir + "/client.key"
@@ -324,7 +341,7 @@ func (h *OpcuaHandler) GenerateCertificate(c *gin.Context) {
 
 // CertificateStatus checks if certificates exist
 func (h *OpcuaHandler) CertificateStatus(c *gin.Context) {
-	certDir := "certs"
+	certDir := DefaultCertsDir
 	pemPath := certDir + "/client.pem"
 	keyPath := certDir + "/client.key"
 	derPath := certDir + "/client.der"

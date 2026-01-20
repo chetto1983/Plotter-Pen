@@ -27,6 +27,9 @@ export class InputHandler {
     this.renderRequested = false;
     this.inputTicking = false;
     this.pendingMouseEvent = null;
+
+    // Bound handlers for cleanup
+    this._boundHandlers = null;
   }
   /**
    * Setup all input event listeners
@@ -37,25 +40,64 @@ export class InputHandler {
     // Get selection box element
     this.selectionBoxEl = document.getElementById('selectionBox');
 
+    // Store bound handlers for cleanup
+    this._boundHandlers = {
+      mousedown: this.handleMouseDown.bind(this),
+      mousemove: this.handleMouseMove.bind(this),
+      mouseup: this.handleMouseUp.bind(this),
+      dblclick: this.handleDoubleClick.bind(this),
+      wheel: this.handleWheel.bind(this),
+      contextmenu: (e) => e.preventDefault(),
+      touchstart: this.handleTouchStart.bind(this),
+      touchmove: this.handleTouchMove.bind(this),
+      touchend: this.handleTouchEnd.bind(this),
+      keydown: this.handleKeyDown.bind(this),
+      resize: () => this.app.renderer.resizeCanvas()
+    };
+
     // Canvas events
-    canvas.addEventListener('mousedown', this.handleMouseDown.bind(this));
-    canvas.addEventListener('mousemove', this.handleMouseMove.bind(this));
-    canvas.addEventListener('mouseup', this.handleMouseUp.bind(this));
-    canvas.addEventListener('dblclick', this.handleDoubleClick.bind(this));
-    canvas.addEventListener('wheel', this.handleWheel.bind(this));
-    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    canvas.addEventListener('mousedown', this._boundHandlers.mousedown);
+    canvas.addEventListener('mousemove', this._boundHandlers.mousemove);
+    canvas.addEventListener('mouseup', this._boundHandlers.mouseup);
+    canvas.addEventListener('dblclick', this._boundHandlers.dblclick);
+    canvas.addEventListener('wheel', this._boundHandlers.wheel);
+    canvas.addEventListener('contextmenu', this._boundHandlers.contextmenu);
 
     // Touch events
-    // Touch events
-    canvas.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
-    canvas.addEventListener('touchmove', this.handleTouchMove.bind(this), { passive: false });
-    canvas.addEventListener('touchend', this.handleTouchEnd.bind(this), { passive: false });
+    canvas.addEventListener('touchstart', this._boundHandlers.touchstart, { passive: false });
+    canvas.addEventListener('touchmove', this._boundHandlers.touchmove, { passive: false });
+    canvas.addEventListener('touchend', this._boundHandlers.touchend, { passive: false });
 
     // Keyboard events
-    document.addEventListener('keydown', this.handleKeyDown.bind(this));
+    document.addEventListener('keydown', this._boundHandlers.keydown);
 
     // Window resize
-    window.addEventListener('resize', () => this.app.renderer.resizeCanvas());
+    window.addEventListener('resize', this._boundHandlers.resize);
+  }
+
+  /**
+   * Remove all event listeners (cleanup for memory management)
+   */
+  destroy() {
+    if (!this._boundHandlers) return;
+
+    const canvas = this.app.canvas;
+    if (canvas) {
+      canvas.removeEventListener('mousedown', this._boundHandlers.mousedown);
+      canvas.removeEventListener('mousemove', this._boundHandlers.mousemove);
+      canvas.removeEventListener('mouseup', this._boundHandlers.mouseup);
+      canvas.removeEventListener('dblclick', this._boundHandlers.dblclick);
+      canvas.removeEventListener('wheel', this._boundHandlers.wheel);
+      canvas.removeEventListener('contextmenu', this._boundHandlers.contextmenu);
+      canvas.removeEventListener('touchstart', this._boundHandlers.touchstart);
+      canvas.removeEventListener('touchmove', this._boundHandlers.touchmove);
+      canvas.removeEventListener('touchend', this._boundHandlers.touchend);
+    }
+
+    document.removeEventListener('keydown', this._boundHandlers.keydown);
+    window.removeEventListener('resize', this._boundHandlers.resize);
+
+    this._boundHandlers = null;
   }
   /**
    * Convert screen coordinates to world coordinates

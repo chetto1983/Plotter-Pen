@@ -3,6 +3,7 @@
  */
 
 import { Line, Arc, Circle, Rectangle, Polygon, Polyline, Dimension, AngularDimension, RadiusDimension } from '../geometry/primitives.js';
+import { getPLCSettingsFromUI, setPLCSettingsToUI } from './plcSettingsUtils.js';
 
 export class StateManager {
   constructor(app, maxHistory = 50) {
@@ -121,23 +122,8 @@ export class StateManager {
       gridSpacing: this.app.gridSpacing
     };
 
-    const toNumber = (value, fallback) => {
-      const num = parseFloat(value);
-      return Number.isFinite(num) ? num : fallback;
-    };
-    const toInt = (value, fallback) => {
-      const num = parseInt(value, 10);
-      return Number.isFinite(num) ? num : fallback;
-    };
-
-    // PLC settings from UI inputs
-    const plcSettings = {
-      workSpeed: toNumber(document.getElementById('simWorkSpeed')?.value, 100),
-      rapidSpeed: toNumber(document.getElementById('simRapidSpeed')?.value, 1000),
-      safeZ: toNumber(document.getElementById('simSafeZ')?.value, 5),
-      workZ: toNumber(document.getElementById('simWorkZ')?.value, -2),
-      waitTime: toInt(document.getElementById('simWaitTime')?.value, 0)
-    };
+    // PLC settings from UI inputs (using centralized utility)
+    const plcSettings = getPLCSettingsFromUI();
 
     const state = {
       primitives: this.app.primitives.map(p => p.toJSON()),
@@ -342,18 +328,7 @@ export class StateManager {
    * Apply PLC settings to UI inputs
    */
   applyPlcSettings(p) {
-    if (!p) return;
-    const els = {
-      simWorkSpeed: p.workSpeed ?? 100,
-      simRapidSpeed: p.rapidSpeed ?? 1000,
-      simSafeZ: p.safeZ ?? 5,
-      simWorkZ: p.workZ ?? -2,
-      simWaitTime: p.waitTime ?? 0
-    };
-    for (const [id, val] of Object.entries(els)) {
-      const el = document.getElementById(id);
-      if (el) el.value = val;
-    }
+    setPLCSettingsToUI(p);
   }
 
   /**

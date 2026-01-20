@@ -275,8 +275,8 @@ export class Modals {
        </div>
        
        <div id="loadTabFile" class="cad-tab-content" style="display:none; margin-top:10px; padding:20px; text-align:center; border:1px dashed var(--border); border-radius:4px;">
-           <button type="button" class="cad-primary-btn" id="btnPickFile">Scegli File (.json / .dxf)</button>
-           <p style="margin-top:10px; color:var(--muted); font-size:0.9em">Supporta JSON proprietario e DXF standard</p>
+           <button type="button" class="cad-primary-btn" id="btnPickFile">Scegli File (.json / .dxf / .svg)</button>
+           <p style="margin-top:10px; color:var(--muted); font-size:0.9em">Supporta JSON proprietario, DXF standard e SVG</p>
        </div>
     </div>
   </div>

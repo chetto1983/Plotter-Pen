@@ -17,9 +17,10 @@ export class PersistenceManager {
     }
 
     queueSave() {
+        // Chain saves to prevent concurrent requests; errors are handled in saveState()
         this.saveQueue = this.saveQueue
             .then(() => this.saveState())
-            .catch(() => { });
+            .catch(() => { /* Errors handled in saveState() */ });
     }
 
     async saveState() {
@@ -33,8 +34,7 @@ export class PersistenceManager {
             });
 
             if (!response.ok) throw new Error('Server returned ' + response.status);
-        } catch (e) {
-            console.error('Auto-save error:', e);
+        } catch {
             this.app.ui.updateStatus('Errore salvataggio automatico');
         }
     }

@@ -6,28 +6,36 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gopcua/opcua"
 	"github.com/gopcua/opcua/ua"
 )
 
+// Default certificate paths (overridable via OPCUA_CERT_PATH and OPCUA_KEY_PATH env vars)
+const (
+	DefaultCertPath = "certs/client.pem"
+	DefaultKeyPath  = "certs/client.key"
+)
+
 // Client wraps gopcua client with connection management
 type Client struct {
 	client       *opcua.Client
 	config       *ConfigManager
-	connected    bool
+	connected    atomic.Bool
 	mu           sync.RWMutex
 	subscription *opcua.Subscription
 	posCallback  PositionCallback
 	stopCh       chan struct{}
+	stopOnce     sync.Once // protects stopCh close
 }
 
 // NewClient creates a new OPC UA client
 func NewClient(config *ConfigManager) *Client {
 	return &Client{
-		config:    config,
-		connected: false,
+		config: config,
+		// connected is atomic.Bool, zero value is false
 	}
 }
 
@@ -36,7 +44,7 @@ func (c *Client) Connect(ctx context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if c.connected && c.client != nil {
+	if c.connected.Load() && c.client != nil {
 		return nil // Already connected
 	}
 
@@ -67,8 +75,9 @@ func (c *Client) Connect(ctx context.Context) error {
 	}
 
 	c.client = client
-	c.connected = true
+	c.connected.Store(true)
 	c.stopCh = make(chan struct{})
+	c.stopOnce = sync.Once{} // Reset for new connection lifecycle
 	return nil
 }
 
@@ -113,11 +122,11 @@ func (c *Client) buildConnectionOptions(cfg Config, ep *ua.EndpointDescription) 
 			// Configurable via environment variables for production deployment
 			certPath := os.Getenv("OPCUA_CERT_PATH")
 			if certPath == "" {
-				certPath = "certs/client.pem"
+				certPath = DefaultCertPath
 			}
 			keyPath := os.Getenv("OPCUA_KEY_PATH")
 			if keyPath == "" {
-				keyPath = "certs/client.key"
+				keyPath = DefaultKeyPath
 			}
 			cert, key, err := LoadOrGenerateCert(certPath, keyPath)
 			if err != nil {
@@ -152,15 +161,13 @@ func (c *Client) Disconnect(ctx context.Context) error {
 
 	err := c.client.Close(ctx)
 	c.client = nil
-	c.connected = false
+	c.connected.Store(false)
 	return err
 }
 
 // IsConnected returns connection status
 func (c *Client) IsConnected() bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.connected
+	return c.connected.Load()
 }
 
 // WriteData writes data to the configured data node
@@ -168,7 +175,7 @@ func (c *Client) WriteData(ctx context.Context, data interface{}, cfg Config) er
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if !c.connected || c.client == nil {
+	if !c.connected.Load() || c.client == nil {
 		return fmt.Errorf("not connected to OPC UA server")
 	}
 
@@ -219,7 +226,7 @@ func (c *Client) writeBoolNode(ctx context.Context, nodeStr string, value bool, 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if !c.connected || c.client == nil {
+	if !c.connected.Load() || c.client == nil {
 		return fmt.Errorf("not connected to OPC UA server")
 	}
 
@@ -346,7 +353,7 @@ func (c *Client) ReadNode(ctx context.Context, nodeIDStr string) (interface{}, e
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	if !c.connected || c.client == nil {
+	if !c.connected.Load() || c.client == nil {
 		return nil, fmt.Errorf("not connected to OPC UA server")
 	}
 
@@ -378,7 +385,7 @@ func (c *Client) WriteString(ctx context.Context, nodeIDStr string, value string
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if !c.connected || c.client == nil {
+	if !c.connected.Load() || c.client == nil {
 		return fmt.Errorf("not connected to OPC UA server")
 	}
 
@@ -420,7 +427,7 @@ func (c *Client) WriteStringArray(ctx context.Context, nodeIDStr string, data []
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if !c.connected || c.client == nil {
+	if !c.connected.Load() || c.client == nil {
 		return fmt.Errorf("not connected to OPC UA server")
 	}
 
@@ -481,7 +488,7 @@ func (c *Client) WriteBoolNode(ctx context.Context, nodeIDStr string, value bool
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if !c.connected || c.client == nil {
+	if !c.connected.Load() || c.client == nil {
 		return fmt.Errorf("not connected to OPC UA server")
 	}
 
@@ -537,7 +544,7 @@ func (c *Client) ReadBoolNode(ctx context.Context, nodeIDStr string) (bool, erro
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	if !c.connected || c.client == nil {
+	if !c.connected.Load() || c.client == nil {
 		return false, fmt.Errorf("not connected to OPC UA server")
 	}
 
@@ -580,7 +587,7 @@ func (c *Client) ReadNodeDataType(ctx context.Context, nodeIDStr string) (*ua.No
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	if !c.connected || c.client == nil {
+	if !c.connected.Load() || c.client == nil {
 		return nil, fmt.Errorf("not connected to OPC UA server")
 	}
 
@@ -617,7 +624,7 @@ func (c *Client) ReadNodeAccessLevel(ctx context.Context, nodeIDStr string) (uin
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	if !c.connected || c.client == nil {
+	if !c.connected.Load() || c.client == nil {
 		return 0, fmt.Errorf("not connected to OPC UA server")
 	}
 
@@ -654,7 +661,7 @@ func (c *Client) ReadNodeUserAccessLevel(ctx context.Context, nodeIDStr string) 
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	if !c.connected || c.client == nil {
+	if !c.connected.Load() || c.client == nil {
 		return 0, fmt.Errorf("not connected to OPC UA server")
 	}
 
@@ -691,7 +698,7 @@ func (c *Client) BrowseNode(ctx context.Context, nodeIDStr string) ([]BrowseResu
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	if !c.connected || c.client == nil {
+	if !c.connected.Load() || c.client == nil {
 		return nil, fmt.Errorf("not connected to OPC UA server")
 	}
 

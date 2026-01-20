@@ -10,6 +10,8 @@ import { log } from '../lib/logger.js';
 export class App {
     constructor(root) {
         this.root = root;
+        // Bound handlers for cleanup
+        this._boundHandlers = null;
         this.init();
     }
 
@@ -50,17 +52,33 @@ export class App {
         this.root.appendChild(this.modals.element);
 
 
+        // Store bound handlers for cleanup
+        this._boundHandlers = {
+            tabChange: (e) => {
+                const tab = e.detail.tab;
+                this.handleTabChange(tab);
+            },
+            resize: () => {
+                window.dispatchEvent(new Event('cad-resize'));
+            }
+        };
+
         // Event Binding (Tab Switching)
-        this.root.addEventListener('tab-change', (e) => {
-            const tab = e.detail.tab;
-            this.handleTabChange(tab);
-        });
+        this.root.addEventListener('tab-change', this._boundHandlers.tabChange);
 
         // Add Resize Listener
-        window.addEventListener('resize', () => {
-            // Dispatch resize event for Canvas logic to catch
-            window.dispatchEvent(new Event('cad-resize'));
-        });
+        window.addEventListener('resize', this._boundHandlers.resize);
+    }
+
+    /**
+     * Cleanup event listeners to prevent memory leaks
+     */
+    destroy() {
+        if (!this._boundHandlers) return;
+
+        this.root.removeEventListener('tab-change', this._boundHandlers.tabChange);
+        window.removeEventListener('resize', this._boundHandlers.resize);
+        this._boundHandlers = null;
     }
 
     handleTabChange() {

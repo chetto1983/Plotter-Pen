@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -34,6 +35,17 @@ func setupTestOpcuaServer(t *testing.T) (*gin.Engine, *OpcuaHandler) {
 	db := setupOpcuaTestDB(t)
 	r := gin.New()
 	h := NewOpcuaHandler(db)
+	api := r.Group("/api")
+	h.RegisterRoutes(api)
+	return r, h
+}
+
+// setupTestOpcuaServerWithMock creates a test server with a mock client
+func setupTestOpcuaServerWithMock(t *testing.T, mockClient *opcua.MockClient) (*gin.Engine, *OpcuaHandler) {
+	gin.SetMode(gin.TestMode)
+	db := setupOpcuaTestDB(t)
+	r := gin.New()
+	h := NewOpcuaHandlerWithClient(db, mockClient)
 	api := r.Group("/api")
 	h.RegisterRoutes(api)
 	return r, h
@@ -215,21 +227,12 @@ func TestOpcuaHandler_Send_MissingData(t *testing.T) {
 }
 
 func TestOpcuaHandler_Connect_NoServer(t *testing.T) {
-	r, _ := setupTestOpcuaServer(t)
+	// Use mock client with simulated connection failure
+	mockClient := opcua.NewMockClient()
+	mockClient.SetConnectError(errors.New("connection refused: no OPC UA server available"))
 
-	// First, set an unreachable endpoint to guarantee failure
-	// Use localhost with an unlikely port that has short timeout
-	unreachableConfig := `{"endpoint":"opc.tcp://127.0.0.1:59999","securityMode":"None","securityPolicy":"None"}`
-	updateReq := httptest.NewRequest(http.MethodPut, "/api/opcua/config", bytes.NewReader([]byte(unreachableConfig)))
-	updateReq.Header.Set("Content-Type", "application/json")
-	updateW := httptest.NewRecorder()
-	r.ServeHTTP(updateW, updateReq)
+	r, _ := setupTestOpcuaServerWithMock(t, mockClient)
 
-	if updateW.Code != http.StatusOK {
-		t.Fatalf("Failed to update config: %s", updateW.Body.String())
-	}
-
-	// Now try to connect - should fail with 503
 	req := httptest.NewRequest(http.MethodPost, "/api/opcua/connect", nil)
 	w := httptest.NewRecorder()
 
@@ -238,6 +241,15 @@ func TestOpcuaHandler_Connect_NoServer(t *testing.T) {
 	// Should return 503 when server unavailable
 	if w.Code != http.StatusServiceUnavailable {
 		t.Errorf("Expected status %d, got %d: %s", http.StatusServiceUnavailable, w.Code, w.Body.String())
+	}
+
+	var errResp map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &errResp); err != nil {
+		t.Fatalf("Failed to parse response: %v", err)
+	}
+
+	if errResp["error"] == "" {
+		t.Error("Expected error message in response")
 	}
 }
 
@@ -261,5 +273,173 @@ func TestOpcuaHandler_Disconnect_NotConnected(t *testing.T) {
 
 	if resp["connected"].(bool) != false {
 		t.Error("Expected connected=false")
+	}
+}
+
+// === Mock-Based Tests for Industrial-Grade Coverage ===
+
+func TestOpcuaHandler_Connect_Success_Mock(t *testing.T) {
+	mockClient := opcua.NewMockClient()
+	// No error set - connection will succeed
+
+	r, _ := setupTestOpcuaServerWithMock(t, mockClient)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/opcua/connect", nil)
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("Failed to parse response: %v", err)
+	}
+
+	if resp["connected"].(bool) != true {
+		t.Error("Expected connected=true after successful connection")
+	}
+}
+
+func TestOpcuaHandler_Disconnect_Mock(t *testing.T) {
+	mockClient := opcua.NewMockClient()
+	mockClient.SetConnected(true) // Start connected
+
+	r, _ := setupTestOpcuaServerWithMock(t, mockClient)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/opcua/disconnect", nil)
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("Failed to parse response: %v", err)
+	}
+
+	if resp["connected"].(bool) != false {
+		t.Error("Expected connected=false after disconnect")
+	}
+}
+
+func TestOpcuaHandler_Send_ConnectionFailed_Mock(t *testing.T) {
+	mockClient := opcua.NewMockClient()
+	// Not connected and auto-connect will fail
+	mockClient.SetConnectError(errors.New("connection refused"))
+
+	r, _ := setupTestOpcuaServerWithMock(t, mockClient)
+
+	body := []byte(`{"data": ["L X 10, Y 20, Z 0, V 100"]}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/opcua/send", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	// Should fail when auto-connect fails
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("Expected status %d, got %d: %s", http.StatusServiceUnavailable, w.Code, w.Body.String())
+	}
+}
+
+func TestOpcuaHandler_Send_Success_Mock(t *testing.T) {
+	mockClient := opcua.NewMockClient()
+	mockClient.SetConnected(true)
+
+	r, _ := setupTestOpcuaServerWithMock(t, mockClient)
+
+	body := []byte(`{"data": ["L X 10, Y 20, Z 0, V 100"]}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/opcua/send", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+}
+
+func TestOpcuaHandler_Send_Error_Mock(t *testing.T) {
+	mockClient := opcua.NewMockClient()
+	mockClient.SetConnected(true)
+	mockClient.SetSendError(errors.New("write timeout"))
+
+	r, _ := setupTestOpcuaServerWithMock(t, mockClient)
+
+	body := []byte(`{"data": ["L X 10, Y 20, Z 0, V 100"]}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/opcua/send", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("Expected status %d, got %d: %s", http.StatusInternalServerError, w.Code, w.Body.String())
+	}
+}
+
+func TestOpcuaHandler_GetPosition_Mock(t *testing.T) {
+	mockClient := opcua.NewMockClient()
+	mockClient.SetConnected(true)
+	mockClient.SetPosition(opcua.Position{X: 100.5, Y: 200.3, Z: 5.0}, nil)
+
+	r, _ := setupTestOpcuaServerWithMock(t, mockClient)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/opcua/position", nil)
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+
+	var pos opcua.Position
+	if err := json.Unmarshal(w.Body.Bytes(), &pos); err != nil {
+		t.Fatalf("Failed to parse response: %v", err)
+	}
+
+	if pos.X != 100.5 || pos.Y != 200.3 || pos.Z != 5.0 {
+		t.Errorf("Position mismatch: got X=%.1f Y=%.1f Z=%.1f", pos.X, pos.Y, pos.Z)
+	}
+}
+
+func TestOpcuaHandler_GetMachineStatus_Mock(t *testing.T) {
+	mockClient := opcua.NewMockClient()
+	mockClient.SetConnected(true)
+	mockClient.SetMachineStatus(opcua.MachineStatus{
+		Connected: true,
+		Status:    "running",
+		Position:  opcua.Position{X: 50, Y: 75, Z: 0},
+	})
+
+	r, _ := setupTestOpcuaServerWithMock(t, mockClient)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/opcua/machine-status", nil)
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+
+	var status opcua.MachineStatus
+	if err := json.Unmarshal(w.Body.Bytes(), &status); err != nil {
+		t.Fatalf("Failed to parse response: %v", err)
+	}
+
+	if !status.Connected {
+		t.Error("Expected connected=true")
+	}
+	if status.Status != "running" {
+		t.Errorf("Expected status=running, got %s", status.Status)
 	}
 }

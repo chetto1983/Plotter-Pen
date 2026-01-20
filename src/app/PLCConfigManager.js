@@ -96,8 +96,7 @@ export class PLCConfigManager {
                 this.plcSelector.value = this.plcList[0].id;
                 this.populateForm(this.plcList[0]);
             }
-        } catch (error) {
-            console.error("Load PLC list failed:", error);
+        } catch {
             this.showStatus("Errore caricamento lista PLC.", "error");
         } finally {
             this.setFormDisabled(false);
@@ -121,8 +120,7 @@ export class PLCConfigManager {
             const payload = await response.json();
             this.populateForm(payload.data);
             this.showStatus("PLC attivato.", "success");
-        } catch (error) {
-            console.error("Activate PLC failed:", error);
+        } catch {
             this.showStatus("Errore attivazione PLC.", "error");
         }
     }
@@ -139,8 +137,7 @@ export class PLCConfigManager {
             if (!response.ok) throw new Error("Creation failed");
             this.showStatus("PLC creato.", "success");
             await this.loadPLCList();
-        } catch (error) {
-            console.error("Create PLC failed:", error);
+        } catch {
             this.showStatus("Errore creazione PLC.", "error");
         }
     }
@@ -155,8 +152,7 @@ export class PLCConfigManager {
             if (!response.ok) throw new Error("Cannot delete active PLC");
             this.showStatus("PLC eliminato.", "success");
             await this.loadPLCList();
-        } catch (error) {
-            console.error("Delete PLC failed:", error);
+        } catch {
             this.showStatus("Impossibile eliminare PLC attivo.", "error");
         }
     }
@@ -177,8 +173,7 @@ export class PLCConfigManager {
             }
             this.enableDownloadButtons(true);
             this.showStatus(result.message || "Certificati generati.", "success");
-        } catch (error) {
-            console.error("Generate cert failed:", error);
+        } catch {
             this.showStatus("Errore generazione certificati.", "error");
         }
     }
@@ -324,8 +319,7 @@ export class PLCConfigManager {
             } else {
                 throw new Error("Invalid response");
             }
-        } catch (error) {
-            console.error("Load config failed:", error);
+        } catch {
             this.showStatus("Errore caricamento configurazione.", "error");
         } finally {
             this.setFormDisabled(false);
@@ -360,7 +354,6 @@ export class PLCConfigManager {
             this.showStatus("Salvataggio completato.", "success");
             setTimeout(() => this.close(), 1000);
         } catch (error) {
-            console.error("Save config failed:", error);
             this.showStatus(error.message || "Errore sconosciuto.", "error");
         } finally {
             this.setFormDisabled(false);

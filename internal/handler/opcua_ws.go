@@ -51,11 +51,13 @@ var upgrader = websocket.Upgrader{
 
 // WSClient represents a WebSocket client connection
 type WSClient struct {
-	conn     *websocket.Conn
-	send     chan opcua.WSMessage
-	stream   *opcua.PositionStream
-	transfer *opcua.ChunkedTransfer
-	mu       sync.Mutex
+	conn      *websocket.Conn
+	send      chan opcua.WSMessage
+	done      chan struct{} // signals shutdown to writePump
+	closeOnce sync.Once     // ensures send channel is closed only once
+	stream    *opcua.PositionStream
+	transfer  *opcua.ChunkedTransfer
+	mu        sync.Mutex
 }
 
 func (wc *WSClient) safeSend(msg opcua.WSMessage) {
@@ -111,6 +113,7 @@ func (h *OpcuaHandler) WebSocket(c *gin.Context) {
 	client := &WSClient{
 		conn: conn,
 		send: make(chan opcua.WSMessage, 256),
+		done: make(chan struct{}),
 	}
 
 	// Start write pump
@@ -139,6 +142,18 @@ func (wc *WSClient) writePump() {
 
 	for {
 		select {
+		case <-wc.done:
+			// Shutdown signal received, drain remaining messages
+			for {
+				select {
+				case msg := <-wc.send:
+					wc.conn.SetWriteDeadline(time.Now().Add(1 * time.Second))
+					_ = wc.conn.WriteJSON(msg)
+				default:
+					wc.conn.WriteMessage(websocket.CloseMessage, []byte{})
+					return
+				}
+			}
 		case msg, ok := <-wc.send:
 			wc.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if !ok {
@@ -162,7 +177,11 @@ func (wc *WSClient) readPump(h *OpcuaHandler) {
 	defer func() {
 		wc.stopStream()
 		wc.cancelTransfer()
-		close(wc.send)
+		// Signal writePump to shutdown, then safely close send channel
+		wc.closeOnce.Do(func() {
+			close(wc.done)
+			close(wc.send)
+		})
 		wc.conn.Close()
 	}()
 
@@ -219,9 +238,16 @@ func (wc *WSClient) handleSubscribe(h *OpcuaHandler, data json.RawMessage) {
 	// Stop existing stream if any
 	wc.stopStream()
 
+	// Require concrete client for streaming (type assertion)
+	client, ok := h.client.(*opcua.Client)
+	if !ok {
+		wc.safeSend(opcua.NewWSMessage("error", "streaming not supported with this client type"))
+		return
+	}
+
 	// Create new stream
 	wc.mu.Lock()
-	wc.stream = opcua.NewPositionStream(h.client, req.Interval)
+	wc.stream = opcua.NewPositionStream(client, req.Interval)
 	wc.mu.Unlock()
 
 	// Start streaming in background
@@ -331,6 +357,13 @@ func (wc *WSClient) handleTransfer(h *OpcuaHandler, data json.RawMessage) {
 		return
 	}
 
+	// Require concrete client for chunked transfer (type assertion)
+	client, ok := h.client.(*opcua.Client)
+	if !ok {
+		wc.send <- opcua.ErrorMessage("chunked transfer not supported with this client type")
+		return
+	}
+
 	// Check if transfer already running
 	wc.mu.Lock()
 	if wc.transfer != nil && wc.transfer.IsRunning() {
@@ -354,7 +387,7 @@ func (wc *WSClient) handleTransfer(h *OpcuaHandler, data json.RawMessage) {
 
 	// Create transfer
 	cfg := h.configMgr.Get()
-	wc.transfer = opcua.NewChunkedTransfer(h.client, cfg)
+	wc.transfer = opcua.NewChunkedTransfer(client, cfg)
 	wc.mu.Unlock()
 
 	// Send start message

@@ -17,7 +17,7 @@ type OPCUAClient interface {
 	ReadPosition(ctx context.Context) (Position, error)
 	GetMachineStatus(ctx context.Context) MachineStatus
 	StopPositionPolling()
-	StartPositionPolling(callback PositionCallback, interval int)
+	StartPositionPolling(ctx context.Context)
 }
 
 // Ensure Client implements OPCUAClient interface

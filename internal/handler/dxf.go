@@ -10,7 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// DXFHandler handles DXF import/export endpoints
+// DXFHandler handles DXF/SVG/STL import/export endpoints
 type DXFHandler struct{}
 
 // NewDXFHandler creates a new DXF handler
@@ -22,6 +22,8 @@ func NewDXFHandler() *DXFHandler {
 func (h *DXFHandler) RegisterRoutes(r *gin.RouterGroup) {
 	r.POST("/parse-dxf", h.ParseDXF)
 	r.POST("/smart-import", h.SmartImport)
+	r.POST("/parse-svg", h.ParseSVG)
+	r.POST("/smart-import-svg", h.SmartImportSVG)
 	r.POST("/export-dxf", h.ExportDXF)
 	r.POST("/parse-stl", h.ParseSTL)
 }
@@ -62,6 +64,41 @@ func (h *DXFHandler) ParseDXF(c *gin.Context) {
 	})
 }
 
+// ParseSVGRequest represents SVG parse input
+type ParseSVGRequest struct {
+	Content string `json:"content" binding:"required"`
+}
+
+// ParseSVG parses an SVG file and returns primitives
+func (h *DXFHandler) ParseSVG(c *gin.Context) {
+	var req ParseSVGRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if !importservice.ValidateSVGContent(req.Content) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid SVG content"})
+		return
+	}
+
+	result, err := importservice.ParseSVG(req.Content)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "failed to parse SVG",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":    true,
+		"primitives": result.Primitives,
+		"bounds":     result.Bounds,
+		"stats":      result.Stats,
+	})
+}
+
 // SmartImportRequest represents smart import input
 type SmartImportRequest struct {
 	Content  string `json:"content" binding:"required"`
@@ -73,6 +110,20 @@ type SmartImportRequest struct {
 		ExtractPLC   bool    `json:"extractPLC"`
 		FitArcs      bool    `json:"fitArcs"`
 		ArcTolerance float64 `json:"arcTolerance"`
+	} `json:"options"`
+}
+
+// SmartImportSVGRequest represents smart import SVG input
+type SmartImportSVGRequest struct {
+	Content string `json:"content" binding:"required"`
+	Options struct {
+		Normalize    bool    `json:"normalize"`
+		CenterOrigin bool    `json:"centerOrigin"`
+		ScaleFactor  float64 `json:"scaleFactor"`
+		ExtractPLC   bool    `json:"extractPLC"`
+		FitArcs      bool    `json:"fitArcs"`
+		ArcTolerance float64 `json:"arcTolerance"`
+		FlipY        bool    `json:"flipY"`
 	} `json:"options"`
 }
 
@@ -98,8 +149,8 @@ func (h *DXFHandler) SmartImport(c *gin.Context) {
 			Normalize:    false,
 			CenterOrigin: true,
 			ExtractPLC:   false,
-			FitArcs:      true,        // ENABLED: Robust Taubin+RANSAC arc fitting
-			ArcTolerance: 0.1,         // 0.1mm tolerance
+			FitArcs:      true, // ENABLED: Robust Taubin+RANSAC arc fitting
+			ArcTolerance: 0.1,  // 0.1mm tolerance
 		}
 	} else {
 		// Handle JSON body
@@ -129,6 +180,73 @@ func (h *DXFHandler) SmartImport(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "smart import failed",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":    true,
+		"primitives": result.Primitives,
+		"plcData":    result.PLCData,
+		"bounds":     result.Bounds,
+		"stats":      result.Stats,
+		"layers":     importservice.GetLayerNames(result.Primitives),
+	})
+}
+
+// SmartImportSVG performs SVG import with DXF-like options
+// Supports both JSON body and raw text/plain body for efficiency with large files
+func (h *DXFHandler) SmartImportSVG(c *gin.Context) {
+	var content string
+	opts := importservice.SVGImportOptions{
+		ImportOptions: importservice.ImportOptions{},
+		FlipY:         true,
+	}
+
+	contentType := c.GetHeader("Content-Type")
+	if strings.HasPrefix(contentType, "text/plain") {
+		body, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
+			return
+		}
+		content = string(body)
+		opts.ImportOptions = importservice.ImportOptions{
+			Normalize:    false,
+			CenterOrigin: true,
+			ExtractPLC:   false,
+			FitArcs:      false,
+			ArcTolerance: 0.1,
+		}
+		opts.FlipY = true
+	} else {
+		var req SmartImportSVGRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		content = req.Content
+		opts.ImportOptions = importservice.ImportOptions{
+			Normalize:    req.Options.Normalize,
+			CenterOrigin: req.Options.CenterOrigin,
+			ScaleFactor:  req.Options.ScaleFactor,
+			ExtractPLC:   req.Options.ExtractPLC,
+			FitArcs:      req.Options.FitArcs,
+			ArcTolerance: req.Options.ArcTolerance,
+		}
+		opts.FlipY = req.Options.FlipY
+	}
+
+	if !importservice.ValidateSVGContent(content) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid SVG content"})
+		return
+	}
+
+	result, err := importservice.SmartImportSVG(content, opts)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "smart SVG import failed",
 			"details": err.Error(),
 		})
 		return

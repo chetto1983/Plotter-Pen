@@ -110,12 +110,15 @@ class CADApplication {
     this.wsService = new OPCUAWebSocketService();
     this.wsService.connect();
 
-    // Cleanup WebSocket on page unload to prevent zombie connections
-    window.addEventListener('beforeunload', () => {
+    // Bound handler for cleanup
+    this._beforeUnloadHandler = () => {
       if (this.wsService) {
         this.wsService.disconnect();
       }
-    });
+    };
+
+    // Cleanup WebSocket on page unload to prevent zombie connections
+    window.addEventListener('beforeunload', this._beforeUnloadHandler);
 
     // Initialize handlers
     this.input = new InputHandler(this);
@@ -512,6 +515,27 @@ class CADApplication {
     // Trigger auto-save (debounced)
     if (this.persistenceManager) {
       this.persistenceManager.triggerAutoSave();
+    }
+  }
+
+  /**
+   * Cleanup resources to prevent memory leaks
+   */
+  destroy() {
+    // Remove beforeunload listener
+    if (this._beforeUnloadHandler) {
+      window.removeEventListener('beforeunload', this._beforeUnloadHandler);
+      this._beforeUnloadHandler = null;
+    }
+
+    // Cleanup managers
+    if (this.input && this.input.destroy) {
+      this.input.destroy();
+    }
+
+    // Disconnect WebSocket
+    if (this.wsService) {
+      this.wsService.disconnect();
     }
   }
 
