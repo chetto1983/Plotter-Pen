@@ -1,6 +1,7 @@
 package cam
 
 import (
+	plcfit "plotter-pen/internal/service/plc"
 	"plotter-pen/pkg/clipper"
 	"plotter-pen/pkg/gcode"
 	"plotter-pen/pkg/geom"
@@ -78,6 +79,13 @@ func GenerateProfile(paths []geom.Path, settings ProfileSettings) ProfileResult 
 			continue
 		}
 
+		// Fit arcs and lines to the path points
+		tolerance := settings.Tolerance
+		if tolerance <= 0 {
+			tolerance = 0.05
+		}
+		segments := plcfit.FitArcsAndLines(path, tolerance)
+
 		for pass := 0; pass < numPasses; pass++ {
 			currentZ := -float64(pass+1) * settings.StepDown
 			if currentZ < -settings.CutDepth {
@@ -92,15 +100,38 @@ func GenerateProfile(paths []geom.Path, settings ProfileSettings) ProfileResult 
 			pc.Jump(path[0].X, path[0].Y, settings.SafeZ, settings.FeedXY*2) // Rapid at safe Z
 			pc.Line(path[0].X, path[0].Y, currentZ, settings.FeedZ)          // Plunge to work depth
 
-			// Cut path at work depth
-			for i := 1; i < len(path); i++ {
-				gc.FeedXY(path[i].X, path[i].Y, settings.FeedXY)
-				pc.Line(path[i].X, path[i].Y, currentZ, settings.FeedXY)
+			// Cut path using fitted arcs and lines
+			for _, seg := range segments {
+				if seg.Type == "arc" {
+					// Determine arc direction (CW or CCW)
+					start := geom.Point{X: seg.X1, Y: seg.Y1}
+					end := geom.Point{X: seg.X2, Y: seg.Y2}
+					center := geom.Point{X: seg.Cx, Y: seg.Cy}
+
+					// Calculate cross product to determine direction
+					// (start-center) x (end-center)
+					v1x, v1y := start.X-center.X, start.Y-center.Y
+					v2x, v2y := end.X-center.X, end.Y-center.Y
+					cross := v1x*v2y - v1y*v2x
+					isCW := cross < 0
+
+					// G-code: G2 (CW) or G3 (CCW)
+					gc.Arc(end, center, start, isCW, settings.FeedXY)
+
+					// PLC: Arc command with through-point
+					pc.Arc(end, center, start, isCW, currentZ, settings.FeedXY)
+				} else {
+					// Line segment
+					end := geom.Point{X: seg.X2, Y: seg.Y2}
+					gc.FeedXY(end.X, end.Y, settings.FeedXY)
+					pc.Line(end.X, end.Y, currentZ, settings.FeedXY)
+				}
 			}
 
 			// Retract to safe Z
 			gc.RapidZ(settings.SafeZ)
-			pc.Jump(path[len(path)-1].X, path[len(path)-1].Y, settings.SafeZ, settings.FeedXY*2)
+			lastPt := path[len(path)-1]
+			pc.Jump(lastPt.X, lastPt.Y, settings.SafeZ, settings.FeedXY*2)
 		}
 	}
 

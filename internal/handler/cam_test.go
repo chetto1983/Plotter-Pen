@@ -58,8 +58,8 @@ func TestCAMProcess_Profile(t *testing.T) {
 	var resp map[string]interface{}
 	json.Unmarshal(w.Body.Bytes(), &resp)
 
-	if resp["success"] != true {
-		t.Error("Expected success=true")
+	if resp["status"] != "ok" {
+		t.Error("Expected status=ok")
 	}
 	if resp["gcode"] == nil || resp["gcode"] == "" {
 		t.Error("Expected gcode output")
@@ -213,8 +213,8 @@ M30`
 	var resp map[string]interface{}
 	json.Unmarshal(w.Body.Bytes(), &resp)
 
-	if resp["success"] != true {
-		t.Error("Expected success=true")
+	if resp["status"] != "ok" {
+		t.Error("Expected status=ok")
 	}
 
 	segments, ok := resp["segments"].([]interface{})
@@ -305,8 +305,8 @@ func TestCAMPostprocess_Plotter(t *testing.T) {
 	var resp map[string]interface{}
 	json.Unmarshal(w.Body.Bytes(), &resp)
 
-	if resp["success"] != true {
-		t.Error("Expected success=true")
+	if resp["status"] != "ok" {
+		t.Error("Expected status=ok")
 	}
 }
 

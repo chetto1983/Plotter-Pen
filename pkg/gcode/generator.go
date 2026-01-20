@@ -59,6 +59,14 @@ func (g *Generator) FeedXY(x, y, feed float64) {
 	g.Buffer.WriteString(fmt.Sprintf("G1 X%s Y%s F%s\n", g.format(x), g.format(y), g.format(feed)))
 }
 
+// Dwell emits G4 dwell command (pause in milliseconds)
+func (g *Generator) Dwell(ms int) {
+	if ms > 0 {
+		// G4 P uses seconds in most controllers, convert from ms
+		g.Buffer.WriteString(fmt.Sprintf("G4 P%s\n", g.format(float64(ms)/1000.0)))
+	}
+}
+
 // Arc emits G2 (CW) or G3 (CCW) using I/J notation
 func (g *Generator) Arc(end geom.Point, center geom.Point, start geom.Point, cw bool, feed float64) {
 	// I, J are relative to Start Point

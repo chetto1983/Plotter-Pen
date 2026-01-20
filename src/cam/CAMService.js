@@ -14,10 +14,23 @@ export class CAMService {
      * @param {Object} settings - Job settings
      */
     async process(primitives, type, settings) {
+        // Include operation type in settings (backend expects settings.operation)
         const payload = {
             primitives,
-            type,
-            settings
+            settings: {
+                ...settings,
+                operation: type,
+                // Map frontend setting names to backend expected names
+                toolDiameter: settings.toolDiameter,
+                stepover: settings.stepOver,
+                feedXY: settings.feedXY || 1000,
+                feedZ: settings.feedZ || 200,
+                safeZ: settings.safeZ,
+                cutDepth: settings.cutDepth || settings.stepDown || 1,
+                stepDown: settings.stepDown || 1,
+                tolerance: settings.tolerance,
+                offset: settings.profileSide || 'outside'
+            }
         };
         const res = await fetch(`${this.baseUrl}/process`, {
             method: 'POST',

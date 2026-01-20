@@ -28,6 +28,7 @@ func (h *CAMHandler) RegisterRoutes(r *gin.RouterGroup) {
 		camGroup.POST("/process", h.Process)
 		camGroup.POST("/parse", h.Parse)
 		camGroup.POST("/postprocess", h.Postprocess)
+		// Note: /cam/settings endpoints are in persistence.go
 	}
 }
 
@@ -51,9 +52,16 @@ type PrimitiveInput struct {
 	Y2         float64   `json:"y2"`
 	StartAngle float64   `json:"startAngle"` // Arc: start angle in radians
 	EndAngle   float64   `json:"endAngle"`   // Arc: end angle in radians
+	Sweep      float64   `json:"sweep"`      // Arc: sweep angle (alternative to endAngle)
 	Clockwise  bool      `json:"clockwise"`  // Arc: direction
-	CenterX    float64   `json:"centerX"`    // Arc: center X
-	CenterY    float64   `json:"centerY"`    // Arc: center Y
+	CenterX    float64   `json:"centerX"`    // Arc: center X (DXF format)
+	CenterY    float64   `json:"centerY"`    // Arc: center Y (DXF format)
+	Cx         float64   `json:"cx"`         // Arc: center X (frontend format)
+	Cy         float64   `json:"cy"`         // Arc: center Y (frontend format)
+	Ax         float64   `json:"ax"`         // Arc: start X (frontend format)
+	Ay         float64   `json:"ay"`         // Arc: start Y (frontend format)
+	Bx         float64   `json:"bx"`         // Arc: end X (frontend format)
+	By         float64   `json:"by"`         // Arc: end Y (frontend format)
 }
 
 // PointXY represents a 2D point from JSON
@@ -132,7 +140,7 @@ func (h *CAMHandler) Process(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"success":  true,
+		"status":   "ok",
 		"gcode":    gcode,
 		"plc":      plc,
 		"toolpath": toolpath,
@@ -163,8 +171,21 @@ func (h *CAMHandler) convertPrimitives(primitives []PrimitiveInput) []geom.Path 
 			paths = append(paths, path)
 
 		case "arc":
-			// Convert arc to polyline (segments based on arc length)
-			path := h.arcToPath(p.CenterX, p.CenterY, p.Radius, p.StartAngle, p.EndAngle, p.Clockwise)
+			// Handle both frontend format (ax,ay,bx,by,cx,cy,sweep) and DXF format (centerX,centerY,radius,startAngle,endAngle)
+			var path geom.Path
+			if p.Ax != 0 || p.Ay != 0 || p.Bx != 0 || p.By != 0 {
+				// Frontend format: start/end/center points with sweep
+				path = h.arcFromPoints(p.Ax, p.Ay, p.Bx, p.By, p.Cx, p.Cy, p.Sweep)
+			} else {
+				// DXF/legacy format: center + radius + angles
+				cx := p.CenterX
+				cy := p.CenterY
+				if cx == 0 && cy == 0 {
+					cx = p.Cx
+					cy = p.Cy
+				}
+				path = h.arcToPath(cx, cy, p.Radius, p.StartAngle, p.EndAngle, p.Clockwise)
+			}
 			if len(path) > 0 {
 				paths = append(paths, path)
 			}
@@ -193,6 +214,52 @@ func (h *CAMHandler) circleToPath(cx, cy, r float64, segments int) geom.Path {
 			Y: cy + r*math.Sin(angle),
 		}
 	}
+	return path
+}
+
+// arcFromPoints converts an arc defined by start/end/center points and sweep to a polyline path
+func (h *CAMHandler) arcFromPoints(ax, ay, bx, by, cx, cy, sweep float64) geom.Path {
+	// Calculate radius from center to start point
+	r := math.Sqrt((ax-cx)*(ax-cx) + (ay-cy)*(ay-cy))
+	if r <= 0 {
+		return nil
+	}
+
+	// Calculate start angle from center to start point
+	startAngle := math.Atan2(ay-cy, ax-cx)
+
+	// Sweep determines direction: positive = CCW (math), negative = CW (math)
+	// If sweep is zero, calculate from start to end
+	if sweep == 0 {
+		endAngle := math.Atan2(by-cy, bx-cx)
+		sweep = endAngle - startAngle
+		// Default to smaller arc
+		if sweep > math.Pi {
+			sweep -= 2 * math.Pi
+		}
+		if sweep < -math.Pi {
+			sweep += 2 * math.Pi
+		}
+	}
+
+	// Calculate segments based on arc length
+	arcLen := r * math.Abs(sweep)
+	segments := max(8, min(72, int(arcLen/2.0)))
+
+	path := make(geom.Path, segments+1)
+	for i := 0; i <= segments; i++ {
+		t := float64(i) / float64(segments)
+		angle := startAngle + t*sweep
+		path[i] = geom.Point{
+			X: cx + r*math.Cos(angle),
+			Y: cy + r*math.Sin(angle),
+		}
+	}
+
+	// Snap endpoints exactly
+	path[0] = geom.Point{X: ax, Y: ay}
+	path[len(path)-1] = geom.Point{X: bx, Y: by}
+
 	return path
 }
 
@@ -262,7 +329,7 @@ func (h *CAMHandler) Parse(c *gin.Context) {
 	segments, bounds := h.parseGCode(req.GCode)
 
 	c.JSON(http.StatusOK, gin.H{
-		"success":  true,
+		"status":   "ok",
 		"segments": segments,
 		"bounds":   bounds,
 	})
@@ -374,8 +441,8 @@ func (h *CAMHandler) Postprocess(c *gin.Context) {
 	processed := h.applyPostprocessor(req.GCode, req.PostProc, req.MachineType)
 
 	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"gcode":   processed,
+		"status": "ok",
+		"gcode":  processed,
 	})
 }
 

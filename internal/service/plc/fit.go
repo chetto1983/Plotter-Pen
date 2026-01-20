@@ -1,31 +1,32 @@
 package plc
 
 import (
-    "math"
-    "plotter-pen/pkg/geom"
+	"math"
+	"plotter-pen/pkg/geom"
 )
 
-type fitSegment struct {
-    Type       string
-    X1, Y1     float64
-    X2, Y2     float64
-    Cx, Cy, R  float64
+// FitSegment represents a fitted line or arc segment
+type FitSegment struct {
+	Type      string  // "line" or "arc"
+	X1, Y1    float64 // Start point
+	X2, Y2    float64 // End point
+	Cx, Cy, R float64 // Center and radius (for arcs)
 }
 
 type fitCircle struct {
-    Cx, Cy, R float64
+	Cx, Cy, R float64
 }
 
-// fitArcsAndLines approximates a point sequence with arcs and lines.
+// FitArcsAndLines approximates a point sequence with arcs and lines.
 // Ported from src/geometry/biarc.js fitArcsAndLines.
-func fitArcsAndLines(points []geom.Point, tolerance float64) []fitSegment {
+func FitArcsAndLines(points []geom.Point, tolerance float64) []FitSegment {
     if tolerance <= 0 {
         tolerance = 0.05
     }
     minRadius := 0.005
     maxRadius := 1000000.0
 
-    result := []fitSegment{}
+    result := []FitSegment{}
     i := 0
 
     for i < len(points)-1 {
@@ -57,7 +58,7 @@ func fitArcsAndLines(points []geom.Point, tolerance float64) []fitSegment {
         }
 
         if bestArcEnd > i+1 && bestCircle != nil {
-            result = append(result, fitSegment{
+            result = append(result, FitSegment{
                 Type: "arc",
                 X1:   points[i].X,
                 Y1:   points[i].Y,
@@ -90,7 +91,7 @@ func fitArcsAndLines(points []geom.Point, tolerance float64) []fitSegment {
             }
         }
 
-        result = append(result, fitSegment{
+        result = append(result, FitSegment{
             Type: "line",
             X1:   points[i].X,
             Y1:   points[i].Y,

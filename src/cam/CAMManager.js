@@ -1,6 +1,7 @@
 /**
  * CAM Manager (Refactored)
  * Coordinator for CAM operations, managing state and sub-managers.
+ * Now includes PLC output display and 3D simulation like main PLC panel.
  */
 import { MachineConfig } from './MachineConfig.js';
 import { getModalManager } from '../ui/ModalManager.js';
@@ -8,6 +9,8 @@ import { ToolService } from './ToolService.js';
 import { CAMService } from './CAMService.js';
 import { CAMSettingsManager } from './CAMSettingsManager.js';
 import { ToolLibraryManager } from './ToolLibraryManager.js';
+import { PLCSimulator3D } from '../plc/PLCSimulator3D.js';
+import { PLC3DAnimator } from '../plc/PLC3DAnimator.js';
 import { log } from '../lib/logger.js';
 
 export class CAMManager {
@@ -33,9 +36,12 @@ export class CAMManager {
             },
             toolDiameter: 3.0,
             stepOver: 40,
-            stepDown: 1.0
+            stepDown: 1.0,
+            feedXY: 1000,
+            feedZ: 200
         };
         this.gcode = '';
+        this.plcOutput = [];  // PLC output lines
         this.gcodeSource = '';
         this.gcodeDirty = false;
         this.gcodeEditing = false;
@@ -46,33 +52,71 @@ export class CAMManager {
         this.settingsManager = new CAMSettingsManager(this, this.camService);
         this.toolLibraryManager = new ToolLibraryManager(this, this.toolService);
 
-        // Initialize Viewer
-        this.viewer = null;
-        try {
-            this.initViewer();
-        } catch (e) {
-            console.error('CAMManager: initViewer failed', e);
-        }
+        // 3D Simulation (same as main PLC)
+        this.simulator3D = null;
+        this.animator3D = null;
+        this._is3DInitialized = false;
 
-        setTimeout(() => this.bindEvents(), 100);
+        // Initialize Viewer and 3D Simulator
+        this.viewer = null;
+        setTimeout(() => {
+            this.init3DSimulator();
+            this.bindEvents();
+            this.loadSettingsFromUI();
+        }, 100);
     }
 
-    initViewer() {
+    /**
+     * Initialize 3D simulator using PLCSimulator3D (same as main PLC)
+     */
+    init3DSimulator() {
         const canvas = document.getElementById('camPreviewCanvas');
-        if (!canvas || this.viewer) {
-            return;
-        }
+        if (!canvas || this._is3DInitialized) return;
 
-        import('./Polar3DViewerAdapter.js')
-            .then(module => {
-                this.viewer = new module.Polar3DViewerAdapter(canvas);
-                if (this.previewData) {
-                    this.viewer.setParsedData(this.previewData);
+        try {
+            this.simulator3D = new PLCSimulator3D(canvas);
+            this.animator3D = new PLC3DAnimator(this.simulator3D);
+            this.viewer = this.simulator3D; // Alias for compatibility
+            log('CAMManager: 3D Simulator initialized');
+
+            // Wire progress callback
+            this.animator3D.onUpdate = (currentIndex, total) => {
+                const progressBar = document.querySelector('.cam-3d-progress-bar');
+                if (progressBar && total > 0) {
+                    const percent = Math.round((currentIndex / total) * 100);
+                    progressBar.style.width = `${percent}%`;
                 }
-            })
-            .catch((error) => {
-                console.error('CAMManager: Failed to load Polar3D viewer', error);
-            });
+            };
+
+            this.animator3D.onComplete = () => {
+                const btnPlay = document.getElementById('btnCam3DPlay');
+                if (btnPlay) {
+                    btnPlay.textContent = '▶';
+                    btnPlay.classList.remove('playing');
+                }
+                const progressBar = document.querySelector('.cam-3d-progress-bar');
+                if (progressBar) progressBar.style.width = '100%';
+            };
+
+            this._is3DInitialized = true;
+        } catch (err) {
+            console.error('CAMManager: Failed to create 3D simulator:', err);
+        }
+    }
+
+    /**
+     * Load settings from UI inputs
+     */
+    loadSettingsFromUI() {
+        const feedXY = document.getElementById('camFeedXY');
+        const feedZ = document.getElementById('camFeedZ');
+        const safeZ = document.getElementById('camSafeZ');
+        const toolDia = document.getElementById('camToolDia');
+
+        if (feedXY) this.jobSettings.feedXY = parseFloat(feedXY.value) || 1000;
+        if (feedZ) this.jobSettings.feedZ = parseFloat(feedZ.value) || 200;
+        if (safeZ) this.jobSettings.safeZ = parseFloat(safeZ.value) || 5;
+        if (toolDia) this.jobSettings.toolDiameter = parseFloat(toolDia.value) || 3;
     }
 
     bindEvents() {
@@ -104,33 +148,97 @@ export class CAMManager {
         // Preview Expand
         bind('btnCamExpandPreview', () => this.toggleFullscreenPreview());
 
-        // Tab Switching Logic
-        const tabs = document.querySelectorAll('.cad-tab-sm');
-        tabs.forEach(tab => {
-            tab.addEventListener('click', (e) => {
-                // Remove active from all tabs
-                tabs.forEach(t => t.classList.remove('active'));
-                // Add active to clicked
-                e.target.classList.add('active');
+        // ===== NEW: PLC Output Buttons =====
+        bind('btnCamSimulate', () => this.simulatePath());
+        bind('btnCamCopyPLC', () => this.copyPLCOutput());
+        bind('btnCamDownloadPLC', () => this.downloadPLCOutput());
+        bind('btnCamSendPLC', () => this.sendToPLC());
 
-                // Hide all subtabs
-                document.querySelectorAll('.cam-subtab-sm').forEach(el => el.hidden = true);
-                document.querySelectorAll('.cam-subtab-sm').forEach(el => el.classList.remove('active'));
+        // ===== NEW: 3D Playback Controls =====
+        const btnPlay = document.getElementById('btnCam3DPlay');
+        const btnStep = document.getElementById('btnCam3DStep');
+        const btnReset = document.getElementById('btnCam3DReset');
+        const speedSlider = document.getElementById('camSim3DSpeed');
+        const speedLabel = document.getElementById('camSim3DSpeedLabel');
 
-                // Show target subtab
-                const targetId = `cam-subtab-${e.target.dataset.subtab}`;
-                const target = document.getElementById(targetId);
-                if (target) {
-                    target.hidden = false;
-                    target.classList.add('active');
-                }
-
-                // If switching to preview, resize viewer because it might have been hidden
-                if (e.target.dataset.subtab === 'preview' && this.viewer) {
-                    requestAnimationFrame(() => this.viewer.resize());
+        if (btnPlay) {
+            btnPlay.addEventListener('click', () => {
+                if (!this.animator3D) return;
+                if (this.animator3D.isPlaying) {
+                    this.animator3D.pause();
+                    btnPlay.textContent = '▶';
+                    btnPlay.classList.remove('playing');
+                } else {
+                    this.animator3D.play();
+                    btnPlay.textContent = '⏸';
+                    btnPlay.classList.add('playing');
                 }
             });
+        }
+
+        if (btnStep) {
+            btnStep.addEventListener('click', () => this.animator3D?.step());
+        }
+
+        if (btnReset) {
+            btnReset.addEventListener('click', () => {
+                this.animator3D?.stop();
+                if (btnPlay) {
+                    btnPlay.textContent = '▶';
+                    btnPlay.classList.remove('playing');
+                }
+            });
+        }
+
+        if (speedSlider) {
+            speedSlider.addEventListener('input', () => {
+                const speed = parseFloat(speedSlider.value);
+                this.animator3D?.setSpeed(speed);
+                if (speedLabel) speedLabel.textContent = `${speed.toFixed(1)}x`;
+            });
+        }
+
+        // ===== NEW: Settings Input Changes =====
+        const settingsInputs = ['camFeedXY', 'camFeedZ', 'camSafeZ', 'camToolDia'];
+        settingsInputs.forEach(id => {
+            const input = document.getElementById(id);
+            if (input) {
+                input.addEventListener('change', () => this.loadSettingsFromUI());
+            }
         });
+
+        // Tab Switching Logic (updated to include 'plc' tab)
+        const camPanel = document.getElementById('camPanel');
+        if (camPanel) {
+            const tabs = camPanel.querySelectorAll('.cad-tab-sm');
+            tabs.forEach(tab => {
+                tab.addEventListener('click', (e) => {
+                    // Remove active from all tabs in CAM panel only
+                    tabs.forEach(t => t.classList.remove('active'));
+                    // Add active to clicked
+                    e.target.classList.add('active');
+
+                    // Hide all subtabs in CAM panel
+                    camPanel.querySelectorAll('.cam-subtab-sm').forEach(el => {
+                        el.hidden = true;
+                        el.classList.remove('active');
+                    });
+
+                    // Show target subtab
+                    const targetId = `cam-subtab-${e.target.dataset.subtab}`;
+                    const target = document.getElementById(targetId);
+                    if (target) {
+                        target.hidden = false;
+                        target.classList.add('active');
+                    }
+
+                    // If switching to preview, resize viewer
+                    if (e.target.dataset.subtab === 'preview' && this.simulator3D) {
+                        requestAnimationFrame(() => this.simulator3D?.resize());
+                    }
+                });
+            });
+        }
     }
 
     toggleFullscreenPreview() {
@@ -261,6 +369,26 @@ export class CAMManager {
         this.renderOperationsList();
     }
 
+    editOperation(op) {
+        // Simple edit: toggle operation type between profile/pocket
+        const newType = op.type === 'profile' ? 'pocket' : 'profile';
+        const typeName = newType === 'profile' ? 'Profilo' : 'Tasca';
+
+        getModalManager().confirm({
+            title: 'Modifica Operazione',
+            message: `Cambiare "${op.name}" in ${typeName}?`,
+            confirmText: 'Cambia',
+            cancelText: 'Annulla'
+        }).then(confirmed => {
+            if (confirmed) {
+                op.type = newType;
+                op.name = `${typeName} (${op.primitives.length} elem.)`;
+                this.renderOperationsList();
+                this.app.ui.updateStatus(`Operazione cambiata in ${typeName}.`);
+            }
+        });
+    }
+
     clearOperations() {
         this.operations = [];
         this.gcode = '';
@@ -309,7 +437,7 @@ export class CAMManager {
             editBtn.style.cursor = 'pointer';
             editBtn.onclick = (e) => {
                 e.stopPropagation();
-                this.opSettingsModal.open(op);
+                this.editOperation(op);
             };
             actions.appendChild(editBtn);
 
