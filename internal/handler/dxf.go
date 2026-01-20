@@ -216,7 +216,7 @@ func (h *DXFHandler) SmartImportSVG(c *gin.Context) {
 			Normalize:    false,
 			CenterOrigin: true,
 			ExtractPLC:   false,
-			FitArcs:      false,
+			FitArcs:      true,
 			ArcTolerance: 0.1,
 		}
 		opts.FlipY = true

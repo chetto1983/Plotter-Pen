@@ -70,6 +70,12 @@ func SmartImportSVG(content string, opts SVGImportOptions) (*SmartImportResult, 
 		result.Bounds = recalculateBounds(result.Primitives)
 	}
 
+	if opts.FitArcs {
+		result.Primitives = fitSVGPrimitives(result.Primitives)
+		result.Bounds = recalculateBounds(result.Primitives)
+		result.Stats = recalculateStats(result.Primitives)
+	}
+
 	if opts.Normalize {
 		normalizePrimitives(result.Primitives, result.Bounds)
 		result.Bounds = recalculateBounds(result.Primitives)
@@ -80,6 +86,63 @@ func SmartImportSVG(content string, opts SVGImportOptions) (*SmartImportResult, 
 	}
 
 	return result, nil
+}
+
+func fitSVGPrimitives(prims []Primitive) []Primitive {
+	if len(prims) == 0 {
+		return prims
+	}
+
+	out := make([]Primitive, 0, len(prims))
+	idx := len(prims)
+	for _, prim := range prims {
+		if (prim.Type != "polyline" && prim.Type != "polygon") || len(prim.Points) < 2 {
+			out = append(out, prim)
+			continue
+		}
+
+		points := prim.Points
+		closed := prim.Type == "polygon" || prim.Closed
+		if closed {
+			if circle := detectCircle(points); circle != nil {
+				out = append(out, Primitive{
+					Type:    "circle",
+					ID:      nextSVGID(&idx),
+					Layer:   prim.Layer,
+					CenterX: circle.Cx,
+					CenterY: circle.Cy,
+					Radius:  circle.R,
+				})
+				continue
+			}
+		}
+
+		fitted := fitArcsToPoints(points)
+		if len(fitted) == 0 || len(fitted) >= len(points)/2 {
+			out = append(out, prim)
+			continue
+		}
+
+		if closed && len(fitted) > 0 {
+			first := fitted[0]
+			last := fitted[len(fitted)-1]
+			start := primitiveStartPoint(&first)
+			end := primitiveEndPoint(&last)
+			if distance(start, end) > 0.1 {
+				fitted = append(fitted, newLinePrimitive(end, start, prim.Layer, ""))
+			}
+		}
+
+		for i := range fitted {
+			fitted[i].ID = nextSVGID(&idx)
+			if prim.Layer != "" {
+				fitted[i].Layer = prim.Layer
+			}
+			out = append(out, fitted[i])
+		}
+	}
+
+	return out
 }
 
 func parseSVGContent(content string) (*ParseResult, error) {
