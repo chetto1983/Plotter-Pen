@@ -137,11 +137,6 @@
     overflow: hidden;
 }
 
-/* Helper for hiding panels */
-#camPanel {
-    display: none;
-}
-
 /* Responsive Adjustments */
 @media (max-width: 1200px) {
     .cad-main {

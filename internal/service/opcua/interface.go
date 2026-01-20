@@ -1,0 +1,24 @@
+package opcua
+
+import "context"
+
+// OPCUAClient defines the interface for OPC UA client operations
+// Used by handlers and enables mock implementations for testing
+type OPCUAClient interface {
+	// Connection management
+	Connect(ctx context.Context) error
+	Disconnect(ctx context.Context) error
+	IsConnected() bool
+
+	// Data operations
+	SendWithTrigger(ctx context.Context, data interface{}, cfg Config) error
+
+	// Position and status
+	ReadPosition(ctx context.Context) (Position, error)
+	GetMachineStatus(ctx context.Context) MachineStatus
+	StopPositionPolling()
+	StartPositionPolling(callback PositionCallback, interval int)
+}
+
+// Ensure Client implements OPCUAClient interface
+var _ OPCUAClient = (*Client)(nil)

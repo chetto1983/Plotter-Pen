@@ -217,6 +217,19 @@ func TestOpcuaHandler_Send_MissingData(t *testing.T) {
 func TestOpcuaHandler_Connect_NoServer(t *testing.T) {
 	r, _ := setupTestOpcuaServer(t)
 
+	// First, set an unreachable endpoint to guarantee failure
+	// Use localhost with an unlikely port that has short timeout
+	unreachableConfig := `{"endpoint":"opc.tcp://127.0.0.1:59999","securityMode":"None","securityPolicy":"None"}`
+	updateReq := httptest.NewRequest(http.MethodPut, "/api/opcua/config", bytes.NewReader([]byte(unreachableConfig)))
+	updateReq.Header.Set("Content-Type", "application/json")
+	updateW := httptest.NewRecorder()
+	r.ServeHTTP(updateW, updateReq)
+
+	if updateW.Code != http.StatusOK {
+		t.Fatalf("Failed to update config: %s", updateW.Body.String())
+	}
+
+	// Now try to connect - should fail with 503
 	req := httptest.NewRequest(http.MethodPost, "/api/opcua/connect", nil)
 	w := httptest.NewRecorder()
 

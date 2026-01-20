@@ -225,17 +225,6 @@
     color: #ef4444;
 }
 
-/* CAM Settings Modal Tool Row */
-.cam-tool-row {
-    display: flex;
-    align-items: flex-end;
-    gap: 8px;
-}
-
-.cam-tool-input-wrapper {
-    flex: 1;
-}
-
 .btn-manage-tools {
     padding: 8px 12px;
     background: transparent;
