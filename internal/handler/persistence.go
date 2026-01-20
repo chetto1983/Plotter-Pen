@@ -38,10 +38,6 @@ func (h *PersistenceHandler) RegisterRoutes(r *gin.RouterGroup) {
 	r.PUT("/tools/:id", h.UpdateTool)
 	r.DELETE("/tools/:id", h.DeleteTool)
 
-	// CAM Settings
-	r.GET("/cam/settings", h.GetCAMSettings)
-	r.POST("/cam/settings", h.SaveCAMSettings)
-
 	// PLC Simulation Settings
 	r.GET("/plc/settings", h.GetPLCSimSettings)
 	r.POST("/plc/settings", h.SavePLCSimSettings)
@@ -260,33 +256,6 @@ func (h *PersistenceHandler) DeleteTool(c *gin.Context) {
 	}
 
 	if err := h.db.Delete(&persistence.Tool{}, id).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"success": true})
-}
-
-// === CAM Settings ===
-
-func (h *PersistenceHandler) GetCAMSettings(c *gin.Context) {
-	var settings persistence.CAMSettings
-	if err := h.db.First(&settings).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"data": settings.Data})
-}
-
-func (h *PersistenceHandler) SaveCAMSettings(c *gin.Context) {
-	var req struct {
-		Data string `json:"data" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	if err := h.db.Model(&persistence.CAMSettings{}).Where("id = 1").Update("data", req.Data).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

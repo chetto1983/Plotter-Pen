@@ -30,12 +30,6 @@ func TestInitDB(t *testing.T) {
 		t.Errorf("AppState count = %d, want 1", count)
 	}
 
-	// CAMSettings singleton
-	db.Model(&CAMSettings{}).Count(&count)
-	if count != 1 {
-		t.Errorf("CAMSettings count = %d, want 1", count)
-	}
-
 	// Default tools seeded
 	db.Model(&Tool{}).Count(&count)
 	if count < 1 {
@@ -203,30 +197,6 @@ func TestTool_CRUD(t *testing.T) {
 	// Should have default tools + new one
 	if len(tools) < 2 {
 		t.Errorf("Expected at least 2 tools, got %d", len(tools))
-	}
-}
-
-func TestCAMSettings_CRUD(t *testing.T) {
-	tmpFile := filepath.Join(os.TempDir(), fmt.Sprintf("test_cam_settings_%d.db", time.Now().UnixNano()))
-	defer os.Remove(tmpFile)
-
-	db, _ := InitDB(tmpFile)
-
-	// Read initial
-	var settings CAMSettings
-	db.First(&settings)
-
-	if settings.ID != 1 {
-		t.Errorf("CAMSettings ID = %d, want 1", settings.ID)
-	}
-
-	// Update
-	newData := `{"feedXY": 1000, "feedZ": 200}`
-	db.Model(&CAMSettings{}).Where("id = 1").Update("data", newData)
-
-	db.First(&settings)
-	if settings.Data != newData {
-		t.Errorf("CAMSettings data = %v", settings.Data)
 	}
 }
 

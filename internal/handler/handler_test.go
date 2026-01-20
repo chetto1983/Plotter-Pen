@@ -306,51 +306,6 @@ func TestCreateTool_DefaultType(t *testing.T) {
 	}
 }
 
-// === CAM Settings Tests ===
-
-func TestGetCAMSettings(t *testing.T) {
-	r, cleanup := setupTestDB(t)
-	defer cleanup()
-
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/api/cam/settings", nil)
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("Status = %d, want 200", w.Code)
-	}
-}
-
-func TestSaveCAMSettings(t *testing.T) {
-	r, cleanup := setupTestDB(t)
-	defer cleanup()
-
-	body := `{"data": "{\"feedXY\": 1000}"}`
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("POST", "/api/cam/settings", bytes.NewBufferString(body))
-	req.Header.Set("Content-Type", "application/json")
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("Status = %d, want 200, body: %s", w.Code, w.Body.String())
-	}
-}
-
-func TestSaveCAMSettings_Invalid(t *testing.T) {
-	r, cleanup := setupTestDB(t)
-	defer cleanup()
-
-	body := `{"invalid": "no data field"}`
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("POST", "/api/cam/settings", bytes.NewBufferString(body))
-	req.Header.Set("Content-Type", "application/json")
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("Status = %d, want 400", w.Code)
-	}
-}
-
 // === UpdateDrawing Tests ===
 
 func TestUpdateDrawing(t *testing.T) {
@@ -748,34 +703,6 @@ func TestDeleteTool_DBError(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("DELETE", "/api/tools/1", nil)
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusInternalServerError {
-		t.Errorf("Status = %d, want 500", w.Code)
-	}
-}
-
-func TestGetCAMSettings_DBError(t *testing.T) {
-	r, cleanup := setupClosedDB(t)
-	defer cleanup()
-
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/api/cam/settings", nil)
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusInternalServerError {
-		t.Errorf("Status = %d, want 500", w.Code)
-	}
-}
-
-func TestSaveCAMSettings_DBError(t *testing.T) {
-	r, cleanup := setupClosedDB(t)
-	defer cleanup()
-
-	body := `{"data": "{}"}`
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("POST", "/api/cam/settings", bytes.NewBufferString(body))
-	req.Header.Set("Content-Type", "application/json")
 	r.ServeHTTP(w, req)
 
 	if w.Code != http.StatusInternalServerError {
