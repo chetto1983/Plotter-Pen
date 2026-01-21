@@ -1,11 +1,11 @@
 # Plotter-Pen Docker Compose
 # CAD editor for pen plotters with PLC integration via OPC UA
-
+version: "3.8"
 services:
   plotter:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    #build:
+      #context: .
+      #dockerfile: Dockerfile
     image: plotter-pen:latest
     container_name: plotter-pen
     restart: unless-stopped
@@ -44,12 +44,12 @@ services:
     mem_limit: 512m
     cpus: 1.0
 
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8000/healthz"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-      start_period: 10s
+    #healthcheck:
+     # test: ["CMD", "wget", "-q", "--spider", "http://localhost:8000/healthz"]
+     # interval: 30s
+     # timeout: 3s
+     # retries: 3
+     # start_period: 10s
 
     logging:
       driver: json-file

@@ -24,7 +24,6 @@ func (h *DXFHandler) RegisterRoutes(r *gin.RouterGroup) {
 	r.POST("/smart-import", h.SmartImport)
 	r.POST("/parse-svg", h.ParseSVG)
 	r.POST("/smart-import-svg", h.SmartImportSVG)
-	r.POST("/export-dxf", h.ExportDXF)
 	r.POST("/parse-stl", h.ParseSTL)
 }
 
@@ -259,46 +258,6 @@ func (h *DXFHandler) SmartImportSVG(c *gin.Context) {
 		"bounds":     result.Bounds,
 		"stats":      result.Stats,
 		"layers":     importservice.GetLayerNames(result.Primitives),
-	})
-}
-
-// ExportDXFRequest represents DXF export input
-type ExportDXFRequest struct {
-	Primitives []importservice.Primitive `json:"primitives" binding:"required"`
-	Options    struct {
-		Version string `json:"version"` // AC2000
-		Units   string `json:"units"`   // mm, inch
-	} `json:"options"`
-}
-
-// ExportDXF exports primitives to DXF format
-func (h *DXFHandler) ExportDXF(c *gin.Context) {
-	var req ExportDXFRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	if len(req.Primitives) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "no primitives to export"})
-		return
-	}
-
-	content, err := importservice.ExportDXF(req.Primitives, req.Options.Version)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "export failed",
-			"details": err.Error(),
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"success":   true,
-		"content":   content,
-		"format":    "AC2000",
-		"mimeType":  "application/dxf",
-		"extension": ".dxf",
 	})
 }
 

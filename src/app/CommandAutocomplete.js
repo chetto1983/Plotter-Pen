@@ -30,7 +30,6 @@ export function createCommandDefinitions(app, ui) {
         { name: 'SAVE', aliases: ['SALVA'], desc: 'Salva disegno', shortcut: 'Ctrl+S', category: 'File', action: () => app.fileManager.saveToFile() },
         { name: 'OPEN', aliases: ['LOAD', 'APRI', 'CARICA'], desc: 'Apri disegno', shortcut: 'Ctrl+O', category: 'File', action: () => app.fileManager.loadFromFile() },
         { name: 'NEW', aliases: ['CLEAR', 'NUOVO', 'PULISCI'], desc: 'Nuovo disegno (pulisci tutto)', shortcut: '', category: 'File', action: () => app.selectionManager.clearAll() },
-        { name: 'EXPORTDXF', aliases: ['ESPORTADXF', 'DXF'], desc: 'Esporta DXF', shortcut: 'Ctrl+Shift+E', category: 'File', action: () => app.fileManager.exportDXF() },
 
         // View
         { name: 'ZOOM', aliases: ['Z'], desc: 'Zoom (+ o - per in/out)', shortcut: '+/-', category: 'Vista', action: () => ui.updateStatus('Usa + per zoom in, - per zoom out') },

@@ -102,13 +102,12 @@ plotter-pen/
 | `/api/drawings/:id` | GET/PUT/DELETE | Single drawing |
 | `/api/tools` | GET/POST | Tool library |
 
-### Import/Export
+### Import
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/parse-dxf` | POST | Parse DXF content |
 | `/api/smart-import` | POST | Import with arc fitting |
-| `/api/export-dxf` | POST | Export to DXF |
 | `/api/parse-svg` | POST | Parse SVG content |
 
 ### PLC & OPC UA

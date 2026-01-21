@@ -695,11 +695,8 @@ export class InputHandler {
         }
         break;
       case 'e':
-        if ((e.ctrlKey || e.metaKey) && e.shiftKey) {
-          e.preventDefault();
-          this.app.fileManager.exportDXF();
-        } else if (this.app.selectedPrimitives.size > 0) {
-          // E = Rotate 90° CW (clockwise, negative in math convention)
+        // E = Rotate 90° CW (clockwise, negative in math convention)
+        if (this.app.selectedPrimitives.size > 0) {
           this.app.selectionManager.rotateSelected(-90);
         }
         break;

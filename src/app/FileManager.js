@@ -356,54 +356,6 @@ export class FileManager {
   }
 
   /**
-   * Export current drawing to DXF file via backend
-   */
-  async exportDXF() {
-    try {
-      this.app.ui.updateStatus('Esportazione DXF...');
-
-      // Get layer data from LayerManager
-      const layers = this.app.layerManager ? this.app.layerManager.getAllLayers() : [];
-
-      // Serialize primitives to JSON
-      const primitives = this.app.primitives.map(p => p.toJSON());
-
-      // Call backend
-      const response = await fetch('/api/export-dxf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ primitives, layers })
-      });
-
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.message || 'Export failed');
-      }
-
-      // Get DXF content as blob
-      const blob = await response.blob();
-
-      // Generate filename with timestamp
-      const timestamp = new Date().toISOString().slice(0, 10);
-      const filename = `drawing_${timestamp}.dxf`;
-
-      // Trigger download
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      this.app.ui.updateStatus(`Esportato ${filename}`);
-    } catch {
-      this.app.ui.updateStatus('Errore esportazione DXF');
-    }
-  }
-
-  /**
    * DATABASE OPERATIONS
    */
 

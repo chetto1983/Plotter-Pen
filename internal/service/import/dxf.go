@@ -1,14 +1,12 @@
 package importservice
 
 import (
-	"bytes"
 	"fmt"
 	"math"
 	"sort"
 	"strings"
 
 	"github.com/yofu/dxf"
-	"github.com/yofu/dxf/drawing"
 	"github.com/yofu/dxf/entity"
 	"github.com/yofu/dxf/table"
 )
@@ -189,69 +187,6 @@ func SmartImport(content string, opts ImportOptions) (*SmartImportResult, error)
 	}
 
 	return result, nil
-}
-
-// ExportDXF exports primitives to DXF format.
-func ExportDXF(primitives []Primitive, version string) (string, error) {
-	d := dxf.NewDrawing()
-
-	layers := make(map[string]bool)
-	for _, p := range primitives {
-		if p.Layer != "" {
-			layers[p.Layer] = true
-		}
-	}
-
-	for layer := range layers {
-		d.AddLayer(layer, dxf.DefaultColor, dxf.DefaultLineType, true)
-	}
-
-	for _, p := range primitives {
-		if p.Layer != "" {
-			d.ChangeLayer(p.Layer)
-		}
-		addPrimitiveToDrawing(d, p)
-	}
-
-	var buf bytes.Buffer
-	if _, err := d.WriteTo(&buf); err != nil {
-		return "", fmt.Errorf("failed to write DXF: %w", err)
-	}
-
-	return buf.String(), nil
-}
-
-// addPrimitiveToDrawing adds a primitive to DXF drawing.
-func addPrimitiveToDrawing(d *drawing.Drawing, p Primitive) {
-	switch p.Type {
-	case "line":
-		d.Line(p.StartX, p.StartY, 0, p.EndX, p.EndY, 0)
-	case "circle":
-		d.Circle(p.CenterX, p.CenterY, 0, p.Radius)
-	case "arc":
-		startAngle := math.Atan2(p.StartY-p.CenterY, p.StartX-p.CenterX) * 180 / math.Pi
-		endAngle := math.Atan2(p.EndY-p.CenterY, p.EndX-p.CenterX) * 180 / math.Pi
-		if p.Sweep < 0 {
-			startAngle, endAngle = endAngle, startAngle
-		}
-		d.Arc(p.CenterX, p.CenterY, 0, p.Radius, startAngle, endAngle)
-	case "polyline", "polygon":
-		addPolylineToDrawing(d, p)
-	}
-}
-
-// addPolylineToDrawing adds polyline as connected lines.
-func addPolylineToDrawing(d *drawing.Drawing, p Primitive) {
-	if len(p.Points) < 2 {
-		return
-	}
-	for i := 0; i < len(p.Points)-1; i++ {
-		d.Line(p.Points[i].X, p.Points[i].Y, 0, p.Points[i+1].X, p.Points[i+1].Y, 0)
-	}
-	if p.Closed && len(p.Points) > 2 {
-		last := len(p.Points) - 1
-		d.Line(p.Points[last].X, p.Points[last].Y, 0, p.Points[0].X, p.Points[0].Y, 0)
-	}
 }
 
 func (i *dxfImporter) convertEntity(e entity.Entity, idx *int) []Primitive {

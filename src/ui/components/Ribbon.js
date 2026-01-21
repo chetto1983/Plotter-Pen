@@ -136,7 +136,6 @@ export class Ribbon {
                 <button type="button" class="cad-tool-btn" id="btnSave" title="Salva"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" /></svg><span>Salva</span></button>
                 <label for="fileInput" class="cad-tool-btn" title="Apri"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" /></svg><span>Apri</span></label>
                 <input type="file" id="fileInput" accept=".dxf,.svg,.json" style="display:none">
-                <button type="button" class="cad-tool-btn" id="btnExportDXF" title="Esporta DXF"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg><span>Esporta</span></button>
                 <button type="button" class="cad-tool-btn" id="btnClear" title="Pulisci"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="9" y1="9" x2="15" y2="15" /><line x1="15" y1="9" x2="9" y2="15" /></svg><span>Pulisci</span></button>
             </div>
             <span class="cad-toolbar-label">File</span>
