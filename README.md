@@ -5,16 +5,17 @@ CAD editor for pen plotters with PLC integration via OPC UA. Features a Go backe
 ## Features
 
 - **CAD Editor**: Draw lines, arcs, circles, polygons with snap and constraints
-- **File Import**: DXF, SVG, STL support with B-spline interpolation and arc fitting
+- **File Import**: DXF, SVG support with B-spline interpolation and arc fitting
 - **PLC Output**: Generate optimized toolpaths with J/L/A commands
 - **OPC UA**: Send commands directly to industrial PLCs (Siemens S7-1500 tested)
-- **3D Simulation**: Real-time tool visualization with Three.js
+- **3D Simulation**: Real-time tool visualization with Three.js thick line rendering, zoom controls, rotation
+- **Touch Support**: Tablet/HMI optimized with pinch-zoom, two-finger pan, single-finger orbit
 - **Persistence**: SQLite database for drawings, tools, and settings
 
 ## Prerequisites
 
 - Go 1.22+ (for production backend)
-- Node.js 18+ (for legacy/development server)
+- Node.js 18+ (required for Three.js Line2 thick line modules)
 - Docker (optional, for containerized deployment)
 
 ## Quick Start
@@ -22,6 +23,9 @@ CAD editor for pen plotters with PLC integration via OPC UA. Features a Go backe
 ### Go Backend (Recommended)
 
 ```bash
+# Install Three.js dependencies (required for thick line rendering)
+npm install
+
 # Build
 go build -o plotter-pen.exe ./cmd/server
 
@@ -29,11 +33,15 @@ go build -o plotter-pen.exe ./cmd/server
 ./plotter-pen.exe
 
 # Open browser at http://localhost:8000/plotter_pen.html
+```
 
 ### Docker
 
 ```bash
+# Build (includes Node.js deps for Three.js Line2 modules)
 docker build -t plotter-pen .
+
+# Run with Docker Compose
 docker compose up --build
 ```
 
@@ -67,7 +75,7 @@ plotter-pen/
 ├── internal/
 │   ├── handler/          # HTTP API handlers
 │   ├── service/
-│   │   ├── import/       # DXF, SVG, STL parsers
+│   │   ├── import/       # DXF, SVG parsers
 │   │   ├── plc/          # PLC command generation
 │   │   └── opcua/        # OPC UA client
 │   ├── persistence/      # SQLite + GORM
@@ -76,9 +84,10 @@ plotter-pen/
 │   └── geom/             # Geometry primitives
 ├── src/                  # JavaScript frontend
 │   ├── geometry/         # Primitives, B-spline, arc fitting
-│   ├── plc/              # 3D visualization (Three.js)
+│   ├── plc/              # 3D visualization (Three.js Line2, touch)
 │   ├── tools/            # Drawing tools
 │   └── app/              # State management, UI
+├── node_modules/         # Three.js Line2 dependencies (npm)
 └── assets/               # Static resources
 ```
 
@@ -101,7 +110,6 @@ plotter-pen/
 | `/api/smart-import` | POST | Import with arc fitting |
 | `/api/export-dxf` | POST | Export to DXF |
 | `/api/parse-svg` | POST | Parse SVG content |
-| `/api/parse-stl` | POST | Parse STL content |
 
 ### PLC & OPC UA
 
