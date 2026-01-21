@@ -151,6 +151,7 @@ class CADApplication {
 
     // Initial render (wait for layout to be calculated)
     requestAnimationFrame(() => {
+      this.renderer.resetView(); // Center workspace on canvas
       this.render();
       this.ui.updateStatus('Pronto');
     });

@@ -1,23 +1,35 @@
 /* ============================================
    UI COMPONENTS (Buttons, Inputs, Ribbon)
+   Industrial HMI Touch-Optimized
+   ============================================ */
+
+/* ============================================
+   BUTTON BASE STYLES
+   Touch targets follow ISA-101 guidelines
    ============================================ */
 
 /* Menu Btn */
 .cad-menu-btn {
-    width: 36px;
-    height: 36px;
-    padding: 6px;
+    min-width: var(--touch-target-min, 48px);
+    min-height: var(--touch-target-min, 48px);
+    padding: 8px;
     border: 1px solid var(--border-light);
-    border-radius: 6px;
+    border-radius: 8px;
     background: transparent;
     color: var(--fg);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all var(--transition-fast, 150ms) ease;
+    /* Prevent accidental double-tap zoom on mobile */
+    touch-action: manipulation;
 }
 
 .cad-menu-btn:hover {
     background: var(--accent-dim);
     border-color: var(--accent);
+}
+
+.cad-menu-btn:active {
+    transform: scale(0.95);
 }
 
 /* Icon Button (Generic) */
@@ -27,23 +39,28 @@
     align-items: center;
     justify-content: center;
     border: 1px solid var(--border-light);
-    border-radius: 6px;
+    border-radius: 8px;
     background: transparent;
     color: var(--muted);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all var(--transition-fast, 150ms) ease;
+    touch-action: manipulation;
 }
 
 .cad-icon-btn {
-    width: 36px;
-    height: 36px;
-    padding: 6px;
+    min-width: var(--touch-target-min, 48px);
+    min-height: var(--touch-target-min, 48px);
+    width: var(--touch-target-min, 48px);
+    height: var(--touch-target-min, 48px);
+    padding: 8px;
 }
 
 .cad-icon-btn-sm {
-    width: 26px;
-    height: 26px;
-    padding: 4px;
+    min-width: 36px;
+    min-height: 36px;
+    width: 36px;
+    height: 36px;
+    padding: 6px;
 }
 
 .cad-icon-btn:hover,
@@ -53,20 +70,28 @@
     color: var(--fg);
 }
 
+.cad-icon-btn:active,
+.cad-icon-btn-sm:active {
+    transform: scale(0.95);
+}
+
 /* Primary Button */
 .cad-primary-btn {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 8px 14px;
+    justify-content: center;
+    gap: 8px;
+    min-height: var(--touch-target-min, 48px);
+    padding: 12px 20px;
     border: 1px solid var(--accent);
-    border-radius: 6px;
+    border-radius: 8px;
     background: linear-gradient(135deg, rgba(82, 168, 255, 0.9), rgba(54, 122, 255, 0.9));
     color: #fff;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: all var(--transition-fast, 150ms) ease;
+    touch-action: manipulation;
 }
 
 .cad-primary-btn:hover {
@@ -74,7 +99,50 @@
     box-shadow: 0 0 12px rgba(82, 168, 255, 0.35);
 }
 
-/* Inputs */
+.cad-primary-btn:active {
+    transform: scale(0.97);
+}
+
+/* Secondary/Ghost Button */
+.cad-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: var(--touch-target-min, 48px);
+    padding: 12px 16px;
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--fg);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast, 150ms) ease;
+    touch-action: manipulation;
+}
+
+.cad-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent);
+}
+
+.cad-btn:active {
+    transform: scale(0.97);
+}
+
+/* Button Groups */
+.cad-btn-group {
+    display: flex;
+    gap: var(--touch-target-spacing, 8px);
+    flex-wrap: wrap;
+}
+
+/* ============================================
+   INPUT STYLES
+   Touch-friendly sizing for HMI
+   ============================================ */
+
 .cad-input-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -83,27 +151,63 @@
 }
 
 .cad-input-row label {
-    font-size: 11px;
+    font-size: var(--font-size-hmi-small, 14px);
     color: var(--muted);
 }
 
 .cad-input-row input[type="number"],
-.cad-number-input {
+.cad-number-input,
+.cad-input {
     width: 100%;
-    padding: 6px 8px;
-    background: rgba(11, 14, 22, 0.9);
+    min-height: 40px;
+    padding: 10px 12px;
+    background: var(--bg-input, rgba(11, 14, 22, 0.9));
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: 8px;
     color: var(--fg);
-    font-size: 12px;
+    font-size: var(--font-size-hmi-small, 14px);
     text-align: right;
+    transition: border-color var(--transition-fast, 150ms), box-shadow var(--transition-fast, 150ms);
+}
+
+/* Text inputs align left */
+input[type="text"].cad-input,
+.cad-input[type="text"] {
+    text-align: left;
 }
 
 .cad-number-input:focus,
+.cad-input:focus,
 input:focus {
     outline: none;
     border-color: var(--accent);
-    box-shadow: 0 0 0 2px rgba(82, 168, 255, 0.15);
+    box-shadow: 0 0 0 3px rgba(82, 168, 255, 0.2);
+}
+
+/* Select dropdown */
+.cad-select,
+select {
+    width: 100%;
+    min-height: 40px;
+    padding: 10px 12px;
+    padding-right: 32px;
+    background: var(--bg-input, rgba(11, 14, 22, 0.9));
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--fg);
+    font-size: var(--font-size-hmi-small, 14px);
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a9b0c0' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+}
+
+.cad-select:focus,
+select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(82, 168, 255, 0.2);
 }
 
 /* Toggles */
@@ -150,6 +254,38 @@ input:focus {
 .cad-toggle input:checked+.cad-toggle-slider::after {
     left: calc(100% - 16px);
     background: var(--accent);
+}
+
+/* Touch-friendly toggle (larger for HMI) */
+.cad-toggle-touch {
+    min-height: var(--touch-target-min, 48px);
+    padding: 8px 0;
+}
+
+.cad-toggle-touch .cad-toggle-slider {
+    width: 52px;
+    height: 28px;
+    border-radius: 14px;
+}
+
+.cad-toggle-touch .cad-toggle-slider::after {
+    top: 3px;
+    left: 3px;
+    width: 20px;
+    height: 20px;
+}
+
+.cad-toggle-touch input:checked+.cad-toggle-slider::after {
+    left: calc(100% - 23px);
+}
+
+.cad-toggle-touch .cad-toggle-label {
+    font-size: var(--font-size-hmi-small, 14px);
+}
+
+/* Toggle row spacing */
+.cad-toggle-row {
+    padding: 4px 0;
 }
 
 /* ============================================
@@ -414,4 +550,148 @@ input:focus {
     width: 20px;
     height: 20px;
     flex-shrink: 0;
+}
+
+/* ============================================
+   ADAPTIVE RIBBON - Responsive Design
+   Uses container queries for component-level responsiveness
+   ============================================ */
+
+/* Tablet/Medium HMI: Compact ribbon with icons only */
+@media (max-width: 1023px) {
+    .cad-ribbon-content {
+        height: auto;
+        min-height: 60px;
+        padding: 4px;
+        overflow-x: auto;
+    }
+
+    .cad-toolbar-group {
+        flex-direction: row;
+        padding: 0 4px;
+        gap: 4px;
+    }
+
+    .cad-toolbar-label {
+        display: none;
+    }
+
+    .cad-toolbar-buttons {
+        flex-direction: row;
+        flex-wrap: nowrap;
+    }
+
+    .cad-tool-btn {
+        min-width: var(--touch-target-min, 48px);
+        min-height: var(--touch-target-min, 48px);
+        padding: 8px;
+        flex-direction: column;
+    }
+
+    .cad-tool-btn span:not(.btn-icon) {
+        display: none;
+    }
+
+    .ribbon-tab {
+        min-height: var(--touch-target-min, 48px);
+        padding: 8px 12px;
+    }
+}
+
+/* Small HMI / Mobile: Bottom toolbar */
+@media (max-width: 799px) {
+    .cad-ribbon {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        top: auto;
+        z-index: var(--z-floating, 100);
+        border-bottom: none;
+        border-top: 1px solid var(--border);
+        background: rgba(15, 17, 21, 0.98);
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .cad-ribbon-tabs {
+        display: none;
+    }
+
+    .cad-ribbon-content {
+        height: auto;
+        padding: 8px;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        gap: 8px;
+        scroll-behavior: smooth;
+    }
+
+    .ribbon-panel {
+        display: flex !important;
+    }
+
+    .cad-toolbar-group {
+        flex-direction: row;
+        border-right: none;
+        padding: 0;
+        gap: 4px;
+    }
+
+    .cad-tool-btn {
+        min-width: var(--touch-target-min, 48px);
+        min-height: var(--touch-target-min, 48px);
+        padding: 8px;
+    }
+
+    .cad-tool-btn svg {
+        width: 20px;
+        height: 20px;
+    }
+
+    .cad-tool-btn span:not(.btn-icon) {
+        display: none;
+    }
+
+    /* Hide less-used tools on very small screens */
+    .cad-toolbar-group.secondary {
+        display: none;
+    }
+}
+
+/* Container query for ribbon (when container queries are supported) */
+@container ribbon (max-width: 800px) {
+    .cad-toolbar-label {
+        display: none;
+    }
+
+    .cad-tool-btn span:not(.btn-icon) {
+        display: none;
+    }
+}
+
+@container ribbon (max-width: 500px) {
+    .cad-toolbar-group.secondary {
+        display: none;
+    }
+}
+
+/* ============================================
+   TOUCH-OPTIMIZED STATUS BAR
+   ============================================ */
+
+@media (max-width: 799px) {
+    .cad-statusbar {
+        min-height: 36px;
+        padding: 6px 12px;
+        font-size: 12px;
+    }
+
+    .cad-status-center {
+        display: none;
+    }
+}
+
+/* Hide status bar in kiosk mode on small screens */
+.kiosk-mode .cad-statusbar {
+    display: none;
 }

@@ -1,0 +1,248 @@
+/* ============================================
+   RESPONSIVE.CSS - Industrial HMI Breakpoints
+   Mobile-first responsive design system
+   ============================================ */
+
+/* ============================================
+   BREAKPOINT REFERENCE
+   --bp-small-hmi:  480px  (7" portrait)
+   --bp-medium-hmi: 800px  (7" landscape / 10" portrait)
+   --bp-large-hmi:  1024px (10" landscape)
+   --bp-desktop:    1280px (15"+)
+   ============================================ */
+
+/* ============================================
+   HEADER RESPONSIVENESS
+   ============================================ */
+
+/* Mobile: Simplified header */
+@media (max-width: 799px) {
+    .cad-header {
+        padding: 6px 12px;
+    }
+
+    .cad-brand-version {
+        display: none;
+    }
+
+    .cad-nav-link {
+        padding: 8px 10px;
+        font-size: 12px;
+    }
+
+    .cad-header-right {
+        gap: 8px;
+    }
+}
+
+/* Hide non-essential nav on very small screens */
+@media (max-width: 599px) {
+    .cad-header-right .cad-nav-link:not(.cad-nav-essential) {
+        display: none;
+    }
+}
+
+/* ============================================
+   FOOTER RESPONSIVENESS
+   ============================================ */
+
+/* Mobile: Compact footer */
+@media (max-width: 799px) {
+    .cad-footer {
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .cad-status-bar {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+}
+
+/* ============================================
+   CANVAS AREA RESPONSIVENESS
+   ============================================ */
+
+/* Ensure canvas fills available space on all devices */
+.cad-canvas-area {
+    min-height: 200px;
+}
+
+@media (max-width: 799px) {
+    .cad-canvas-area {
+        min-height: 50vh;
+    }
+}
+
+/* ============================================
+   MODAL RESPONSIVENESS
+   ============================================ */
+
+@media (max-width: 479px) {
+    .cad-modal {
+        width: calc(100vw - 24px);
+        max-height: calc(100vh - 48px);
+        margin: 12px;
+    }
+
+    .cad-modal-content {
+        padding: 12px;
+    }
+
+    .cad-modal-footer {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .cad-modal-footer .cad-btn {
+        width: 100%;
+    }
+}
+
+/* ============================================
+   TOUCH-SPECIFIC ADJUSTMENTS
+   Applied when touch is detected
+   ============================================ */
+
+@media (pointer: coarse) {
+    /* Larger touch targets for touch devices */
+    .cad-icon-btn,
+    .cad-tool-btn,
+    .cad-btn {
+        min-height: var(--touch-target-min, 48px);
+        min-width: var(--touch-target-min, 48px);
+    }
+
+    /* More padding for inputs */
+    .cad-input,
+    .cad-number-input,
+    input[type="text"],
+    input[type="number"],
+    select {
+        min-height: var(--touch-target-min, 48px);
+        padding: 12px;
+        font-size: 16px; /* Prevents zoom on iOS */
+    }
+
+    /* Larger checkboxes and toggles */
+    .cad-toggle,
+    .cad-checkbox {
+        transform: scale(1.2);
+    }
+
+    /* Better spacing for touch */
+    .cad-btn-group {
+        gap: var(--touch-target-spacing, 8px);
+    }
+}
+
+/* ============================================
+   GLOVE MODE (for industrial environments)
+   Activated via body.glove-mode class
+   ============================================ */
+
+.glove-mode .cad-icon-btn,
+.glove-mode .cad-tool-btn,
+.glove-mode .cad-btn {
+    min-height: var(--touch-target-glove, 64px);
+    min-width: var(--touch-target-glove, 64px);
+}
+
+.glove-mode .cad-ribbon-btn {
+    min-height: var(--touch-target-glove, 64px);
+    min-width: var(--touch-target-glove, 64px);
+    padding: 12px 16px;
+}
+
+.glove-mode input,
+.glove-mode select {
+    min-height: var(--touch-target-glove, 64px);
+    font-size: var(--font-size-hmi-value, 20px);
+}
+
+.glove-mode .cad-panel-header {
+    min-height: var(--touch-target-glove, 64px);
+    font-size: var(--font-size-hmi-label, 16px);
+}
+
+/* ============================================
+   ASPECT RATIO SPECIFIC ADJUSTMENTS
+   For legacy 4:3 HMI panels
+   ============================================ */
+
+@media (aspect-ratio: 4/3) {
+    /* Optimize for square-ish displays */
+    .cad-main {
+        --sidebar-width-default: 240px;
+    }
+}
+
+@media (max-aspect-ratio: 1/1) {
+    /* Portrait orientation - stack everything */
+    .cad-main {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr auto auto;
+        grid-template-areas:
+            "canvas"
+            "left"
+            "right";
+    }
+}
+
+/* ============================================
+   PRINT STYLES
+   ============================================ */
+
+@media print {
+    .cad-header,
+    .cad-ribbon,
+    .cad-panel-left,
+    .cad-panel-right,
+    .cad-footer,
+    .cad-floating-toolbar {
+        display: none !important;
+    }
+
+    .cad-main {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr;
+        grid-template-areas: "canvas";
+    }
+
+    .cad-canvas-area {
+        width: 100%;
+        height: auto;
+    }
+}
+
+/* ============================================
+   HIGH CONTRAST MODE (accessibility)
+   ============================================ */
+
+@media (prefers-contrast: high) {
+    :root {
+        --border: #444;
+        --border-light: #666;
+        --bg-hover: rgba(255, 255, 255, 0.15);
+    }
+
+    .cad-icon-btn,
+    .cad-tool-btn,
+    .cad-btn {
+        border: 2px solid var(--fg);
+    }
+}
+
+/* ============================================
+   REDUCED MOTION (accessibility)
+   ============================================ */
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}

@@ -1,5 +1,6 @@
 /* ============================================
    LAYOUT STYLES (Header, Grid, Panels)
+   Industrial HMI Responsive Design
    ============================================ */
 
 /* Main App Container */
@@ -9,6 +10,32 @@
     height: 100vh;
     width: 100vw;
     overflow: hidden;
+}
+
+/* ============================================
+   CONTAINER QUERY SETUP
+   Enables component-level responsive design
+   ============================================ */
+.cad-sidebar-left,
+.cad-panel-left {
+    container-type: inline-size;
+    container-name: sidebar-left;
+}
+
+.cad-sidebar-right,
+.cad-panel-right {
+    container-type: inline-size;
+    container-name: sidebar-right;
+}
+
+.cad-ribbon {
+    container-type: inline-size;
+    container-name: ribbon;
+}
+
+.cad-canvas-area {
+    container-type: size;
+    container-name: canvas;
 }
 
 /* Header */
@@ -67,14 +94,58 @@
     background: var(--accent-dim);
 }
 
-/* Main Content Grid */
+/* ============================================
+   MAIN CONTENT GRID - Mobile-First Design
+   ============================================ */
 .cad-main {
     display: grid;
-    grid-template-columns: 260px minmax(0, 1fr) clamp(280px, 30vw, 400px);
     gap: 0;
     height: 100%;
     min-height: 0;
     overflow: hidden;
+
+    /* Mobile-first: Single column stack (< 800px) */
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto auto;
+    grid-template-areas:
+        "canvas"
+        "left"
+        "right";
+}
+
+/* 10" HMI Landscape / Desktop (>= 1024px): Two columns */
+@media (min-width: 1024px) {
+    .cad-main {
+        grid-template-columns: var(--sidebar-width-compact, 200px) 1fr;
+        grid-template-rows: 1fr auto;
+        grid-template-areas:
+            "left canvas"
+            "left right";
+    }
+}
+
+/* Desktop (>= 1280px): Full three columns */
+@media (min-width: 1280px) {
+    .cad-main {
+        grid-template-columns: var(--sidebar-width-default, 260px) 1fr clamp(280px, 25vw, 400px);
+        grid-template-rows: 1fr;
+        grid-template-areas: "left canvas right";
+    }
+}
+
+/* Grid area assignments */
+.cad-panel-left,
+.cad-sidebar-left {
+    grid-area: left;
+}
+
+.cad-canvas-area {
+    grid-area: canvas;
+}
+
+.cad-panel-right,
+.cad-sidebar-right {
+    grid-area: right;
 }
 
 /* Panels */
@@ -137,34 +208,155 @@
     overflow: hidden;
 }
 
-/* Responsive Adjustments */
-@media (max-width: 1200px) {
-    .cad-main {
-        grid-template-columns: 220px 1fr 260px;
-    }
-}
+/* ============================================
+   RESPONSIVE PANEL ADJUSTMENTS
+   Mobile-first approach
+   ============================================ */
 
-@media (max-width: 1000px) {
-    .cad-main {
-        grid-template-columns: 1fr;
-        grid-template-rows: auto 1fr auto;
-    }
-
+/* Mobile/Small HMI: Horizontal scrolling panels */
+@media (max-width: 1023px) {
     .cad-panel-left {
         flex-direction: row;
+        flex-wrap: nowrap;
         gap: 8px;
         padding: 8px;
         border: none;
         border-bottom: 1px solid var(--border);
         overflow-x: auto;
+        max-height: 35vh;
+    }
+
+    .cad-panel-left .cad-panel-section {
+        flex: 0 0 auto;
+        min-width: 180px;
+        max-width: 220px;
     }
 
     .cad-panel-right {
-        flex-direction: column;
+        flex-direction: row;
+        flex-wrap: nowrap;
         gap: 8px;
         padding: 8px;
         border: none;
         border-top: 1px solid var(--border);
+        overflow-x: auto;
+        max-height: 35vh;
+    }
+
+    .cad-panel-right .cad-panel-section {
+        flex: 0 0 auto;
+        min-width: 200px;
+        max-width: 280px;
+    }
+}
+
+/* Two-column mode: Right panel at bottom */
+@media (min-width: 1024px) and (max-width: 1279px) {
+    .cad-panel-right {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 8px;
+        border: none;
+        border-top: 1px solid var(--border);
+        overflow-x: auto;
         max-height: 40vh;
     }
+}
+
+/* Desktop: Full sidebars */
+@media (min-width: 1280px) {
+    .cad-panel-left,
+    .cad-panel-right {
+        flex-direction: column;
+        overflow-x: visible;
+        overflow-y: auto;
+        max-height: none;
+    }
+
+    .cad-panel-left .cad-panel-section,
+    .cad-panel-right .cad-panel-section {
+        min-width: auto;
+        max-width: none;
+    }
+}
+
+/* ============================================
+   COLLAPSIBLE PANELS (for tablet/HMI)
+   ============================================ */
+.cad-panel.collapsed {
+    width: var(--sidebar-width-collapsed, 48px);
+    min-width: var(--sidebar-width-collapsed, 48px);
+    padding: 8px 4px;
+    overflow: hidden;
+}
+
+.cad-panel.collapsed .cad-panel-section {
+    display: none;
+}
+
+.cad-panel.collapsed .cad-panel-toggle {
+    display: flex;
+}
+
+.cad-panel-toggle {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: var(--touch-target-min, 48px);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    color: var(--fg);
+    transition: background var(--transition-fast, 150ms);
+}
+
+.cad-panel-toggle:hover {
+    background: var(--bg-hover);
+}
+
+/* Show toggle button on tablet */
+@media (max-width: 1279px) {
+    .cad-panel-toggle {
+        display: flex;
+    }
+}
+
+/* ============================================
+   KIOSK MODE
+   Maximizes canvas, hides non-essential UI
+   ============================================ */
+.kiosk-mode .cad-header {
+    display: none;
+}
+
+.kiosk-mode .cad-ribbon {
+    position: fixed;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: auto;
+    max-width: 90vw;
+    background: rgba(21, 24, 35, 0.95);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    z-index: var(--z-floating, 100);
+}
+
+.kiosk-mode .cad-panel-left,
+.kiosk-mode .cad-panel-right {
+    display: none;
+}
+
+.kiosk-mode .cad-main {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+    grid-template-areas: "canvas";
+}
+
+.kiosk-mode .cad-footer {
+    display: none;
 }

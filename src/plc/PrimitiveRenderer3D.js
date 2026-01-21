@@ -8,7 +8,8 @@ export class PrimitiveRenderer3D {
         this.THREE = THREE;
         this.scene = scene;
         this.group = new THREE.Group();
-        this.material = new THREE.LineBasicMaterial({ color: 0x4488ff, linewidth: 1 });
+        // Dim blue color for "uncut" paths - will be overlaid by bright trail when cut
+        this.material = new THREE.LineBasicMaterial({ color: 0x334466, linewidth: 1 });
         scene.add(this.group);
     }
 

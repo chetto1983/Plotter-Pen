@@ -112,10 +112,6 @@ export class Ribbon {
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
                     <span>PLC</span>
                 </button>
-                <button type="button" class="cad-tool-btn" id="btnOpenPLCConfig" title="Config PLC/OPC UA">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M9 9h6" /><path d="M9 13h6" /><path d="M9 17h4" /></svg>
-                    <span>Config</span>
-                </button>
             </div>
             <span class="cad-toolbar-label">Output</span>
          </div>
@@ -127,7 +123,7 @@ export class Ribbon {
              <div class="cad-toolbar-buttons">
                 <button type="button" class="cad-tool-btn" id="btnZoomIn" title="Zoom In"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /><line x1="11" y1="8" x2="11" y2="14" /><line x1="8" y1="11" x2="14" y2="11" /></svg><span>Zoom In</span></button>
                 <button type="button" class="cad-tool-btn" id="btnZoomOut" title="Zoom Out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /><line x1="8" y1="11" x2="14" y2="11" /></svg><span>Zoom Out</span></button>
-                <button type="button" class="cad-tool-btn" id="btnZoomFit" title="Estensioni"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" /><line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" /></svg><span>Estensioni</span></button>
+                <button type="button" class="cad-tool-btn" id="btnZoomFit" title="Estendi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" /><line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" /></svg><span>Estendi</span></button>
                 <div class="cad-toolbar-divider"></div>
                 <button type="button" class="cad-tool-btn" id="btnUndo" title="Annulla"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10h10a5 5 0 015 5v2" /><polyline points="3 10 8 5 3 10 8 15" /></svg><span>Annulla</span></button>
                 <button type="button" class="cad-tool-btn" id="btnRedo" title="Ripeti"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10H11a5 5 0 00-5 5v2" /><polyline points="21 10 16 5 21 10 16 15" /></svg><span>Ripeti</span></button>

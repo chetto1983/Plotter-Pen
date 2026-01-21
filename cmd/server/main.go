@@ -46,6 +46,7 @@ func main() {
 	staticGroup.Static("/src", cfg.StaticDir+"/src")
 	staticGroup.Static("/styles", cfg.StaticDir+"/styles")
 	staticGroup.Static("/assets", cfg.StaticDir+"/assets")
+	staticGroup.Static("/node_modules", cfg.StaticDir+"/node_modules")
 	r.StaticFile("/", cfg.StaticDir+"/plotter_pen.html")
 	r.StaticFile("/plotter_pen.html", cfg.StaticDir+"/plotter_pen.html")
 	r.StaticFile("/favicon.ico", cfg.StaticDir+"/favicon.ico")

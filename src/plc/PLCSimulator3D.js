@@ -4,6 +4,9 @@
  * Uses polar3d-viewer bundle (includes Three.js + branding requirements)
  */
 import { THREE, BRANDING_CSS, injectBranding } from '../lib/polar3d-viewer.bundle.mjs';
+import { Line2 } from 'three/addons/lines/Line2.js';
+import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { ViewCubeHelper } from './ViewCubeHelper.js';
 import { PrimitiveRenderer3D } from './PrimitiveRenderer3D.js';
 
@@ -20,8 +23,9 @@ export class PLCSimulator3D {
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(0x1a1a2e);
 
-        // Camera
+        // Camera (Z-up coordinate system)
         this.camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100000);
+        this.camera.up.set(0, 0, 1);  // Z is up in this app
         this.camera.position.set(500, 500, 500);
         this.camera.lookAt(0, 0, 0);
 
@@ -33,11 +37,28 @@ export class PLCSimulator3D {
         });
         this.renderer.setPixelRatio(window.devicePixelRatio || 1);
 
-        // Trail data - improved colors for visibility on dark background
+        // Trail data - high contrast colors for clear progress visibility
         this.trailSegments = [];
-        this.rapidMaterial = new THREE.LineBasicMaterial({ color: 0x00ffaa, linewidth: 2 }); // Cyan-green
-        this.cutMaterial = new THREE.LineBasicMaterial({ color: 0xff6644, linewidth: 2 });   // Orange-red
-        this.liveMaterial = new THREE.LineBasicMaterial({ color: 0xffff00, linewidth: 2 });  // Yellow (live)
+
+        // Thin material for rapids (don't need thick lines)
+        this.rapidMaterial = new THREE.LineBasicMaterial({ color: 0x333344, linewidth: 1 });
+
+        // Thick LineMaterial for cut trails (3px wide, bright green)
+        this.cutMaterial = new LineMaterial({
+            color: 0x00ff88,
+            linewidth: 3,  // In pixels
+            worldUnits: false,
+            dashed: false
+        });
+
+        // Thick LineMaterial for live/active trail (4px wide, white)
+        this.liveMaterial = new LineMaterial({
+            color: 0xffffff,
+            linewidth: 4,
+            worldUnits: false,
+            dashed: false
+        });
+
         this.trailGroup = new THREE.Group();
         this.scene.add(this.trailGroup);
 
@@ -80,6 +101,17 @@ export class PLCSimulator3D {
      */
     addNavigationCube() {
         this.viewCubeHelper = new ViewCubeHelper(THREE);
+
+        // Camera animation state
+        this.cameraAnimation = {
+            isAnimating: false,
+            startTheta: 0,
+            startPhi: 0,
+            targetTheta: 0,
+            targetPhi: 0,
+            startTime: 0,
+            duration: 400  // ms
+        };
     }
 
     injectBranding() {
@@ -164,30 +196,6 @@ export class PLCSimulator3D {
     }
 
     /**
-     * Load custom STL tool model
-     * @param {File|string} source - File object or URL
-     */
-    async loadToolSTL(source) {
-        const { STLLoader } = await import('three/addons/loaders/STLLoader.js');
-        const loader = new STLLoader();
-
-        let geometry;
-        if (source instanceof File) {
-            const buffer = await source.arrayBuffer();
-            geometry = loader.parse(buffer);
-        } else {
-            geometry = await loader.loadAsync(source);
-        }
-
-        const material = new THREE.MeshPhongMaterial({ color: 0x888888, shininess: 80 });
-        this.scene.remove(this.toolMesh);
-        this.toolMesh = new THREE.Mesh(geometry, material);
-        this.toolMesh.rotation.x = -Math.PI / 2; // STL Z-up to Three.js Y-up
-        this.scene.add(this.toolMesh);
-        this.renderFrame();
-    }
-
-    /**
      * Set tool position
      */
     setToolPosition(x, y, z) {
@@ -199,25 +207,40 @@ export class PLCSimulator3D {
      * Add trail segment
      * @param {Object} from - {x, y, z}
      * @param {Object} to - {x, y, z}
-     * @param {boolean} isRapid - true for rapid (green), false for cut (red)
+     * @param {boolean} isRapid - true for rapid (thin), false for cut (thick)
      */
     addTrailSegment(from, to, isRapid = false) {
-        const geometry = new THREE.BufferGeometry();
-        const vertices = new Float32Array([
-            from.x, from.y, from.z,
-            to.x, to.y, to.z
-        ]);
-        geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+        let line;
 
-        const material = isRapid ? this.rapidMaterial : this.cutMaterial;
-        const line = new THREE.Line(geometry, material);
+        if (isRapid) {
+            // Rapids use thin LineBasicMaterial (1px)
+            const geometry = new THREE.BufferGeometry();
+            const vertices = new Float32Array([
+                from.x, from.y, from.z,
+                to.x, to.y, to.z
+            ]);
+            geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+            line = new THREE.Line(geometry, this.rapidMaterial);
+        } else {
+            // Cut moves use thick Line2 (3px)
+            const geometry = new LineGeometry();
+            geometry.setPositions([
+                from.x, from.y, from.z,
+                to.x, to.y, to.z
+            ]);
+            // Update resolution for proper line width
+            this.cutMaterial.resolution.set(this.canvas.width, this.canvas.height);
+            line = new Line2(geometry, this.cutMaterial);
+            line.computeLineDistances();
+        }
+
         this.trailGroup.add(line);
         this.trailSegments.push(line);
         this.renderFrame();
     }
 
     /**
-     * Add arc trail segment (curved line)
+     * Add arc trail segment (curved line with thick rendering)
      * @param {Object} from - start point {x, y, z}
      * @param {Object} to - end point {x, y, z}
      * @param {Object} center - arc center {cx, cy}
@@ -241,8 +264,8 @@ export class PLCSimulator3D {
         const arcLength = radius * sweep;
         const segments = Math.max(8, Math.min(64, Math.ceil(arcLength / 2)));
 
-        // Generate points along the arc
-        const vertices = new Float32Array((segments + 1) * 3);
+        // Generate points along the arc (flat array for LineGeometry)
+        const positions = [];
         for (let i = 0; i <= segments; i++) {
             const t = i / segments;
             let angle;
@@ -257,16 +280,18 @@ export class PLCSimulator3D {
             // Z interpolates linearly
             const z = from.z + (to.z - from.z) * t;
 
-            vertices[i * 3] = x;
-            vertices[i * 3 + 1] = y;
-            vertices[i * 3 + 2] = z;
+            positions.push(x, y, z);
         }
 
-        const geometry = new THREE.BufferGeometry();
-        geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+        // Use thick Line2 for arcs (always cut moves)
+        const geometry = new LineGeometry();
+        geometry.setPositions(positions);
 
-        // Arcs are always cut moves (red)
-        const line = new THREE.Line(geometry, this.cutMaterial);
+        // Update resolution for proper line width
+        this.cutMaterial.resolution.set(this.canvas.width, this.canvas.height);
+
+        const line = new Line2(geometry, this.cutMaterial);
+        line.computeLineDistances();
         this.trailGroup.add(line);
         this.trailSegments.push(line);
         this.renderFrame();
@@ -350,6 +375,8 @@ export class PLCSimulator3D {
         this.controls = {
             enabled: true,
             isDragging: false,
+            isPanning: false,
+            dragButton: -1,  // Track which button started drag
             lastX: 0,
             lastY: 0,
             theta: Math.PI / 4,
@@ -357,14 +384,149 @@ export class PLCSimulator3D {
             radius: 800,
             minRadius: 50,
             maxRadius: 10000,
-            target: { x: 0, y: 0, z: 0 }  // Camera look-at target
+            target: { x: 0, y: 0, z: 0 },  // Camera look-at target
+            // Touch gesture state
+            touches: [],
+            lastPinchDist: 0,
+            lastTouchCenter: { x: 0, y: 0 }
         };
 
         this.canvas.style.touchAction = 'none';
 
+        // === TOUCH EVENTS (for tablets/HMI) ===
+        this.handleTouchStart = (e) => {
+            if (!this.controls.enabled) return;
+            e.preventDefault();
+
+            this.controls.touches = Array.from(e.touches);
+
+            if (e.touches.length === 1) {
+                // Single touch - check ViewCube first
+                const touch = e.touches[0];
+                const rect = this.canvas.getBoundingClientRect();
+                const x = touch.clientX - rect.left;
+                const y = touch.clientY - rect.top;
+
+                if (this.viewCubeHelper) {
+                    const viewPreset = this.viewCubeHelper.handleClick(x, y, rect.width, rect.height);
+                    if (viewPreset) {
+                        this.animateToView(viewPreset.theta, viewPreset.phi);
+                        return;
+                    }
+                }
+
+                // Single finger = orbit
+                this.controls.isDragging = true;
+                this.controls.isPanning = false;
+                this.controls.lastX = touch.clientX;
+                this.controls.lastY = touch.clientY;
+            } else if (e.touches.length === 2) {
+                // Two fingers = pan + pinch zoom
+                this.controls.isDragging = true;
+                this.controls.isPanning = true;
+
+                const t1 = e.touches[0], t2 = e.touches[1];
+                this.controls.lastPinchDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+                this.controls.lastTouchCenter = {
+                    x: (t1.clientX + t2.clientX) / 2,
+                    y: (t1.clientY + t2.clientY) / 2
+                };
+            }
+        };
+
+        this.handleTouchMove = (e) => {
+            if (!this.controls.enabled || !this.controls.isDragging) return;
+            e.preventDefault();
+
+            if (e.touches.length === 1 && !this.controls.isPanning) {
+                // Single finger orbit
+                const touch = e.touches[0];
+                const dx = touch.clientX - this.controls.lastX;
+                const dy = touch.clientY - this.controls.lastY;
+                this.controls.lastX = touch.clientX;
+                this.controls.lastY = touch.clientY;
+
+                const speed = 0.005;
+                this.controls.theta -= dx * speed;
+                this.controls.phi += dy * speed;
+                this.controls.phi = Math.min(Math.PI - 0.1, Math.max(0.1, this.controls.phi));
+                this.updateCameraFromControls();
+            } else if (e.touches.length === 2) {
+                const t1 = e.touches[0], t2 = e.touches[1];
+
+                // Pinch zoom
+                const pinchDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+                if (this.controls.lastPinchDist > 0) {
+                    const zoomFactor = this.controls.lastPinchDist / pinchDist;
+                    this.zoom(zoomFactor);
+                }
+                this.controls.lastPinchDist = pinchDist;
+
+                // Two-finger pan
+                const centerX = (t1.clientX + t2.clientX) / 2;
+                const centerY = (t1.clientY + t2.clientY) / 2;
+                const dx = centerX - this.controls.lastTouchCenter.x;
+                const dy = centerY - this.controls.lastTouchCenter.y;
+                this.controls.lastTouchCenter = { x: centerX, y: centerY };
+
+                const panSpeed = this.controls.radius * 0.001;
+                const right = new THREE.Vector3();
+                right.setFromMatrixColumn(this.camera.matrixWorld, 0);
+                const up = new THREE.Vector3();
+                up.setFromMatrixColumn(this.camera.matrixWorld, 1);
+
+                this.controls.target.x -= (dx * right.x - dy * up.x) * panSpeed;
+                this.controls.target.y -= (dx * right.y - dy * up.y) * panSpeed;
+                this.controls.target.z -= (dx * right.z - dy * up.z) * panSpeed;
+                this.updateCameraFromControls();
+            }
+        };
+
+        this.handleTouchEnd = (e) => {
+            if (e.touches.length === 0) {
+                this.controls.isDragging = false;
+                this.controls.isPanning = false;
+                this.controls.lastPinchDist = 0;
+            } else if (e.touches.length === 1) {
+                // Switched from 2 fingers to 1 - reset to orbit
+                this.controls.isPanning = false;
+                this.controls.lastX = e.touches[0].clientX;
+                this.controls.lastY = e.touches[0].clientY;
+            }
+            this.controls.touches = Array.from(e.touches);
+        };
+
+        // === MOUSE/POINTER EVENTS ===
         this.handlePointerDown = (e) => {
-            if (!this.controls.enabled || e.button !== 0) return;
-            this.controls.isDragging = true;
+            if (!this.controls.enabled) return;
+            if (e.pointerType === 'touch') return; // Handled by touch events
+
+            // Check ViewCube click first (left button only)
+            if (e.button === 0) {
+                const rect = this.canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+
+                if (this.viewCubeHelper) {
+                    const viewPreset = this.viewCubeHelper.handleClick(x, y, rect.width, rect.height);
+                    if (viewPreset) {
+                        this.animateToView(viewPreset.theta, viewPreset.phi);
+                        return;  // Don't start orbit drag
+                    }
+                }
+            }
+
+            // Left button = orbit, Right/Middle button = pan
+            if (e.button === 0) {
+                this.controls.isDragging = true;
+                this.controls.isPanning = false;
+            } else if (e.button === 1 || e.button === 2) {
+                this.controls.isDragging = true;
+                this.controls.isPanning = true;
+                e.preventDefault();
+            }
+
+            this.controls.dragButton = e.button;
             this.controls.lastX = e.clientX;
             this.controls.lastY = e.clientY;
             this.canvas.setPointerCapture?.(e.pointerId);
@@ -372,35 +534,69 @@ export class PLCSimulator3D {
 
         this.handlePointerMove = (e) => {
             if (!this.controls.enabled || !this.controls.isDragging) return;
+            if (e.pointerType === 'touch') return; // Handled by touch events
+
             const dx = e.clientX - this.controls.lastX;
             const dy = e.clientY - this.controls.lastY;
             this.controls.lastX = e.clientX;
             this.controls.lastY = e.clientY;
 
-            const speed = 0.005;
-            this.controls.theta -= dx * speed;
-            this.controls.phi += dy * speed;
-            this.controls.phi = Math.min(Math.PI - 0.2, Math.max(0.2, this.controls.phi));
+            if (this.controls.isPanning) {
+                // Pan mode: move camera target in screen-aligned directions
+                const panSpeed = this.controls.radius * 0.001;
+
+                const right = new THREE.Vector3();
+                right.setFromMatrixColumn(this.camera.matrixWorld, 0);
+                const up = new THREE.Vector3();
+                up.setFromMatrixColumn(this.camera.matrixWorld, 1);
+
+                this.controls.target.x -= (dx * right.x - dy * up.x) * panSpeed;
+                this.controls.target.y -= (dx * right.y - dy * up.y) * panSpeed;
+                this.controls.target.z -= (dx * right.z - dy * up.z) * panSpeed;
+            } else {
+                // Orbit mode: rotate around target
+                const speed = 0.005;
+                this.controls.theta -= dx * speed;
+                this.controls.phi += dy * speed;
+                this.controls.phi = Math.min(Math.PI - 0.1, Math.max(0.1, this.controls.phi));
+            }
             this.updateCameraFromControls();
         };
 
-        this.handlePointerUp = () => {
-            if (this.controls) this.controls.isDragging = false;
+        this.handlePointerUp = (e) => {
+            if (e.pointerType === 'touch') return; // Handled by touch events
+            if (this.controls && this.controls.dragButton === e.button) {
+                this.controls.isDragging = false;
+                this.controls.isPanning = false;
+                this.controls.dragButton = -1;
+            }
         };
 
         this.handleWheel = (e) => {
             if (!this.controls.enabled) return;
             e.preventDefault();
-            const factor = e.deltaY > 0 ? 1.1 : 0.9;
-            const next = this.controls.radius * factor;
-            this.controls.radius = Math.min(this.controls.maxRadius, Math.max(this.controls.minRadius, next));
-            this.updateCameraFromControls();
+
+            const factor = e.deltaY > 0 ? 1.15 : 0.87;
+            this.zoom(factor);
         };
 
+        // Prevent context menu on right-click (we use it for panning)
+        this.handleContextMenu = (e) => {
+            e.preventDefault();
+        };
+
+        // Touch events for tablets/HMI
+        this.canvas.addEventListener('touchstart', this.handleTouchStart, { passive: false });
+        this.canvas.addEventListener('touchmove', this.handleTouchMove, { passive: false });
+        this.canvas.addEventListener('touchend', this.handleTouchEnd);
+        this.canvas.addEventListener('touchcancel', this.handleTouchEnd);
+
+        // Pointer events for mouse
         this.canvas.addEventListener('pointerdown', this.handlePointerDown);
         window.addEventListener('pointermove', this.handlePointerMove);
         window.addEventListener('pointerup', this.handlePointerUp);
         this.canvas.addEventListener('wheel', this.handleWheel, { passive: false });
+        this.canvas.addEventListener('contextmenu', this.handleContextMenu);
     }
 
     updateCameraFromControls() {
@@ -416,6 +612,183 @@ export class PLCSimulator3D {
         this.camera.lookAt(target.x, target.y, target.z);
         this.camera.updateProjectionMatrix();
         this.renderFrame();
+    }
+
+    /**
+     * Zoom by factor (>1 = zoom out, <1 = zoom in)
+     */
+    zoom(factor) {
+        if (!this.controls) return;
+        const newRadius = this.controls.radius * factor;
+        this.controls.radius = Math.min(this.controls.maxRadius, Math.max(this.controls.minRadius, newRadius));
+        this.updateCameraFromControls();
+    }
+
+    /**
+     * Zoom in (for button)
+     */
+    zoomIn() {
+        this.zoom(0.8);
+    }
+
+    /**
+     * Zoom out (for button)
+     */
+    zoomOut() {
+        this.zoom(1.25);
+    }
+
+    /**
+     * Zoom to fit all content (extent) with 180° rotated view
+     */
+    zoomExtent() {
+        // Calculate bounds from trail segments and primitives
+        const bounds = this.calculateSceneBounds();
+        this.fitToView(bounds);
+
+        // Rotate to standard 180° + 45° isometric view
+        this.controls.theta = Math.PI + Math.PI / 4;
+        this.controls.phi = Math.PI / 3;
+        this.updateCameraFromControls();
+    }
+
+    /**
+     * Rotate view by 90° clockwise (looking down Z axis)
+     */
+    rotate90CW() {
+        this.animateToView(this.controls.theta - Math.PI / 2, this.controls.phi);
+    }
+
+    /**
+     * Rotate view by 90° counter-clockwise
+     */
+    rotate90CCW() {
+        this.animateToView(this.controls.theta + Math.PI / 2, this.controls.phi);
+    }
+
+    /**
+     * Calculate bounding box of all visible content
+     */
+    calculateSceneBounds() {
+        let minX = Infinity, minY = Infinity, minZ = Infinity;
+        let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+        let hasContent = false;
+
+        // Check trail segments
+        for (const segment of this.trailSegments) {
+            const pos = segment.geometry.getAttribute('position');
+            if (pos) {
+                for (let i = 0; i < pos.count; i++) {
+                    minX = Math.min(minX, pos.getX(i));
+                    minY = Math.min(minY, pos.getY(i));
+                    minZ = Math.min(minZ, pos.getZ(i));
+                    maxX = Math.max(maxX, pos.getX(i));
+                    maxY = Math.max(maxY, pos.getY(i));
+                    maxZ = Math.max(maxZ, pos.getZ(i));
+                    hasContent = true;
+                }
+            }
+        }
+
+        // Check primitive renderer bounds
+        if (this.primitiveRenderer && this.primitiveRenderer.group) {
+            this.primitiveRenderer.group.traverse((obj) => {
+                if (obj.geometry) {
+                    const pos = obj.geometry.getAttribute('position');
+                    if (pos) {
+                        for (let i = 0; i < pos.count; i++) {
+                            minX = Math.min(minX, pos.getX(i));
+                            minY = Math.min(minY, pos.getY(i));
+                            minZ = Math.min(minZ, pos.getZ(i));
+                            maxX = Math.max(maxX, pos.getX(i));
+                            maxY = Math.max(maxY, pos.getY(i));
+                            maxZ = Math.max(maxZ, pos.getZ(i));
+                            hasContent = true;
+                        }
+                    }
+                }
+            });
+        }
+
+        // Check tool position
+        if (this.toolMesh) {
+            const toolPos = this.toolMesh.position;
+            minX = Math.min(minX, toolPos.x);
+            minY = Math.min(minY, toolPos.y);
+            minZ = Math.min(minZ, toolPos.z);
+            maxX = Math.max(maxX, toolPos.x);
+            maxY = Math.max(maxY, toolPos.y);
+            maxZ = Math.max(maxZ, toolPos.z);
+            hasContent = true;
+        }
+
+        if (!hasContent) {
+            return { minX: 0, minY: 0, minZ: 0, maxX: 500, maxY: 500, maxZ: 50 };
+        }
+
+        // Add padding
+        const padX = (maxX - minX) * 0.1 || 50;
+        const padY = (maxY - minY) * 0.1 || 50;
+        const padZ = (maxZ - minZ) * 0.1 || 10;
+
+        return {
+            minX: minX - padX,
+            minY: minY - padY,
+            minZ: minZ - padZ,
+            maxX: maxX + padX,
+            maxY: maxY + padY,
+            maxZ: maxZ + padZ
+        };
+    }
+
+    /**
+     * Animate camera to preset view (smooth transition)
+     * @param {number} targetTheta - Target azimuth angle
+     * @param {number} targetPhi - Target elevation angle
+     */
+    animateToView(targetTheta, targetPhi) {
+        if (!this.cameraAnimation) return;
+
+        // Normalize angles for shortest path
+        let startTheta = this.controls.theta;
+        let diff = targetTheta - startTheta;
+        if (diff > Math.PI) startTheta += 2 * Math.PI;
+        if (diff < -Math.PI) startTheta -= 2 * Math.PI;
+
+        this.cameraAnimation.startTheta = startTheta;
+        this.cameraAnimation.startPhi = this.controls.phi;
+        this.cameraAnimation.targetTheta = targetTheta;
+        this.cameraAnimation.targetPhi = targetPhi;
+        this.cameraAnimation.startTime = performance.now();
+        this.cameraAnimation.isAnimating = true;
+
+        this.animateCameraStep();
+    }
+
+    /**
+     * Animation step for camera transition
+     */
+    animateCameraStep() {
+        if (!this.cameraAnimation.isAnimating) return;
+
+        const elapsed = performance.now() - this.cameraAnimation.startTime;
+        const t = Math.min(1, elapsed / this.cameraAnimation.duration);
+
+        // Ease out cubic for smooth deceleration
+        const eased = 1 - Math.pow(1 - t, 3);
+
+        this.controls.theta = this.cameraAnimation.startTheta +
+            (this.cameraAnimation.targetTheta - this.cameraAnimation.startTheta) * eased;
+        this.controls.phi = this.cameraAnimation.startPhi +
+            (this.cameraAnimation.targetPhi - this.cameraAnimation.startPhi) * eased;
+
+        this.updateCameraFromControls();
+
+        if (t < 1) {
+            requestAnimationFrame(() => this.animateCameraStep());
+        } else {
+            this.cameraAnimation.isAnimating = false;
+        }
     }
 
     // === Resize Handling ===
@@ -439,6 +812,11 @@ export class PLCSimulator3D {
         this.renderer.setSize(width, height, false);
         this.camera.aspect = width / height;
         this.camera.updateProjectionMatrix();
+
+        // Update LineMaterial resolution for proper line width
+        this.cutMaterial.resolution.set(width, height);
+        this.liveMaterial.resolution.set(width, height);
+
         this.renderFrame();
     }
 
@@ -465,15 +843,23 @@ export class PLCSimulator3D {
         this.renderFrame();
     }
 
-    /** Update live trail during animation */
+    /** Update live trail during animation (thick white line) */
     updateLiveTrail(points) {
         this.clearLiveTrail();
         if (!points || points.length < 2) return;
-        const vertices = new Float32Array(points.length * 3);
-        points.forEach((p, i) => { vertices[i * 3] = p.x; vertices[i * 3 + 1] = p.y; vertices[i * 3 + 2] = p.z; });
-        const geometry = new THREE.BufferGeometry();
-        geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-        this.liveTrailLine = new THREE.Line(geometry, this.liveMaterial);
+
+        // Build flat position array for LineGeometry
+        const positions = [];
+        points.forEach(p => positions.push(p.x, p.y, p.z));
+
+        const geometry = new LineGeometry();
+        geometry.setPositions(positions);
+
+        // Update resolution for proper line width
+        this.liveMaterial.resolution.set(this.canvas.width, this.canvas.height);
+
+        this.liveTrailLine = new Line2(geometry, this.liveMaterial);
+        this.liveTrailLine.computeLineDistances();
         this.trailGroup.add(this.liveTrailLine);
         this.renderFrame();
     }
@@ -489,12 +875,26 @@ export class PLCSimulator3D {
         if (this.resizeObserver) this.resizeObserver.disconnect();
         if (this._handleResize) window.removeEventListener('resize', this._handleResize);
 
+        // Remove touch listeners
+        this.canvas.removeEventListener('touchstart', this.handleTouchStart);
+        this.canvas.removeEventListener('touchmove', this.handleTouchMove);
+        this.canvas.removeEventListener('touchend', this.handleTouchEnd);
+        this.canvas.removeEventListener('touchcancel', this.handleTouchEnd);
+
+        // Remove pointer/mouse listeners
         this.canvas.removeEventListener('pointerdown', this.handlePointerDown);
         window.removeEventListener('pointermove', this.handlePointerMove);
         window.removeEventListener('pointerup', this.handlePointerUp);
         this.canvas.removeEventListener('wheel', this.handleWheel);
+        this.canvas.removeEventListener('contextmenu', this.handleContextMenu);
 
         this.clearTrail();
+
+        // Dispose LineMaterials
+        this.rapidMaterial?.dispose();
+        this.cutMaterial?.dispose();
+        this.liveMaterial?.dispose();
+
         this.primitiveRenderer?.dispose();
         this.viewCubeHelper?.dispose();
         this.renderer?.dispose();

@@ -23,6 +23,30 @@ export class InputHandler {
     this.moveHasMoved = false;
     this.lastTouchPos = null;
 
+    // Industrial touch handling state
+    this.touchState = {
+      touches: [],
+      lastTouchTime: 0,
+      lastTapTime: 0,
+      lastTapPos: null,
+      longPressTimer: null,
+      isPinching: false,
+      isPanning: false,
+      initialPinchDistance: 0,
+      initialZoom: 1,
+      touchStartPos: null
+    };
+
+    // Touch configuration (ISA-101 compliant)
+    this.touchConfig = {
+      longPressDelay: 500,       // ms for long press
+      doubleTapDelay: 300,       // ms between taps for double-tap
+      doubleTapDistance: 30,     // px tolerance for double-tap
+      minPinchDistance: 10,      // px minimum for pinch gesture
+      touchDebounce: 50,         // ms debounce for touch events
+      accidentalTouchThreshold: 5 // px movement to confirm intentional touch
+    };
+
     // Optimization
     this.renderRequested = false;
     this.inputTicking = false;
@@ -407,32 +431,207 @@ export class InputHandler {
     this.app.render();
   }
 
+  // ============================================
+  // INDUSTRIAL TOUCH HANDLING (ISA-101 Compliant)
+  // ============================================
+
   /**
-   * Handle touch events
+   * Calculate distance between two touch points
+   */
+  getTouchDistance(touch1, touch2) {
+    const dx = touch1.clientX - touch2.clientX;
+    const dy = touch1.clientY - touch2.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  /**
+   * Get center point between two touches
+   */
+  getTouchCenter(touch1, touch2) {
+    return {
+      x: (touch1.clientX + touch2.clientX) / 2,
+      y: (touch1.clientY + touch2.clientY) / 2
+    };
+  }
+
+  /**
+   * Handle touch start - supports single touch, pinch-zoom, and two-finger pan
    */
   handleTouchStart(e) {
+    e.preventDefault();
+    const now = Date.now();
+
+    // Clear any pending long press
+    if (this.touchState.longPressTimer) {
+      clearTimeout(this.touchState.longPressTimer);
+      this.touchState.longPressTimer = null;
+    }
+
+    // Store touch info
+    this.touchState.touches = Array.from(e.touches);
+    this.touchState.lastTouchTime = now;
+
     if (e.touches.length === 1) {
+      // Single touch
       const touch = e.touches[0];
       this.lastTouchPos = { clientX: touch.clientX, clientY: touch.clientY };
+      this.touchState.touchStartPos = { x: touch.clientX, y: touch.clientY };
+
+      // Check for double-tap (zoom fit)
+      if (this.touchState.lastTapPos) {
+        const dx = touch.clientX - this.touchState.lastTapPos.x;
+        const dy = touch.clientY - this.touchState.lastTapPos.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const timeDiff = now - this.touchState.lastTapTime;
+
+        if (timeDiff < this.touchConfig.doubleTapDelay && dist < this.touchConfig.doubleTapDistance) {
+          // Double tap detected - zoom fit
+          this.app.viewManager.zoomFit();
+          this.touchState.lastTapPos = null;
+          this.touchState.lastTapTime = 0;
+          return;
+        }
+      }
+
+      // Setup long press timer for context menu / select mode
+      this.touchState.longPressTimer = setTimeout(() => {
+        if (this.touchState.touches.length === 1) {
+          // Long press - switch to select mode or show context
+          this.app.selectTool('select');
+          this.app.ui.updateStatus('Modalità selezione (long press)');
+          // Provide visual feedback
+          this.showTouchFeedback(touch.clientX, touch.clientY, 'longpress');
+        }
+      }, this.touchConfig.longPressDelay);
+
+      // Delegate to mouse handler for tool operations
       this.handleMouseDown({ clientX: touch.clientX, clientY: touch.clientY, button: 0 });
+
+    } else if (e.touches.length === 2) {
+      // Two-finger gesture (pinch or pan)
+      this.touchState.isPinching = true;
+      this.touchState.isPanning = true;
+      this.touchState.initialPinchDistance = this.getTouchDistance(e.touches[0], e.touches[1]);
+      this.touchState.initialZoom = this.app.renderer.view.zoom;
+      this.touchState.lastPanCenter = this.getTouchCenter(e.touches[0], e.touches[1]);
+
+      // Cancel any ongoing tool operation
+      this.app.cancelCurrentOperation();
     }
   }
 
+  /**
+   * Handle touch move - single touch draws, two-finger pinch/pan
+   */
   handleTouchMove(e) {
-    if (e.touches.length === 1) {
+    e.preventDefault();
+
+    // Debounce check
+    const now = Date.now();
+    if (now - this.touchState.lastTouchTime < this.touchConfig.touchDebounce) {
+      return;
+    }
+    this.touchState.lastTouchTime = now;
+
+    // Clear long press if moved significantly
+    if (this.touchState.longPressTimer && this.touchState.touchStartPos && e.touches.length === 1) {
+      const touch = e.touches[0];
+      const dx = touch.clientX - this.touchState.touchStartPos.x;
+      const dy = touch.clientY - this.touchState.touchStartPos.y;
+      if (Math.sqrt(dx * dx + dy * dy) > this.touchConfig.accidentalTouchThreshold) {
+        clearTimeout(this.touchState.longPressTimer);
+        this.touchState.longPressTimer = null;
+      }
+    }
+
+    if (e.touches.length === 1 && !this.touchState.isPinching) {
+      // Single touch - delegate to mouse move
       const touch = e.touches[0];
       this.lastTouchPos = { clientX: touch.clientX, clientY: touch.clientY };
       this.handleMouseMove({ clientX: touch.clientX, clientY: touch.clientY });
+
+    } else if (e.touches.length === 2) {
+      // Two-finger gesture
+      const currentDistance = this.getTouchDistance(e.touches[0], e.touches[1]);
+      const currentCenter = this.getTouchCenter(e.touches[0], e.touches[1]);
+      const rect = this.app.canvas.getBoundingClientRect();
+
+      // Pinch-to-zoom
+      if (Math.abs(currentDistance - this.touchState.initialPinchDistance) > this.touchConfig.minPinchDistance) {
+        const scale = currentDistance / this.touchState.initialPinchDistance;
+        const newZoom = this.touchState.initialZoom * scale;
+
+        // Zoom centered on pinch point
+        const centerX = currentCenter.x - rect.left;
+        const centerY = currentCenter.y - rect.top;
+        this.app.renderer.setZoom(newZoom, centerX, centerY);
+        this.app.ui.updateZoomDisplay();
+      }
+
+      // Two-finger pan
+      if (this.touchState.lastPanCenter) {
+        const dx = currentCenter.x - this.touchState.lastPanCenter.x;
+        const dy = currentCenter.y - this.touchState.lastPanCenter.y;
+        this.app.renderer.pan(dx, -dy);
+      }
+
+      this.touchState.lastPanCenter = currentCenter;
+      this.requestRender();
     }
   }
 
-  handleTouchEnd(_e) {
-    if (this.lastTouchPos) {
-      this.handleMouseUp({ button: 0, ...this.lastTouchPos });
-    } else {
-      this.handleMouseUp({ button: 0 });
+  /**
+   * Handle touch end
+   */
+  handleTouchEnd(e) {
+    e.preventDefault();
+
+    // Clear long press timer
+    if (this.touchState.longPressTimer) {
+      clearTimeout(this.touchState.longPressTimer);
+      this.touchState.longPressTimer = null;
     }
+
+    // Record tap for double-tap detection
+    if (e.changedTouches.length === 1 && !this.touchState.isPinching) {
+      const touch = e.changedTouches[0];
+      this.touchState.lastTapTime = Date.now();
+      this.touchState.lastTapPos = { x: touch.clientX, y: touch.clientY };
+    }
+
+    // Reset multi-touch state
+    if (e.touches.length === 0) {
+      this.touchState.isPinching = false;
+      this.touchState.isPanning = false;
+      this.touchState.touches = [];
+      this.touchState.lastPanCenter = null;
+    }
+
+    // Delegate mouse up for single touch
+    if (this.lastTouchPos) {
+      this.handleMouseUp({ button: 0, clientX: this.lastTouchPos.clientX, clientY: this.lastTouchPos.clientY });
+    } else if (e.changedTouches.length > 0) {
+      const touch = e.changedTouches[0];
+      this.handleMouseUp({ button: 0, clientX: touch.clientX, clientY: touch.clientY });
+    }
+
     this.lastTouchPos = null;
+  }
+
+  /**
+   * Show visual feedback for touch events (optional enhancement)
+   */
+  showTouchFeedback(x, y, type = 'tap') {
+    const feedback = document.createElement('div');
+    feedback.className = `touch-indicator touch-${type}`;
+    feedback.style.left = `${x}px`;
+    feedback.style.top = `${y}px`;
+    document.body.appendChild(feedback);
+
+    // Remove after animation
+    setTimeout(() => {
+      feedback.remove();
+    }, 300);
   }
 
   /**

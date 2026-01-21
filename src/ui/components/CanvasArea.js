@@ -22,10 +22,23 @@ export class CanvasArea {
           <input type="range" class="cad-3d-speed-slider" id="sim3DSpeed" min="0.1" max="5" step="0.1" value="1">
           <span class="cad-3d-speed-label" id="sim3DSpeedLabel">1x</span>
           <div class="cad-3d-spacer"></div>
-          <label class="cad-3d-btn cad-stl-upload-label" title="Carica Tool STL">
-            <input type="file" id="stlToolUpload" accept=".stl">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          </label>
+          <button type="button" class="cad-3d-btn" id="btn3DZoomIn" title="Zoom In">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+          </button>
+          <button type="button" class="cad-3d-btn" id="btn3DZoomOut" title="Zoom Out">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+          </button>
+          <button type="button" class="cad-3d-btn" id="btn3DZoomExtent" title="Zoom Extent">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>
+          </button>
+          <div class="cad-3d-spacer"></div>
+          <button type="button" class="cad-3d-btn" id="btn3DRotateCCW" title="Ruota 90° CCW">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2.5 2v6h6"/><path d="M2.5 8C5 4 9 2 13.5 2a9.5 9.5 0 110 19c-4 0-7-2-9-5"/></svg>
+          </button>
+          <button type="button" class="cad-3d-btn" id="btn3DRotateCW" title="Ruota 90° CW">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6"/><path d="M21.5 8C19 4 15 2 10.5 2A9.5 9.5 0 1010.5 21c4 0 7-2 9-5"/></svg>
+          </button>
+          <div class="cad-3d-spacer"></div>
           <button type="button" class="cad-3d-btn" id="btn3DClose" title="Chiudi 3D">✕</button>
         </div>
         <div class="cad-3d-progress"><div class="cad-3d-progress-bar"></div></div>

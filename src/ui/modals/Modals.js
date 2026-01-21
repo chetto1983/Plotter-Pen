@@ -233,6 +233,81 @@ export class Modals {
 </div>
 
 <!-- ====================
+     PLC SETTINGS MODAL
+     ==================== -->
+<div class="cad-modal-overlay" id="plcSettingsModal">
+  <div class="cad-modal cad-modal-plc-settings">
+    <div class="cad-modal-header">
+      <h2 class="cad-modal-title">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:8px">
+          <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+        Parametri Simulazione PLC
+      </h2>
+      <button type="button" class="cad-modal-close" id="btnClosePLCSettings">&times;</button>
+    </div>
+    <div class="cad-modal-body">
+      <div class="cad-plc-settings-grid">
+        <div class="cad-plc-setting-row">
+          <div class="cad-plc-setting-info">
+            <label for="modalSimWorkSpeed">Velocità Lavoro</label>
+            <span class="cad-plc-setting-desc">Velocità di taglio/disegno</span>
+          </div>
+          <div class="cad-plc-setting-input">
+            <input type="number" id="modalSimWorkSpeed" class="cad-modal-input" min="10" max="1000" step="10" value="100">
+            <span class="cad-plc-setting-unit">mm/s</span>
+          </div>
+        </div>
+        <div class="cad-plc-setting-row">
+          <div class="cad-plc-setting-info">
+            <label for="modalSimRapidSpeed">Velocità Rapido</label>
+            <span class="cad-plc-setting-desc">Spostamenti senza contatto</span>
+          </div>
+          <div class="cad-plc-setting-input">
+            <input type="number" id="modalSimRapidSpeed" class="cad-modal-input" min="10" max="5000" step="100" value="1000">
+            <span class="cad-plc-setting-unit">mm/s</span>
+          </div>
+        </div>
+        <div class="cad-plc-setting-row">
+          <div class="cad-plc-setting-info">
+            <label for="modalSimSafeZ">Altezza Sicurezza (Z)</label>
+            <span class="cad-plc-setting-desc">Quota Z per spostamenti rapidi</span>
+          </div>
+          <div class="cad-plc-setting-input">
+            <input type="number" id="modalSimSafeZ" class="cad-modal-input" min="0" max="100" step="1" value="5">
+            <span class="cad-plc-setting-unit">mm</span>
+          </div>
+        </div>
+        <div class="cad-plc-setting-row">
+          <div class="cad-plc-setting-info">
+            <label for="modalSimWorkZ">Altezza Lavoro (Z)</label>
+            <span class="cad-plc-setting-desc">Quota Z durante taglio/disegno</span>
+          </div>
+          <div class="cad-plc-setting-input">
+            <input type="number" id="modalSimWorkZ" class="cad-modal-input" min="-50" max="50" step="0.5" value="0">
+            <span class="cad-plc-setting-unit">mm</span>
+          </div>
+        </div>
+        <div class="cad-plc-setting-row">
+          <div class="cad-plc-setting-info">
+            <label for="modalSimWaitTime">Attesa Pen Down</label>
+            <span class="cad-plc-setting-desc">Pausa dopo abbassamento utensile</span>
+          </div>
+          <div class="cad-plc-setting-input">
+            <input type="number" id="modalSimWaitTime" class="cad-modal-input" min="0" max="5000" step="50" value="0">
+            <span class="cad-plc-setting-unit">ms</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="cad-modal-footer" style="justify-content:flex-end">
+      <button type="button" class="cad-modal-btn cad-modal-btn-secondary" id="btnCancelPLCSettings">Annulla</button>
+      <button type="button" class="cad-modal-btn cad-modal-btn-primary" id="btnSavePLCSettings">Applica</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====================
      RESTORED SAVE MODAL
      ==================== -->
 <div class="cad-modal-overlay" id="saveModal" hidden>

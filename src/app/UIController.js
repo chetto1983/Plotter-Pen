@@ -8,6 +8,7 @@ import { createCommandDefinitions, CommandAutocomplete } from './CommandAutocomp
 
 /**
  * UIController class - manages all UI interactions
+ * Enhanced for industrial HMI/tablet support
  */
 export class UIController {
   constructor(app) {
@@ -18,6 +19,14 @@ export class UIController {
 
     // Create autocomplete manager
     this.autocomplete = new CommandAutocomplete(this.commands, (msg) => this.updateStatus(msg));
+
+    // UI state
+    this.isKioskMode = false;
+    this.isGloveMode = false;
+    this.panelStates = {
+      left: true,
+      right: true
+    };
   }
 
   /**
@@ -32,6 +41,7 @@ export class UIController {
     this.setupFloatingToolbar();
     this.initWebSocket();
     this.setupTransferCancelButton();
+    this.initCollapsiblePanels();
   }
 
   /**
@@ -509,6 +519,48 @@ export class UIController {
   }
 
   /**
+   * Highlight a specific PLC command during animation (auto-scroll)
+   * @param {number} index - Command index to highlight
+   */
+  highlightPLCCommand(index) {
+    const grid = document.getElementById('outputGrid');
+    if (!grid) return;
+
+    // Remove previous animation highlight
+    const prevActive = grid.querySelector('.cad-output-item.active');
+    if (prevActive) prevActive.classList.remove('active');
+
+    // Mark completed commands
+    const items = grid.querySelectorAll('.cad-output-item');
+    items.forEach((item, i) => {
+      if (i < index) {
+        item.classList.add('completed');
+        item.classList.remove('active');
+      } else if (i === index) {
+        item.classList.add('active');
+        item.classList.remove('completed');
+        // Smooth scroll into view
+        item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      } else {
+        item.classList.remove('completed', 'active');
+      }
+    });
+  }
+
+  /**
+   * Clear all PLC command highlights (after animation)
+   */
+  clearPLCHighlights() {
+    const grid = document.getElementById('outputGrid');
+    if (!grid) return;
+
+    const items = grid.querySelectorAll('.cad-output-item');
+    items.forEach(item => {
+      item.classList.remove('active', 'completed');
+    });
+  }
+
+  /**
    * Update OPC UA status display
    */
   updateOPCUAStatus(status, type = 'info') {
@@ -644,6 +696,234 @@ export class UIController {
       const fill = container.querySelector('.progress-fill');
       if (fill) fill.style.width = '0%';
     }
+  }
+
+  // ============================================
+  // INDUSTRIAL HMI/TABLET UI METHODS
+  // ============================================
+
+  /**
+   * Toggle fullscreen kiosk mode
+   * Maximizes canvas, hides non-essential UI
+   */
+  toggleKioskMode() {
+    this.isKioskMode = !this.isKioskMode;
+
+    if (this.isKioskMode) {
+      this.enterKioskMode();
+    } else {
+      this.exitKioskMode();
+    }
+
+    return this.isKioskMode;
+  }
+
+  /**
+   * Enter kiosk/fullscreen mode
+   */
+  enterKioskMode() {
+    // Request fullscreen if supported
+    const elem = document.documentElement;
+    if (elem.requestFullscreen) {
+      elem.requestFullscreen().catch(() => {
+        // Fullscreen not supported or denied - continue anyway
+      });
+    }
+
+    document.body.classList.add('kiosk-mode');
+    this.isKioskMode = true;
+    this.updateStatus('Modalità kiosk attivata (premi ESC per uscire)');
+
+    // Listen for ESC to exit
+    this._kioskEscHandler = (e) => {
+      if (e.key === 'Escape' && this.isKioskMode) {
+        this.exitKioskMode();
+      }
+    };
+    document.addEventListener('keydown', this._kioskEscHandler);
+  }
+
+  /**
+   * Exit kiosk/fullscreen mode
+   */
+  exitKioskMode() {
+    // Exit fullscreen if active
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    }
+
+    document.body.classList.remove('kiosk-mode');
+    this.isKioskMode = false;
+    this.updateStatus('Modalità kiosk disattivata');
+
+    // Remove ESC listener
+    if (this._kioskEscHandler) {
+      document.removeEventListener('keydown', this._kioskEscHandler);
+      this._kioskEscHandler = null;
+    }
+
+    // Trigger resize to recalculate canvas
+    this.app.renderer?.resize();
+  }
+
+  /**
+   * Toggle glove mode (larger touch targets)
+   */
+  toggleGloveMode() {
+    this.isGloveMode = !this.isGloveMode;
+    document.body.classList.toggle('glove-mode', this.isGloveMode);
+    this.updateStatus(this.isGloveMode ? 'Modalità guanti attivata' : 'Modalità guanti disattivata');
+    return this.isGloveMode;
+  }
+
+  /**
+   * Toggle a sidebar panel
+   * @param {string} panelId - 'left' or 'right'
+   */
+  togglePanel(panelId) {
+    const panel = document.querySelector(`.cad-panel-${panelId}`);
+    if (!panel) return;
+
+    this.panelStates[panelId] = !this.panelStates[panelId];
+    panel.classList.toggle('collapsed', !this.panelStates[panelId]);
+
+    // Trigger resize after animation
+    setTimeout(() => {
+      this.app.renderer?.resize();
+    }, 300);
+
+    return this.panelStates[panelId];
+  }
+
+  /**
+   * Collapse all panels (maximize canvas)
+   */
+  collapsePanels() {
+    this.togglePanel('left');
+    this.togglePanel('right');
+  }
+
+  /**
+   * Get current panel states
+   */
+  getPanelStates() {
+    return { ...this.panelStates };
+  }
+
+  /**
+   * Restore panel states from saved config
+   * @param {Object} states - { left: boolean, right: boolean }
+   */
+  restorePanelStates(states) {
+    if (states.left !== undefined) {
+      const leftPanel = document.querySelector('.cad-panel-left');
+      if (leftPanel) {
+        this.panelStates.left = states.left;
+        leftPanel.classList.toggle('collapsed', !states.left);
+      }
+    }
+    if (states.right !== undefined) {
+      const rightPanel = document.querySelector('.cad-panel-right');
+      if (rightPanel) {
+        this.panelStates.right = states.right;
+        rightPanel.classList.toggle('collapsed', !states.right);
+      }
+    }
+  }
+
+  /**
+   * Detect if running on touch device
+   */
+  isTouchDevice() {
+    return ('ontouchstart' in window) ||
+           (navigator.maxTouchPoints > 0) ||
+           (navigator.msMaxTouchPoints > 0);
+  }
+
+  /**
+   * Apply optimal settings for current device
+   */
+  optimizeForDevice() {
+    if (this.isTouchDevice()) {
+      // Auto-enable glove mode on small screens
+      if (window.innerWidth < 1024) {
+        this.toggleGloveMode();
+      }
+    }
+  }
+
+  /**
+   * Initialize collapsible panels in left sidebar
+   */
+  initCollapsiblePanels() {
+    const collapsiblePanels = document.querySelectorAll('.cad-panel-left .cad-panel-collapsible');
+
+    collapsiblePanels.forEach(panel => {
+      const header = panel.querySelector('.cad-panel-header-collapsible');
+      const collapseBtn = panel.querySelector('.cad-panel-collapse-btn');
+
+      if (!header || !collapseBtn) return;
+
+      const panelId = panel.id;
+
+      // Load saved state
+      const savedState = localStorage.getItem(`panel_${panelId}_collapsed`);
+      if (savedState === 'true') {
+        panel.classList.add('collapsed');
+      }
+
+      // Toggle on button click
+      collapseBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.toggleLeftPanelSection(panel);
+      });
+
+      // Toggle on header click (but not on action buttons)
+      header.addEventListener('click', (e) => {
+        if (e.target.closest('.cad-panel-actions')) return;
+        if (e.target.closest('.cad-panel-collapse-btn')) return;
+        this.toggleLeftPanelSection(panel);
+      });
+    });
+  }
+
+  /**
+   * Toggle a collapsible section in left sidebar
+   */
+  toggleLeftPanelSection(panel) {
+    if (!panel) return;
+
+    panel.classList.toggle('collapsed');
+    const isCollapsed = panel.classList.contains('collapsed');
+    localStorage.setItem(`panel_${panel.id}_collapsed`, isCollapsed);
+
+    // Resize canvas after transition completes
+    setTimeout(() => {
+      this.app.renderer?.resize();
+      this.app.render();
+    }, 320);
+  }
+
+  /**
+   * Collapse all secondary panels (for small screens)
+   */
+  collapseSecondaryPanels() {
+    const secondaryPanels = document.querySelectorAll('.cad-panel-secondary');
+    secondaryPanels.forEach(panel => {
+      if (!panel.classList.contains('collapsed')) {
+        this.toggleLeftPanelSection(panel);
+      }
+    });
+  }
+
+  /**
+   * Expand all panels
+   */
+  expandAllPanels() {
+    const collapsiblePanels = document.querySelectorAll('.cad-panel-collapsible.collapsed');
+    collapsiblePanels.forEach(panel => {
+      this.toggleLeftPanelSection(panel);
+    });
   }
 }
 

@@ -209,6 +209,16 @@ export class LayerPanel {
     this.container.querySelectorAll('.cad-layer-item').forEach(item => {
       const layerId = item.dataset.layerId;
 
+      // SELECT LAYER - Click anywhere on the entire row (touch-friendly)
+      // This is the primary touch target - entire row is clickable
+      item.addEventListener('click', (e) => {
+        // Don't select if clicking on a button or input
+        if (e.target.closest('button') || e.target.closest('input') || e.target.closest('.cad-layer-color')) {
+          return;
+        }
+        this.layerManager.setActiveLayer(layerId);
+      });
+
       // Visibility toggle
       item.querySelector('[data-action="visibility"]')?.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -219,11 +229,6 @@ export class LayerPanel {
       item.querySelector('[data-action="lock"]')?.addEventListener('click', (e) => {
         e.stopPropagation();
         this.layerManager.toggleLock(layerId);
-      });
-
-      // Select layer (click on name or item)
-      item.querySelector('[data-action="select"]')?.addEventListener('click', () => {
-        this.layerManager.setActiveLayer(layerId);
       });
 
       // Toggle settings

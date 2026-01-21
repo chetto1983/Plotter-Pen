@@ -1,5 +1,6 @@
 /* ============================================
    CANVAS STYLES (Container, Overlays)
+   Industrial HMI Touch-Optimized
    ============================================ */
 
 .cad-canvas-container {
@@ -17,6 +18,64 @@
     cursor: crosshair;
     touch-action: none;
     outline: none;
+    /* Prevent text selection on touch */
+    -webkit-user-select: none;
+    user-select: none;
+    /* Prevent callouts on iOS */
+    -webkit-touch-callout: none;
+}
+
+/* ============================================
+   TOUCH FEEDBACK INDICATORS
+   Visual feedback for touch interactions
+   ============================================ */
+.touch-indicator {
+    position: fixed;
+    width: 60px;
+    height: 60px;
+    border: 3px solid var(--accent, #52a8ff);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: var(--z-toast, 2000);
+    transform: translate(-50%, -50%) scale(0.5);
+    opacity: 0;
+    animation: touch-ripple 0.3s ease-out forwards;
+}
+
+.touch-indicator.touch-longpress {
+    border-color: var(--success, #4CAF50);
+    width: 80px;
+    height: 80px;
+    animation: touch-longpress 0.5s ease-out forwards;
+}
+
+@keyframes touch-ripple {
+    0% {
+        transform: translate(-50%, -50%) scale(0.5);
+        opacity: 0.8;
+    }
+    100% {
+        transform: translate(-50%, -50%) scale(1.5);
+        opacity: 0;
+    }
+}
+
+@keyframes touch-longpress {
+    0% {
+        transform: translate(-50%, -50%) scale(0.3);
+        opacity: 0.6;
+        border-width: 3px;
+    }
+    50% {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 0.8;
+        border-width: 4px;
+    }
+    100% {
+        transform: translate(-50%, -50%) scale(1.2);
+        opacity: 0;
+        border-width: 2px;
+    }
 }
 
 .cad-canvas-overlay {

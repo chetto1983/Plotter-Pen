@@ -396,3 +396,198 @@
     opacity: 1;
     transform: translateY(0);
 }
+
+/* ============================================
+   PLC SETTINGS MODAL
+   ============================================ */
+.cad-modal-plc-settings {
+    width: 420px;
+    max-width: calc(100vw - 32px);
+}
+
+.cad-plc-settings-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.cad-plc-setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 16px;
+    background: rgba(11, 14, 22, 0.6);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    transition: border-color 0.2s;
+}
+
+.cad-plc-setting-row:focus-within {
+    border-color: var(--accent);
+}
+
+.cad-plc-setting-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+}
+
+.cad-plc-setting-info label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--fg);
+}
+
+.cad-plc-setting-desc {
+    font-size: 11px;
+    color: var(--muted);
+}
+
+.cad-plc-setting-input {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.cad-plc-setting-input .cad-modal-input {
+    width: 100px;
+    text-align: right;
+    font-size: 16px;
+    font-weight: 500;
+    padding: 10px 12px;
+}
+
+.cad-plc-setting-unit {
+    font-size: 12px;
+    color: var(--muted);
+    min-width: 32px;
+}
+
+/* Touch-friendly adjustments for PLC settings modal */
+@media (pointer: coarse) {
+    .cad-plc-setting-row {
+        padding: 16px;
+    }
+
+    .cad-plc-setting-input .cad-modal-input {
+        min-height: 48px;
+        font-size: 18px;
+    }
+}
+
+/* ============================================
+   COLLAPSIBLE PANEL STYLES
+   ============================================ */
+.cad-panel-collapsible {
+    transition: max-height 0.3s ease-out;
+}
+
+.cad-panel-header-collapsible {
+    cursor: pointer;
+    user-select: none;
+}
+
+.cad-panel-header-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cad-panel-collapse-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    transition: transform 0.2s, color 0.2s;
+}
+
+.cad-panel-collapse-btn:hover {
+    color: var(--fg);
+}
+
+.cad-panel-collapse-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* Collapsed state */
+.cad-panel-collapsible.collapsed .cad-panel-collapse-btn {
+    transform: rotate(-90deg);
+}
+
+.cad-panel-body-collapsible {
+    overflow: hidden;
+    transition: max-height 0.3s ease-out, opacity 0.2s ease-out;
+    max-height: 1000px;
+    opacity: 1;
+}
+
+/* Panel body inside fill panel - use flex to fill available space */
+.cad-panel-fill .cad-panel-body-collapsible {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    max-height: none;
+}
+
+.cad-panel-collapsible.collapsed .cad-panel-body-collapsible {
+    max-height: 0;
+    opacity: 0;
+    flex: 0;
+}
+
+/* Modal button styles */
+.cad-modal-btn {
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+}
+
+.cad-modal-btn-primary {
+    background: var(--accent);
+    color: #fff;
+}
+
+.cad-modal-btn-primary:hover {
+    background: var(--accent-hover);
+}
+
+.cad-modal-btn-secondary {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border);
+    color: var(--fg);
+}
+
+.cad-modal-btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--border-light);
+}
+
+/* Touch-friendly modal buttons */
+@media (pointer: coarse) {
+    .cad-modal-btn {
+        min-height: 48px;
+        padding: 12px 24px;
+        font-size: 16px;
+    }
+
+    .cad-modal-close {
+        width: 40px;
+        height: 40px;
+        font-size: 24px;
+    }
+}

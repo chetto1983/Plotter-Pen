@@ -1,6 +1,6 @@
 import { PLCSimulator3D } from '../plc/PLCSimulator3D.js';
 import { PLC3DAnimator } from '../plc/PLC3DAnimator.js';
-import { getPLCSettingsFromUI, setPLCSettingsToUI } from './plcSettingsUtils.js';
+import { getPLCSettingsFromUI, setPLCSettingsToUI, getPLCSettingsFromModal, setPLCSettingsToModal } from './plcSettingsUtils.js';
 
 export class PLCOutputManager {
   constructor(app) {
@@ -15,7 +15,7 @@ export class PLCOutputManager {
    * Initialize simulation settings from database and wire change handlers
    */
   async initSimulationSettings() {
-    // Wire change handlers for simulation settings inputs
+    // Wire change handlers for hidden simulation settings inputs
     const inputs = [
       'simWorkSpeed',
       'simRapidSpeed',
@@ -31,8 +31,148 @@ export class PLCOutputManager {
       }
     });
 
+    // Initialize PLC settings modal
+    this.initPLCSettingsModal();
+
+    // Initialize collapsible PLC panel
+    this.initCollapsiblePLCPanel();
+
     // Load saved settings from database
     await this.loadSimulationSettings();
+  }
+
+  /**
+   * Initialize PLC settings modal and wire event handlers
+   */
+  initPLCSettingsModal() {
+    const modal = document.getElementById('plcSettingsModal');
+    const openBtn = document.getElementById('btnPLCSettings');
+    const closeBtn = document.getElementById('btnClosePLCSettings');
+    const cancelBtn = document.getElementById('btnCancelPLCSettings');
+    const saveBtn = document.getElementById('btnSavePLCSettings');
+
+    if (!modal) return;
+
+    // Open modal button
+    if (openBtn) {
+      openBtn.addEventListener('click', () => this.openPLCSettingsModal());
+    }
+
+    // Close modal buttons
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => this.closePLCSettingsModal());
+    }
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', () => this.closePLCSettingsModal());
+    }
+
+    // Save button
+    if (saveBtn) {
+      saveBtn.addEventListener('click', () => this.savePLCSettingsFromModal());
+    }
+
+    // Close on overlay click
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) this.closePLCSettingsModal();
+    });
+
+    // Close on ESC key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && modal.classList.contains('open')) {
+        this.closePLCSettingsModal();
+      }
+    });
+  }
+
+  /**
+   * Open PLC settings modal and populate with current values
+   */
+  openPLCSettingsModal() {
+    const modal = document.getElementById('plcSettingsModal');
+    if (!modal) return;
+
+    // Populate modal with current settings from hidden inputs
+    const currentSettings = getPLCSettingsFromUI();
+    setPLCSettingsToModal(currentSettings);
+
+    modal.classList.add('open');
+  }
+
+  /**
+   * Close PLC settings modal
+   */
+  closePLCSettingsModal() {
+    const modal = document.getElementById('plcSettingsModal');
+    if (modal) {
+      modal.classList.remove('open');
+    }
+  }
+
+  /**
+   * Save PLC settings from modal to hidden inputs and database
+   */
+  async savePLCSettingsFromModal() {
+    // Get settings from modal
+    const settings = getPLCSettingsFromModal();
+
+    // Update hidden inputs (for backward compatibility)
+    setPLCSettingsToUI(settings);
+
+    // Close modal
+    this.closePLCSettingsModal();
+
+    // Trigger settings change (saves to DB and re-extracts PLC)
+    this.onSimSettingsChange();
+  }
+
+  /**
+   * Initialize collapsible PLC panel
+   */
+  initCollapsiblePLCPanel() {
+    const panel = document.getElementById('plcPanel');
+    const collapseBtn = document.getElementById('btnCollapsePLC');
+    const header = document.getElementById('plcPanelHeader');
+
+    if (!panel || !collapseBtn) return;
+
+    // Load saved collapse state
+    const savedState = localStorage.getItem('plcPanelCollapsed');
+    if (savedState === 'true') {
+      panel.classList.add('collapsed');
+    }
+
+    // Toggle on button click
+    collapseBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.togglePLCPanelCollapse();
+    });
+
+    // Toggle on header click (but not on action buttons)
+    if (header) {
+      header.addEventListener('click', (e) => {
+        // Only toggle if clicking on header title area, not action buttons
+        if (e.target.closest('.cad-panel-actions')) return;
+        this.togglePLCPanelCollapse();
+      });
+    }
+  }
+
+  /**
+   * Toggle PLC panel collapse state
+   */
+  togglePLCPanelCollapse() {
+    const panel = document.getElementById('plcPanel');
+    if (!panel) return;
+
+    panel.classList.toggle('collapsed');
+    const isCollapsed = panel.classList.contains('collapsed');
+    localStorage.setItem('plcPanelCollapsed', isCollapsed);
+
+    // Resize canvas after transition completes
+    setTimeout(() => {
+      this.app.renderer?.resize();
+      this.app.render();
+    }, 320); // Slightly longer than CSS transition (300ms)
   }
 
   /**
@@ -162,18 +302,51 @@ export class PLCOutputManager {
       });
     }
 
-    // Wire STL upload
-    const stlUpload = document.getElementById('stlToolUpload');
-    if (stlUpload) {
-      stlUpload.addEventListener('change', (e) => this.handleSTLUpload(e));
+    // Wire 3D zoom controls
+    const btnZoomIn = document.getElementById('btn3DZoomIn');
+    const btnZoomOut = document.getElementById('btn3DZoomOut');
+    const btnZoomExtent = document.getElementById('btn3DZoomExtent');
+
+    if (btnZoomIn) {
+      btnZoomIn.addEventListener('click', () => this.simulator3D?.zoomIn());
+    }
+    if (btnZoomOut) {
+      btnZoomOut.addEventListener('click', () => this.simulator3D?.zoomOut());
+    }
+    if (btnZoomExtent) {
+      btnZoomExtent.addEventListener('click', () => this.simulator3D?.zoomExtent());
+    }
+
+    // Wire 3D rotation controls
+    const btnRotateCCW = document.getElementById('btn3DRotateCCW');
+    const btnRotateCW = document.getElementById('btn3DRotateCW');
+
+    if (btnRotateCCW) {
+      btnRotateCCW.addEventListener('click', () => {
+        if (this.simulator3D) {
+          this.simulator3D.rotate90CCW();
+        }
+      });
+    }
+    if (btnRotateCW) {
+      btnRotateCW.addEventListener('click', () => {
+        if (this.simulator3D) {
+          this.simulator3D.rotate90CW();
+        }
+      });
     }
 
     // Listen for animation progress
     this.animator3D.onUpdate = (currentIndex, total) => {
+      // Update 3D progress bar
       const progressBar = overlay.querySelector('.cad-3d-progress-bar');
       if (progressBar && total > 0) {
         const percent = Math.round((currentIndex / total) * 100);
         progressBar.style.width = `${percent}%`;
+      }
+      // Highlight current command in PLC output panel (auto-scroll)
+      if (this.app.ui) {
+        this.app.ui.highlightPLCCommand(currentIndex);
       }
     };
 
@@ -184,6 +357,10 @@ export class PLCOutputManager {
       }
       const progressBar = overlay.querySelector('.cad-3d-progress-bar');
       if (progressBar) progressBar.style.width = '100%';
+      // Clear highlights when complete
+      if (this.app.ui) {
+        this.app.ui.clearPLCHighlights();
+      }
     };
 
     // ESC key to close 3D view
@@ -217,23 +394,14 @@ export class PLCOutputManager {
     // Update simulator with current commands when shown
     if (!isVisible && this.app.plcOutput && this.app.plcOutput.length > 0) {
       this.update3DSimulation();
+      // Set initial view rotated 180 degrees for better front view
+      if (this.simulator3D?.controls) {
+        this.simulator3D.controls.theta = Math.PI + Math.PI / 4;  // 180° + 45° = 225°
+        this.simulator3D.controls.phi = Math.PI / 3;  // 60° elevation
+        this.simulator3D.updateCameraFromControls();
+      }
       // Trigger resize after display change
       setTimeout(() => this.simulator3D?.resize(), 50);
-    }
-  }
-
-  /**
-   * Handle STL file upload for custom tool model
-   */
-  async handleSTLUpload(event) {
-    const file = event.target.files?.[0];
-    if (!file || !this.simulator3D) return;
-
-    try {
-      await this.simulator3D.loadToolSTL(file);
-      this.app.ui.updateStatus('Modello STL caricato');
-    } catch {
-      this.app.ui.updateStatus('Errore caricamento STL');
     }
   }
 

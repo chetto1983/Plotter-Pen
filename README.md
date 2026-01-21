@@ -29,15 +29,6 @@ go build -o plotter-pen.exe ./cmd/server
 ./plotter-pen.exe
 
 # Open browser at http://localhost:8000/plotter_pen.html
-```
-
-### Node.js Server (Development/Legacy)
-
-```bash
-npm install
-npm start          # Production
-npm run dev        # Watch mode
-```
 
 ### Docker
 

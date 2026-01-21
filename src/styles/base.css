@@ -3,6 +3,9 @@
    ============================================ */
 
 :root {
+    /* ========================================
+       CORE THEME COLORS
+       ======================================== */
     --bg: #0f1115;
     --bg-darker: #0b0d12;
     --bg-lighter: #151823;
@@ -30,6 +33,47 @@
     --text-muted: var(--muted);
     --primary-color: var(--accent);
     --border-color: var(--border);
+
+    /* ========================================
+       INDUSTRIAL HMI DESIGN TOKENS (ISA-101)
+       ======================================== */
+
+    /* Touch Targets - ISA-101 compliant sizing */
+    --touch-target-min: 48px;        /* Minimum for bare fingers */
+    --touch-target-glove: 64px;      /* For gloved operation */
+    --touch-target-spacing: 8px;     /* Gap between touch targets */
+    --touch-target-critical: 72px;   /* Emergency/critical controls */
+
+    /* Industrial Font Sizes */
+    --font-size-hmi-small: 14px;
+    --font-size-hmi-label: 16px;
+    --font-size-hmi-value: 20px;
+    --font-size-hmi-header: 24px;
+    --font-size-hmi-display: 32px;   /* Large numeric displays */
+
+    /* Responsive Breakpoints (as reference values) */
+    --bp-small-hmi: 480px;           /* 7" HMI portrait */
+    --bp-medium-hmi: 800px;          /* 7" landscape / 10" portrait */
+    --bp-large-hmi: 1024px;          /* 10" landscape */
+    --bp-desktop: 1280px;            /* 15"+ desktop */
+
+    /* Panel Sizing */
+    --sidebar-width-collapsed: 48px;
+    --sidebar-width-compact: 200px;
+    --sidebar-width-default: 260px;
+    --sidebar-width-expanded: 320px;
+
+    /* Animation Timing */
+    --transition-fast: 150ms;
+    --transition-normal: 250ms;
+    --transition-slow: 350ms;
+
+    /* Z-Index Layers */
+    --z-base: 1;
+    --z-panel: 10;
+    --z-floating: 100;
+    --z-modal: 1000;
+    --z-toast: 2000;
 }
 
 * {
