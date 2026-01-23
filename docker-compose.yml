@@ -34,18 +34,16 @@ services:
       # OPC UA certificates (must be writable for Generate Cert)
       - ./certs:/app/certs
 
-      # Optional: custom config override
-      # - ./opcua_config.json:/app/opcua_config.json:ro
 
     mem_limit: 512m
     cpus: 1.0
 
-    #healthcheck:
-     # test: ["CMD", "wget", "-q", "--spider", "http://localhost:8000/healthz"]
-     # interval: 30s
-     # timeout: 3s
-     # retries: 3
-     # start_period: 10s
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
 
     logging:
       driver: json-file
