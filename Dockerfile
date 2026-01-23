@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1
+#syntax=docker/dockerfile:1
 
 # Plotter-Pen Docker Build
 # Go backend with JavaScript frontend for pen plotter CAD with OPC UA integration

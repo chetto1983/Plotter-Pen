@@ -5,6 +5,7 @@ import { SidebarRight } from './components/SidebarRight.js';
 import { CanvasArea } from './components/CanvasArea.js';
 import { Footer } from './components/Footer.js';
 import { Modals } from './modals/Modals.js'; // We will put all static modals here for now
+import { CADApplication } from '../app/CADApplication.js';
 import { log } from '../lib/logger.js';
 
 export class App {
@@ -68,6 +69,10 @@ export class App {
 
         // Add Resize Listener
         window.addEventListener('resize', this._boundHandlers.resize);
+
+        // --- Initialize Core App Logic ---
+        // This MUST be done after the UI is mounted
+        window.cadApp = new CADApplication();
     }
 
     /**

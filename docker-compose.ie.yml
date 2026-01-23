@@ -1,11 +1,8 @@
-# Plotter-Pen Docker Compose
-# CAD editor for pen plotters with PLC integration via OPC UA
+# Plotter-Pen Docker Compose (Industrial Edge Publisher compatible)
+# Use Compose v2.x schema; Industrial Edge supports 2.1–2.4.
+version: "2.4"
 services:
   plotter:
-    build:
-      context: .
-      dockerfile: Dockerfile
-            
     image: plotter-pen:latest
     container_name: plotter-pen
     restart: always
@@ -18,8 +15,6 @@ services:
 
       # Database
       DB_PATH: "/app/data/plotter.db"
-
-      # OPC UA configuration is stored in the database (configure via UI/API)
 
       # Optional: API authentication
       # API_TOKEN: "your-secret-token"
@@ -34,8 +29,6 @@ services:
       # OPC UA certificates (must be writable for Generate Cert)
       - ./certs:/app/certs
 
-      # Optional: custom config override
-      # - ./opcua_config.json:/app/opcua_config.json:ro
 
     mem_limit: 512m
     cpus: 1.0
