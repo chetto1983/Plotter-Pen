@@ -54,3 +54,4 @@ STL/*
 Svg/*
 certs/*
 internal/handler/opcua_config.json
+AGENTS.md

@@ -32,7 +32,7 @@ go build -o plotter-pen.exe ./cmd/server
 # Run
 ./plotter-pen.exe
 
-# Open browser at http://localhost:8000/plotter_pen.html
+# Open browser at http://localhost:8000
 ```
 
 ### Docker

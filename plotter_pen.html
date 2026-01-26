@@ -19,6 +19,9 @@
   <link rel="stylesheet" href="src/styles/legacy.css">
   <link rel="stylesheet" href="src/styles/plc-simulation.css">
   <link rel="stylesheet" href="src/styles/responsive.css">
+  <!-- Polyfill for importmap support on older browsers (industrial HMI) -->
+  <script src="src/lib/es-module-shims.js"></script>
+  <!-- Importmap required by Three.js addons (Line2, LineMaterial, etc.) -->
   <script type="importmap">
     {
       "imports": {
