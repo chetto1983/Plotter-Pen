@@ -20,10 +20,6 @@ export class ViewCubeHelper {
         this.raycaster = new THREE.Raycaster();
         this.mouse = new THREE.Vector2();
 
-        // Hover state
-        this.hoveredFace = null;
-        this.originalMaterials = [];
-
         // View presets (spherical coordinates: theta=azimuth, phi=elevation)
         // Matching AutoCAD/Fusion360 standard views
         this.viewPresets = {
@@ -38,9 +34,6 @@ export class ViewCubeHelper {
             'ISO_SE':   { theta: -Math.PI / 4, phi: Math.PI / 3 },
             'ISO_SW':   { theta: -3 * Math.PI / 4, phi: Math.PI / 3 }
         };
-
-        // Callback for view changes
-        this.onViewChange = null;
 
         this.init();
     }
@@ -58,7 +51,6 @@ export class ViewCubeHelper {
             this.createFaceMaterial('FRONT', 0x445566, 'FRONT'),   // +Y
             this.createFaceMaterial('BACK', 0x445566, 'BACK'),     // -Y
         ];
-        this.originalMaterials = materials.map(m => m.clone());
         this.cube = new THREE.Mesh(cubeGeo, materials);
         this.cube.userData.clickable = true;
         this.scene.add(this.cube);
@@ -208,16 +200,6 @@ export class ViewCubeHelper {
     }
 
     /**
-     * Check if a point is within ViewCube bounds
-     */
-    isPointInBounds(clientX, clientY, canvasWidth, canvasHeight) {
-        const cubeX = canvasWidth - this.size - this.margin;
-        const cubeY = canvasHeight - this.size - this.margin;
-        return clientX >= cubeX && clientX <= cubeX + this.size &&
-               clientY >= cubeY && clientY <= cubeY + this.size;
-    }
-
-    /**
      * Render the ViewCube in the corner of the canvas
      * @param {THREE.WebGLRenderer} renderer - The main renderer
      * @param {THREE.Camera} mainCamera - The main scene camera
@@ -242,14 +224,6 @@ export class ViewCubeHelper {
     }
 
     /**
-     * Update size and margin
-     */
-    setSize(size, margin = 10) {
-        this.size = size;
-        this.margin = margin;
-    }
-
-    /**
      * Cleanup
      */
     dispose() {
@@ -259,6 +233,10 @@ export class ViewCubeHelper {
                 m.map?.dispose();
                 m.dispose();
             });
+        }
+        if (this.edges) {
+            this.edges.geometry.dispose();
+            this.edges.material.dispose();
         }
         if (this.axes) {
             this.axes.geometry.dispose();

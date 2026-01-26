@@ -1,12 +1,13 @@
 /**
  * PLCSimulator3D - Three.js 3D visualization for PLC command execution
- * Features: Tool mesh, trail rendering, STL loader, orbit controls
- * Uses polar3d-viewer bundle (includes Three.js + branding requirements)
+ * Features: Tool mesh, trail rendering, orbit controls
+ * Uses single Three.js instance via importmap for compatibility
  */
-import { THREE, BRANDING_CSS, injectBranding } from '../lib/polar3d-viewer.bundle.mjs';
+import * as THREE from 'three';
 import { Line2 } from 'three/addons/lines/Line2.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
+import { BRANDING_CSS, injectBranding } from '../lib/branding.js';
 import { ViewCubeHelper } from './ViewCubeHelper.js';
 import { PrimitiveRenderer3D } from './PrimitiveRenderer3D.js';
 
@@ -29,13 +30,40 @@ export class PLCSimulator3D {
         this.camera.position.set(500, 500, 500);
         this.camera.lookAt(0, 0, 0);
 
-        // Renderer
+        // Renderer - optimized for industrial/limited hardware
+        // Try WebGL2 first, fall back to WebGL1
+        let context = null;
+        try {
+            context = this.canvas.getContext('webgl2', { antialias: false, alpha: true });
+        } catch (_e) { /* WebGL2 not available */ }
+        if (!context) {
+            try {
+                context = this.canvas.getContext('webgl', { antialias: false, alpha: true });
+            } catch (_e) { /* WebGL1 not available */ }
+        }
+
         this.renderer = new THREE.WebGLRenderer({
             canvas: this.canvas,
-            antialias: true,
-            alpha: true
+            context: context,
+            antialias: false,  // Disabled for performance on industrial HMI
+            alpha: true,
+            powerPreference: 'low-power',  // Prefer integrated GPU
+            failIfMajorPerformanceCaveat: false  // Allow software rendering
         });
-        this.renderer.setPixelRatio(window.devicePixelRatio || 1);
+
+        // Clamp pixel ratio for industrial displays (high DPI kills performance)
+        const maxPixelRatio = 1.5;
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxPixelRatio));
+
+        // Handle WebGL context loss (common on industrial/embedded systems)
+        this.canvas.addEventListener('webglcontextlost', (event) => {
+            event.preventDefault();
+            console.warn('WebGL context lost - will restore on next frame');
+        });
+        this.canvas.addEventListener('webglcontextrestored', () => {
+            console.log('WebGL context restored');
+            this.resize();
+        });
 
         // Trail data - high contrast colors for clear progress visibility
         this.trailSegments = [];
@@ -808,7 +836,9 @@ export class PLCSimulator3D {
         const { width, height } = rect;
         if (width < 2 || height < 2) return;
 
-        this.renderer.setPixelRatio(window.devicePixelRatio || 1);
+        // Use clamped pixel ratio for industrial displays
+        const maxPixelRatio = 1.5;
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxPixelRatio));
         this.renderer.setSize(width, height, false);
         this.camera.aspect = width / height;
         this.camera.updateProjectionMatrix();

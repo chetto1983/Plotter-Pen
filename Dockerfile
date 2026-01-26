@@ -45,7 +45,7 @@ RUN set -eux; \
     CGO_ENABLED=1 GOOS=$TARGETOS GOARCH=$TARGETARCH \
     go build -ldflags="-s -w" -o server cmd/server/main.go
 
-# Stage 2: Final runtime image
+# Stage 3: Final runtime image
 FROM alpine:latest AS runner
 
 # Install runtime dependencies
