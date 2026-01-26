@@ -19,25 +19,15 @@
   <link rel="stylesheet" href="src/styles/legacy.css">
   <link rel="stylesheet" href="src/styles/plc-simulation.css">
   <link rel="stylesheet" href="src/styles/responsive.css">
-  <!-- Polyfill for importmap support on older browsers (industrial HMI) -->
-  <script src="src/lib/es-module-shims.js"></script>
-  <!-- Importmap required by Three.js addons (Line2, LineMaterial, etc.) -->
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "/node_modules/three/build/three.module.js",
-        "three/addons/": "/node_modules/three/examples/jsm/"
-      }
-    }
-  </script>
+  <!-- Bundled frontend (Webpack) for older browser compatibility -->
+  <script defer src="/dist/bundle.js"></script>
 </head>
 
 <body>
   <!-- App Container (React-like root) -->
   <div id="app"></div>
 
-  <!-- Main Entry Point -->
-  <script type="module" src="src/main.js"></script>
+  <!-- Main Entry Point is bundled in /dist/bundle.js -->
 </body>
 
 </html>

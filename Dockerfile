@@ -3,11 +3,14 @@
 # Plotter-Pen Docker Build
 # Go backend with JavaScript frontend for pen plotter CAD with OPC UA integration
 
-# Stage 1: Install Node.js dependencies (for Three.js Line2 modules)
-FROM node:22-alpine AS node-deps
+# Stage 1: Build frontend bundle (Webpack)
+FROM node:22-alpine AS frontend-build
 WORKDIR /app
 COPY package.json package-lock.json* ./
-RUN npm ci --production || npm install --production
+RUN npm ci || npm install
+COPY webpack.config.cjs ./
+COPY src/ ./src/
+RUN npm run build
 
 # Stage 2: Build Go server
 FROM --platform=$BUILDPLATFORM golang:1.23-alpine AS builder
@@ -71,12 +74,10 @@ RUN chmod +x ./server
 
 # Copy frontend files
 COPY --chown=appuser:appgroup plotter_pen.html ./
+COPY --from=frontend-build --chown=appuser:appgroup /app/dist/ ./dist/
 COPY --chown=appuser:appgroup src/ ./src/
 COPY --chown=appuser:appgroup assets/ ./assets/
 COPY --chown=appuser:appgroup favicon.ico ./
-
-# Copy node_modules (Three.js Line2 modules for thick line rendering)
-COPY --from=node-deps --chown=appuser:appgroup /app/node_modules/ ./node_modules/
 
 # Copy config files (optional, can be overridden by volume)
 COPY --chown=appuser:appgroup opcua_config.json ./

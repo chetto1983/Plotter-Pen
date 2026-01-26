@@ -15,7 +15,7 @@ CAD editor for pen plotters with PLC integration via OPC UA. Features a Go backe
 ## Prerequisites
 
 - Go 1.22+ (for production backend)
-- Node.js 18+ (required for Three.js Line2 thick line modules)
+- Node.js 18+ (required for webpack build and Three.js Line2 modules)
 - Docker (optional, for containerized deployment)
 
 ## Quick Start
@@ -23,8 +23,11 @@ CAD editor for pen plotters with PLC integration via OPC UA. Features a Go backe
 ### Go Backend (Recommended)
 
 ```bash
-# Install Three.js dependencies (required for thick line rendering)
+# Install frontend dependencies
 npm install
+
+# Build frontend bundle (Webpack)
+npm run build
 
 # Build
 go build -o plotter-pen.exe ./cmd/server
@@ -38,7 +41,7 @@ go build -o plotter-pen.exe ./cmd/server
 ### Docker
 
 ```bash
-# Build (includes Node.js deps for Three.js Line2 modules)
+# Build (includes frontend bundle)
 docker build -t plotter-pen .
 
 # Run with Docker Compose

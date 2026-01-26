@@ -24,7 +24,7 @@ func DefaultSecurityConfig() SecurityConfig {
 		ContentTypeNosniff:    true,
 		XFrameOptions:         "DENY",
 		XSSProtection:         "1; mode=block",
-		ContentSecurityPolicy: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws: wss:; font-src 'self'",
+		ContentSecurityPolicy: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws: wss:; font-src 'self'",
 		ReferrerPolicy:        "strict-origin-when-cross-origin",
 		CacheControl:          "no-store, max-age=0",
 	}

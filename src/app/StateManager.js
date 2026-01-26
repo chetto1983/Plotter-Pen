@@ -183,8 +183,7 @@ export class StateManager {
 
     return new Promise((resolve, reject) => {
       const worker = new Worker(
-        new URL('../workers/jsonParseWorker.js', import.meta.url),
-        { type: 'module' }
+        new URL('../workers/jsonParseWorker.js', import.meta.url)
       );
 
       const messageQueue = [];

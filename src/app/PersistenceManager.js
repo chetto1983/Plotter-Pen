@@ -93,8 +93,7 @@ export class PersistenceManager {
     loadWithWorker(jsonString) {
         return new Promise((resolve, reject) => {
             const worker = new Worker(
-                new URL('../workers/stateLoaderWorker.js', import.meta.url),
-                { type: 'module' }
+                new URL('../workers/stateLoaderWorker.js', import.meta.url)
             );
 
             worker.onmessage = (e) => {

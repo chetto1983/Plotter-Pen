@@ -43,6 +43,7 @@ func main() {
 	// Serve static files with correct MIME types
 	staticGroup := r.Group("/")
 	staticGroup.Use(middleware.MIMEType())
+	staticGroup.Static("/dist", cfg.StaticDir+"/dist")
 	staticGroup.Static("/src", cfg.StaticDir+"/src")
 	staticGroup.Static("/styles", cfg.StaticDir+"/styles")
 	staticGroup.Static("/assets", cfg.StaticDir+"/assets")

@@ -1,7 +1,7 @@
 /**
  * PLCSimulator3D - Three.js 3D visualization for PLC command execution
  * Features: Tool mesh, trail rendering, orbit controls
- * Uses single Three.js instance via importmap for compatibility
+ * Uses single Three.js instance via webpack bundle for compatibility
  */
 import * as THREE from 'three';
 import { Line2 } from 'three/addons/lines/Line2.js';
