@@ -31,8 +31,8 @@ services:
       # Persistent data (SQLite database)
       - plotter-data:/app/data
 
-      # OPC UA certificates (must be writable for Generate Cert)
-      - ./certs:/app/certs
+      # OPC UA certificates (named volume for proper permissions)
+      - plotter-certs:/app/certs
 
 
     mem_limit: 512m
@@ -53,4 +53,6 @@ services:
 
 volumes:
   plotter-data:
+    driver: local
+  plotter-certs:
     driver: local

@@ -74,6 +74,11 @@ export class ToolController {
         this.app.currentTool = null;
         this.app.selectMode = true;
         break;
+      case 'pan':
+        // Pan mode: no tool, no select - free navigation
+        this.app.currentTool = null;
+        this.app.selectMode = false;
+        break;
       case 'delete':
         this.app.currentTool = null;
         this.app.selectMode = false;
@@ -87,6 +92,8 @@ export class ToolController {
     this.app.ui.updateToolUI(toolName);
     if (this.app.selectMode) {
       this.app.ui.updateStatus('Modalita selezione - clicca su una primitiva');
+    } else if (toolName === 'pan') {
+      this.app.ui.updateStatus('Modalità Pan - trascina per navigare');
     } else {
       this.app.ui.updateStatus(this.app.currentTool ? `Strumento: ${toolName}` : 'Nessuno strumento');
     }

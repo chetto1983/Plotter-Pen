@@ -34,18 +34,18 @@ export class PLCSimulator3D {
         // Try WebGL2 first, fall back to WebGL1
         let context = null;
         try {
-            context = this.canvas.getContext('webgl2', { antialias: false, alpha: true });
+            context = this.canvas.getContext('webgl2', { antialias: true, alpha: true });
         } catch (_e) { /* WebGL2 not available */ }
         if (!context) {
             try {
-                context = this.canvas.getContext('webgl', { antialias: false, alpha: true });
+                context = this.canvas.getContext('webgl', { antialias: true, alpha: true });
             } catch (_e) { /* WebGL1 not available */ }
         }
 
         this.renderer = new THREE.WebGLRenderer({
             canvas: this.canvas,
             context: context,
-            antialias: false,  // Disabled for performance on industrial HMI
+            antialias: true,
             alpha: true,
             powerPreference: 'low-power',  // Prefer integrated GPU
             failIfMajorPerformanceCaveat: false  // Allow software rendering

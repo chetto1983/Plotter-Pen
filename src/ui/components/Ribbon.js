@@ -60,6 +60,10 @@ export class Ribbon {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3 L 10 21 L 13 13 L 21 10 Z" /></svg>
               <span>Seleziona</span>
             </button>
+            <button type="button" class="cad-tool-btn" data-tool="pan" title="Pan / Naviga">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M2 12h4M18 12h4M12 8a4 4 0 100 8 4 4 0 000-8z" /><path d="M8 12H4M16 12h4M12 8V4M12 16v4" stroke-linecap="round"/></svg>
+              <span>Pan</span>
+            </button>
             <div class="cad-toolbar-divider"></div>
             <button type="button" class="cad-tool-btn" data-tool="fillet" title="Raccordo (F)">
                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20v-8a8 8 0 018-8h8" /></svg>

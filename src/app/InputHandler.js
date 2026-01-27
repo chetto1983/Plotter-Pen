@@ -149,8 +149,10 @@ export class InputHandler {
     const screenY = e.clientY - rect.top;
     const worldPos = this.screenToWorld(e.clientX, e.clientY);
 
-    if (e.button === 1 || (e.button === 0 && e.altKey)) {
-      // Middle button or Alt+Left for panning
+    // Pan mode: middle button, Alt+Left, or left-click when no tool/select active
+    const isPanMode = !this.app.currentTool && !this.app.selectMode;
+    if (e.button === 1 || (e.button === 0 && e.altKey) || (e.button === 0 && isPanMode)) {
+      // Middle button, Alt+Left, or Pan mode for panning
       this.isDragging = true;
       this.lastMousePos.set(e.clientX, e.clientY);
       this.app.canvas.style.cursor = 'grabbing';
