@@ -55,3 +55,4 @@ Svg/*
 certs/*
 internal/handler/opcua_config.json
 AGENTS.md
+plotter_pen.db
