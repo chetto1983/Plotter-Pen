@@ -101,9 +101,17 @@ func (t *ChunkedTransfer) runTransfer(ctx context.Context, data []string) {
 		totalChunks = 1
 	}
 
-	// Reset EOF flag at start
+	// Reset flags at start to ensure clean handshake state
 	if err := t.client.WriteBoolNode(ctx, t.config.EndOfFileNode, false); err != nil {
 		t.reportError(fmt.Sprintf("failed to reset EOF: %v", err), 0, totalChunks, len(data))
+		return
+	}
+	if err := t.client.WriteBoolNode(ctx, t.config.ReadDoneNode, false); err != nil {
+		t.reportError(fmt.Sprintf("failed to reset ReadDone: %v", err), 0, totalChunks, len(data))
+		return
+	}
+	if err := t.client.WriteBoolNode(ctx, t.config.TriggerWriteNode, false); err != nil {
+		t.reportError(fmt.Sprintf("failed to reset TriggerWrite: %v", err), 0, totalChunks, len(data))
 		return
 	}
 
@@ -161,12 +169,17 @@ func (t *ChunkedTransfer) sendChunk(ctx context.Context, data []string, chunkIdx
 		return fmt.Errorf("failed to set trigger: %w", err)
 	}
 
-	// 3. Wait for Trirrer_Read_Dn = TRUE
+	// 3. Wait for Trigger_Read_Done = TRUE
 	if err := t.waitForAck(ctx); err != nil {
 		return fmt.Errorf("ack timeout on chunk %d: %w", chunkIdx, err)
 	}
 
-	// 4. Reset TriggerWrite = FALSE
+	// 4. Reset ReadDone = FALSE to prevent race condition on next chunk
+	if err := t.client.WriteBoolNode(ctx, t.config.ReadDoneNode, false); err != nil {
+		return fmt.Errorf("failed to reset ReadDone: %w", err)
+	}
+
+	// 5. Reset TriggerWrite = FALSE
 	if err := t.client.WriteBoolNode(ctx, t.config.TriggerWriteNode, false); err != nil {
 		return fmt.Errorf("failed to reset trigger: %w", err)
 	}

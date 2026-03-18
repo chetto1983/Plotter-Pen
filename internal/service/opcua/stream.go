@@ -26,12 +26,13 @@ type CommandRequest struct {
 
 // PositionStream handles real-time position streaming to WebSocket clients
 type PositionStream struct {
-	client   *Client
-	interval time.Duration
-	stopCh   chan struct{}
-	stopOnce sync.Once // protects stopCh close
-	mu       sync.Mutex
-	running  bool
+	client       *Client
+	interval     time.Duration
+	stopCh       chan struct{}
+	stopOnce     sync.Once // protects stopCh close
+	mu           sync.Mutex
+	running      bool
+	lastNotified bool // last connection state sent to frontend
 }
 
 // NewPositionStream creates a new position stream
@@ -51,7 +52,8 @@ func NewPositionStream(client *Client, intervalMs int) *PositionStream {
 	}
 }
 
-// Start begins streaming position updates
+// Start begins streaming position updates.
+// Connection recovery is handled by gopcua's AutoReconnect — we just monitor state.
 func (s *PositionStream) Start(ctx context.Context, send func(WSMessage)) {
 	s.mu.Lock()
 	if s.running {
@@ -59,8 +61,9 @@ func (s *PositionStream) Start(ctx context.Context, send func(WSMessage)) {
 		return
 	}
 	s.running = true
+	s.lastNotified = true // assume connected at start
 	s.stopCh = make(chan struct{})
-	s.stopOnce = sync.Once{} // Reset for new streaming lifecycle
+	s.stopOnce = sync.Once{}
 	s.mu.Unlock()
 
 	ticker := time.NewTicker(s.interval)
@@ -75,21 +78,35 @@ func (s *PositionStream) Start(ctx context.Context, send func(WSMessage)) {
 			s.setRunning(false)
 			return
 		case <-ticker.C:
-			if s.client.IsConnected() {
-				pos, err := s.client.ReadPosition(ctx)
-				if err == nil {
-					send(WSMessage{
-						Type: "position",
-						Data: pos,
-						Time: time.Now().UnixMilli(),
-					})
-				} else {
-					send(WSMessage{
-						Type: "error",
-						Data: map[string]string{"message": err.Error()},
-						Time: time.Now().UnixMilli(),
-					})
-				}
+			connected := s.client.IsConnected()
+
+			// Notify frontend on state change
+			s.mu.Lock()
+			changed := connected != s.lastNotified
+			s.lastNotified = connected
+			s.mu.Unlock()
+
+			if changed {
+				send(WSMessage{
+					Type: "status",
+					Data: map[string]interface{}{"connected": connected, "reconnected": connected},
+					Time: time.Now().UnixMilli(),
+				})
+			}
+
+			if !connected {
+				continue // library auto-reconnects, just wait
+			}
+
+			readCtx, readCancel := context.WithTimeout(ctx, 3*time.Second)
+			pos, err := s.client.ReadPosition(readCtx)
+			readCancel()
+			if err == nil {
+				send(WSMessage{
+					Type: "position",
+					Data: pos,
+					Time: time.Now().UnixMilli(),
+				})
 			}
 		}
 	}

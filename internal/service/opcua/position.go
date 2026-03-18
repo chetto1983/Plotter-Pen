@@ -33,25 +33,28 @@ func (c *Client) ReadPosition(ctx context.Context) (Position, error) {
 	// Read X
 	if cfg.PositionXNode != "" {
 		val, err := c.ReadNode(ctx, cfg.PositionXNode)
-		if err == nil {
-			pos.X = toFloat64(val)
+		if err != nil {
+			return pos, fmt.Errorf("read X: %w", err)
 		}
+		pos.X = toFloat64(val)
 	}
 
 	// Read Y
 	if cfg.PositionYNode != "" {
 		val, err := c.ReadNode(ctx, cfg.PositionYNode)
-		if err == nil {
-			pos.Y = toFloat64(val)
+		if err != nil {
+			return pos, fmt.Errorf("read Y: %w", err)
 		}
+		pos.Y = toFloat64(val)
 	}
 
 	// Read Z
 	if cfg.PositionZNode != "" {
 		val, err := c.ReadNode(ctx, cfg.PositionZNode)
-		if err == nil {
-			pos.Z = toFloat64(val)
+		if err != nil {
+			return pos, fmt.Errorf("read Z: %w", err)
 		}
+		pos.Z = toFloat64(val)
 	}
 
 	return pos, nil

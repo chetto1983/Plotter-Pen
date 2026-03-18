@@ -579,10 +579,16 @@ export class UIController {
     const ws = this.app.wsService;
     if (!ws) return;
 
-    // Connection status
+    // Connection status (OPC UA → PLC)
     ws.on('status', (data) => {
       if (data && data.connected) {
         this.updateOPCUAStatus('Connesso', 'success');
+        // Re-subscribe after OPC UA reconnect
+        if (data.reconnected) {
+          ws.subscribe(100);
+        }
+      } else if (data && data.reconnecting) {
+        this.updateOPCUAStatus('Riconnessione PLC...', 'info');
       } else {
         this.updateOPCUAStatus('Disconnesso', 'error');
       }

@@ -19,39 +19,47 @@ const (
 	DefaultKeyPath  = "certs/client.key"
 )
 
-// Client wraps gopcua client with connection management
+// Client wraps gopcua client with connection management and auto-reconnect
 type Client struct {
-	client       *opcua.Client
-	config       *ConfigManager
-	connected    atomic.Bool
-	mu           sync.RWMutex
-	subscription *opcua.Subscription
-	posCallback  PositionCallback
-	stopCh       chan struct{}
-	stopOnce     sync.Once // protects stopCh close
+	client         *opcua.Client
+	config         *ConfigManager
+	connected      atomic.Bool
+	mu             sync.RWMutex
+	subscription   *opcua.Subscription
+	posCallback    PositionCallback
+	stopCh         chan struct{}
+	stopOnce       sync.Once // protects stopCh close
+	onStatusChange func(connected bool)
 }
 
 // NewClient creates a new OPC UA client
 func NewClient(config *ConfigManager) *Client {
 	return &Client{
 		config: config,
-		// connected is atomic.Bool, zero value is false
 	}
 }
 
-// Connect establishes connection to OPC UA server
+// Connect establishes connection to OPC UA server with auto-reconnect
 func (c *Client) Connect(ctx context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if c.connected.Load() && c.client != nil {
-		return nil // Already connected
+		// Check if library still considers itself connected
+		if c.client.State() == opcua.Connected {
+			return nil
+		}
+		// Library says disconnected, clean up
+		c.connected.Store(false)
 	}
 
 	cfg := c.config.Get()
 
-	// Discover endpoints to find security requirements
-	endpoints, err := opcua.GetEndpoints(ctx, cfg.Endpoint)
+	// Discover endpoints with a dedicated short timeout
+	discoverCtx, discoverCancel := context.WithTimeout(ctx, 10*time.Second)
+	defer discoverCancel()
+
+	endpoints, err := opcua.GetEndpoints(discoverCtx, cfg.Endpoint)
 	if err != nil {
 		return fmt.Errorf("failed to get endpoints: %w", err)
 	}
@@ -59,7 +67,6 @@ func (c *Client) Connect(ctx context.Context) error {
 	// Select best endpoint (prefer Sign over SignAndEncrypt for performance)
 	ep := opcua.SelectEndpoint(endpoints, cfg.SecurityPolicy, ua.MessageSecurityModeFromString(cfg.SecurityMode))
 	if ep == nil && len(endpoints) > 0 {
-		// Auto-select first available secure endpoint
 		ep = endpoints[0]
 	}
 
@@ -77,13 +84,66 @@ func (c *Client) Connect(ctx context.Context) error {
 	c.client = client
 	c.connected.Store(true)
 	c.stopCh = make(chan struct{})
-	c.stopOnce = sync.Once{} // Reset for new connection lifecycle
+	c.stopOnce = sync.Once{}
+
+	// Monitor connection state in background
+	go c.monitorState()
+
 	return nil
+}
+
+// monitorState watches the gopcua client state and updates our connected flag
+func (c *Client) monitorState() {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		c.mu.RLock()
+		client := c.client
+		stopCh := c.stopCh
+		c.mu.RUnlock()
+
+		if client == nil {
+			return
+		}
+
+		select {
+		case <-stopCh:
+			return
+		case <-ticker.C:
+			state := client.State()
+			wasConnected := c.connected.Load()
+
+			switch state {
+			case opcua.Connected:
+				if !wasConnected {
+					c.connected.Store(true)
+					fmt.Println("OPC UA: reconnected")
+					c.notifyStatus(true)
+				}
+			case opcua.Disconnected, opcua.Reconnecting:
+				if wasConnected {
+					c.connected.Store(false)
+					fmt.Printf("OPC UA: %s\n", state)
+					c.notifyStatus(false)
+				}
+			case opcua.Closed:
+				c.connected.Store(false)
+				return
+			}
+		}
+	}
 }
 
 // buildConnectionOptions creates OPC UA connection options based on config and endpoint
 func (c *Client) buildConnectionOptions(cfg Config, ep *ua.EndpointDescription) []opcua.Option {
-	opts := []opcua.Option{}
+	opts := []opcua.Option{
+		// Connection resilience
+		opcua.AutoReconnect(true),
+		opcua.ReconnectInterval(5 * time.Second),
+		opcua.DialTimeout(10 * time.Second),
+		opcua.RequestTimeout(5 * time.Second),
+	}
 
 	// If we have an endpoint, use its security settings
 	if ep != nil {
@@ -118,8 +178,6 @@ func (c *Client) buildConnectionOptions(cfg Config, ep *ua.EndpointDescription) 
 	// Generate self-signed certificates for secure connections if no cert provided
 	if ep != nil && ep.SecurityMode != ua.MessageSecurityModeNone {
 		if cfg.CertFile == "" || cfg.KeyFile == "" {
-			// Use persistent certificates saved to disk
-			// Configurable via environment variables for production deployment
 			certPath := os.Getenv("OPCUA_CERT_PATH")
 			if certPath == "" {
 				certPath = DefaultCertPath
@@ -130,7 +188,6 @@ func (c *Client) buildConnectionOptions(cfg Config, ep *ua.EndpointDescription) 
 			}
 			cert, key, err := LoadOrGenerateCert(certPath, keyPath)
 			if err != nil {
-				// Log error but continue - connection may fail later
 				fmt.Printf("OPC UA: failed to load/generate certificate: %v\n", err)
 			} else {
 				fmt.Printf("OPC UA: using certificate from %s (import DER into PLC trusted certs)\n", certPath)
@@ -159,6 +216,11 @@ func (c *Client) Disconnect(ctx context.Context) error {
 		return nil
 	}
 
+	// Stop state monitor
+	if c.stopCh != nil {
+		c.stopOnce.Do(func() { close(c.stopCh) })
+	}
+
 	err := c.client.Close(ctx)
 	c.client = nil
 	c.connected.Store(false)
@@ -167,8 +229,37 @@ func (c *Client) Disconnect(ctx context.Context) error {
 
 // IsConnected returns connection status
 func (c *Client) IsConnected() bool {
-	return c.connected.Load()
+	if !c.connected.Load() {
+		return false
+	}
+	// Cross-check with library state
+	c.mu.RLock()
+	client := c.client
+	c.mu.RUnlock()
+	if client == nil {
+		return false
+	}
+	state := client.State()
+	return state == opcua.Connected
 }
+
+// SetStatusCallback sets a callback invoked on connection state changes
+func (c *Client) SetStatusCallback(cb func(connected bool)) {
+	c.mu.Lock()
+	c.onStatusChange = cb
+	c.mu.Unlock()
+}
+
+// notifyStatus invokes the status change callback
+func (c *Client) notifyStatus(connected bool) {
+	c.mu.RLock()
+	cb := c.onStatusChange
+	c.mu.RUnlock()
+	if cb != nil {
+		cb(connected)
+	}
+}
+
 
 // WriteData writes data to the configured data node
 func (c *Client) WriteData(ctx context.Context, data interface{}, cfg Config) error {
