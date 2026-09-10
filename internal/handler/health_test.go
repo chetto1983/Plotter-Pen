@@ -52,6 +52,22 @@ func TestHealthz(t *testing.T) {
 	}
 }
 
+// The Docker HEALTHCHECK uses `wget --spider`, which sends HEAD
+func TestHealthz_HEAD(t *testing.T) {
+	r, _, cleanup := setupHealthTest(t)
+	defer cleanup()
+
+	for _, path := range []string{"/healthz", "/readyz", "/health"} {
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("HEAD", path, nil)
+		r.ServeHTTP(w, req)
+
+		if w.Code != 200 {
+			t.Errorf("HEAD %s: expected status 200, got %d", path, w.Code)
+		}
+	}
+}
+
 func TestReadyz_Healthy(t *testing.T) {
 	r, _, cleanup := setupHealthTest(t)
 	defer cleanup()

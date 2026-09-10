@@ -24,10 +24,13 @@ func NewHealthHandler(db *gorm.DB) *HealthHandler {
 }
 
 // RegisterRoutes registers health check routes (no /api prefix)
+// HEAD is registered too: the Docker HEALTHCHECK probes with `wget --spider`
 func (h *HealthHandler) RegisterRoutes(r *gin.Engine) {
-	r.GET("/healthz", h.Healthz)
-	r.GET("/readyz", h.Readyz)
-	r.GET("/health", h.Health) // Alias for /healthz
+	for _, method := range []string{http.MethodGet, http.MethodHead} {
+		r.Handle(method, "/healthz", h.Healthz)
+		r.Handle(method, "/readyz", h.Readyz)
+		r.Handle(method, "/health", h.Health) // Alias for /healthz
+	}
 }
 
 // Healthz is a simple liveness probe
