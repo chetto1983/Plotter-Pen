@@ -14,7 +14,7 @@ CAD editor for pen plotters with PLC integration via OPC UA. Features a Go backe
 
 ## Prerequisites
 
-- Go 1.22+ (for production backend)
+- Go 1.27.1+ (for production backend)
 - Node.js 18+ (required for webpack build and Three.js Line2 modules)
 - Docker (optional, for containerized deployment)
 

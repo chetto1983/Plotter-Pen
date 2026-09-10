@@ -65,8 +65,9 @@ func (c *Client) Connect(ctx context.Context) error {
 	}
 
 	// Select best endpoint (prefer Sign over SignAndEncrypt for performance)
-	ep := opcua.SelectEndpoint(endpoints, cfg.SecurityPolicy, ua.MessageSecurityModeFromString(cfg.SecurityMode))
-	if ep == nil && len(endpoints) > 0 {
+	// No match is not fatal: fall back to the highest-security endpoint (SelectEndpoint sorts in place)
+	ep, err := opcua.SelectEndpoint(endpoints, cfg.SecurityPolicy, ua.MessageSecurityModeFromString(cfg.SecurityMode))
+	if err != nil && len(endpoints) > 0 {
 		ep = endpoints[0]
 	}
 

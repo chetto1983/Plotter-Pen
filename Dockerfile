@@ -4,7 +4,7 @@
 # Go backend with JavaScript frontend for pen plotter CAD with OPC UA integration
 
 # Stage 1: Build frontend bundle (Webpack)
-FROM node:22-alpine AS frontend-build
+FROM node:24-alpine AS frontend-build
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm ci || npm install
@@ -13,7 +13,7 @@ COPY src/ ./src/
 RUN npm run build
 
 # Stage 2: Build Go server
-FROM --platform=$BUILDPLATFORM golang:1.23-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS builder
 WORKDIR /app
 
 # Install build dependencies for SQLite (CGO required)
