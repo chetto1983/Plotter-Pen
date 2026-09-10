@@ -261,6 +261,13 @@ func (c *Client) notifyStatus(connected bool) {
 }
 
 
+// valueOnly wraps v in a DataValue that carries only the value.
+// gopcua encodes exactly the fields flagged in EncodingMask, and S7-1500 rejects
+// writes that include status or timestamps with Bad_WriteNotSupported.
+func valueOnly(v *ua.Variant) *ua.DataValue {
+	return &ua.DataValue{EncodingMask: ua.DataValueValue, Value: v}
+}
+
 // WriteData writes data to the configured data node
 func (c *Client) WriteData(ctx context.Context, data interface{}, cfg Config) error {
 	c.mu.Lock()
@@ -285,7 +292,7 @@ func (c *Client) WriteData(ctx context.Context, data interface{}, cfg Config) er
 			{
 				NodeID:      nodeID,
 				AttributeID: ua.AttributeIDValue,
-				Value:       &ua.DataValue{Value: variant},
+				Value:       valueOnly(variant),
 			},
 		},
 	}
@@ -331,7 +338,7 @@ func (c *Client) writeBoolNode(ctx context.Context, nodeStr string, value bool, 
 			{
 				NodeID:      nodeID,
 				AttributeID: ua.AttributeIDValue,
-				Value:       &ua.DataValue{Value: ua.MustVariant(value)},
+				Value:       valueOnly(ua.MustVariant(value)),
 			},
 		},
 	}
@@ -495,7 +502,7 @@ func (c *Client) WriteString(ctx context.Context, nodeIDStr string, value string
 			{
 				NodeID:      nodeID,
 				AttributeID: ua.AttributeIDValue,
-				Value:       &ua.DataValue{Value: variant},
+				Value:       valueOnly(variant),
 			},
 		},
 	}
@@ -513,7 +520,6 @@ func (c *Client) WriteString(ctx context.Context, nodeIDStr string, value string
 }
 
 // WriteStringArray writes a string array to a node
-// For Siemens S7-1500: reads current value first to match encoding
 func (c *Client) WriteStringArray(ctx context.Context, nodeIDStr string, data []string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -527,36 +533,17 @@ func (c *Client) WriteStringArray(ctx context.Context, nodeIDStr string, data []
 		return fmt.Errorf("invalid node ID: %w", err)
 	}
 
-	// First read to get exact Siemens variant encoding
-	readReq := &ua.ReadRequest{
-		NodesToRead: []*ua.ReadValueID{
-			{NodeID: nodeID, AttributeID: ua.AttributeIDValue},
-		},
-	}
-
-	readResp, err := c.client.Read(ctx, readReq)
-	if err != nil {
-		return fmt.Errorf("read for encoding failed: %w", err)
-	}
-
-	if readResp.Results[0].Status != ua.StatusOK {
-		return fmt.Errorf("read status: %v", readResp.Results[0].Status)
-	}
-
-	// Get the original DataValue and modify only the value
-	originalDV := readResp.Results[0]
 	variant, err := ua.NewVariant(data)
 	if err != nil {
 		return fmt.Errorf("failed to create variant: %w", err)
 	}
-	originalDV.Value = variant
 
 	req := &ua.WriteRequest{
 		NodesToWrite: []*ua.WriteValue{
 			{
 				NodeID:      nodeID,
 				AttributeID: ua.AttributeIDValue,
-				Value:       originalDV,
+				Value:       valueOnly(variant),
 			},
 		},
 	}
@@ -574,7 +561,6 @@ func (c *Client) WriteStringArray(ctx context.Context, nodeIDStr string, data []
 }
 
 // WriteBoolNode writes a boolean value to a node
-// For Siemens S7-1500: reads current value first to match encoding
 func (c *Client) WriteBoolNode(ctx context.Context, nodeIDStr string, value bool) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -588,32 +574,12 @@ func (c *Client) WriteBoolNode(ctx context.Context, nodeIDStr string, value bool
 		return fmt.Errorf("invalid node ID: %w", err)
 	}
 
-	// First read to get exact Siemens variant encoding
-	readReq := &ua.ReadRequest{
-		NodesToRead: []*ua.ReadValueID{
-			{NodeID: nodeID, AttributeID: ua.AttributeIDValue},
-		},
-	}
-
-	readResp, err := c.client.Read(ctx, readReq)
-	if err != nil {
-		return fmt.Errorf("read for encoding failed: %w", err)
-	}
-
-	if readResp.Results[0].Status != ua.StatusOK {
-		return fmt.Errorf("read status: %v", readResp.Results[0].Status)
-	}
-
-	// Get the original DataValue and modify only the value
-	originalDV := readResp.Results[0]
-	originalDV.Value = ua.MustVariant(value)
-
 	req := &ua.WriteRequest{
 		NodesToWrite: []*ua.WriteValue{
 			{
 				NodeID:      nodeID,
 				AttributeID: ua.AttributeIDValue,
-				Value:       originalDV,
+				Value:       valueOnly(ua.MustVariant(value)),
 			},
 		},
 	}
