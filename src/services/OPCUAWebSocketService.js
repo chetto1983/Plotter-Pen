@@ -95,8 +95,8 @@ export class OPCUAWebSocketService {
   /**
    * Handle WebSocket error
    */
-  handleError(error) {
-    error('[WS] WebSocket error:', error);
+  handleError(err) {
+    error('[WS] WebSocket error:', err);
     this.isConnecting = false;
     this.emit('error', { message: 'WebSocket error' });
   }
