@@ -1,10 +1,19 @@
 package clipper
 
 import (
+	"math"
+
 	"plotter-pen/pkg/geom"
 
 	clipper2 "github.com/bolom009/go-clipper2"
 )
+
+// scale converts millimetres to Clipper's integer units (1 unit = 1 µm).
+const scale = 1000.0
+
+// contourArcTolerance is the largest gap, in Clipper units (µm), between a rounded corner of an
+// offset contour and its chords.
+const contourArcTolerance = 5
 
 // OffsetPath offsets an open path (Polyline)
 // endType: 0=Polygon, 1=Joined, 2=Butt, 3=Square, 4=Round (go-clipper2 EndType)
@@ -13,39 +22,13 @@ func OffsetPath(path geom.Path, delta float64, endType clipper2.EndType) []geom.
 		return nil
 	}
 
-	// Convert geom.Path to clipper2.Path64
-	// We scale up float coordinates to int64 for robustness
-	const scale = 1000.0
-	cPath := make(clipper2.Path64, len(path))
-	for i, p := range path {
-		cPath[i] = clipper2.Point64{
-			X: int64(p.X * scale),
-			Y: int64(p.Y * scale),
-		}
-	}
-
 	// NewClipperOffset(miterLimit, arcTolerance, preserveCollinear, reverseSolution)
 	co := clipper2.NewClipperOffset(2.0, 0.25, false, false)
-	co.AddPaths(clipper2.Paths64{cPath}, clipper2.Round, endType) // Standard: Round Join
+	co.AddPaths(toPaths64([]geom.Path{path}), clipper2.Round, endType) // Standard: Round Join
 
-	// Execute offset
 	var result clipper2.Paths64
 	co.Execute64(delta*scale, &result)
-
-	// Convert back to geom.Path
-	var output []geom.Path
-	for _, cPoly := range result {
-		var gPoly geom.Path
-		for _, pt := range cPoly {
-			gPoly = append(gPoly, geom.Point{
-				X: float64(pt.X) / scale,
-				Y: float64(pt.Y) / scale,
-			})
-		}
-		output = append(output, gPoly)
-	}
-
-	return output
+	return fromPaths64(result)
 }
 
 // OffsetPathRound offsets an open path with round end caps
@@ -56,34 +39,25 @@ func OffsetPathRound(path geom.Path, delta float64) []geom.Path {
 
 // OffsetPolygon offsets a closed polygon
 func OffsetPolygon(path geom.Path, delta float64) []geom.Path {
-	const scale = 1000.0
-	cPath := make(clipper2.Path64, len(path))
-	for i, p := range path {
-		cPath[i] = clipper2.Point64{
-			X: int64(p.X * scale),
-			Y: int64(p.Y * scale),
-		}
-	}
-
 	co := clipper2.NewClipperOffset(2.0, 0.25, false, false)
 	// JoinTypeRound, EndTypePolygon = 0 (Polygon)
-	co.AddPaths(clipper2.Paths64{cPath}, clipper2.Round, clipper2.Polygon)
+	co.AddPaths(toPaths64([]geom.Path{path}), clipper2.Round, clipper2.Polygon)
 
 	var result clipper2.Paths64
 	co.Execute64(delta*scale, &result)
+	return fromPaths64(result)
+}
 
-	var output []geom.Path
-	for _, cPoly := range result {
-		var gPoly geom.Path
-		for _, pt := range cPoly {
-			gPoly = append(gPoly, geom.Point{
-				X: float64(pt.X) / scale,
-				Y: float64(pt.Y) / scale,
-			})
-		}
-		output = append(output, gPoly)
-	}
-	return output
+// OffsetContours offsets a set of closed contours as one material. The contours are first
+// merged with the even-odd rule, so a contour inside another is a hole whatever its
+// orientation; then the whole set is offset at once, so nearby parts merge instead of producing
+// rings that run through each other. delta > 0 grows the material (tool outside it), delta < 0
+// shrinks it (tool inside); corners that grow are rounded.
+func OffsetContours(loops []geom.Path, delta float64) []geom.Path {
+	material := clipper2.UnionPaths64(toPaths64(loops), clipper2.EvenOdd)
+	rings := clipper2.InflatePaths64(material, delta*scale, clipper2.Round, clipper2.Polygon,
+		clipper2.WithArcTolerance(contourArcTolerance))
+	return fromPaths64(rings)
 }
 
 // GeneratePocket creates a concentric pocket toolpath
@@ -91,20 +65,7 @@ func OffsetPolygon(path geom.Path, delta float64) []geom.Path {
 // toolRadius: Radius of the cutter
 // stepOver: Distance between concentric passes
 func GeneratePocket(paths []geom.Path, toolRadius float64, stepOver float64) []geom.Path {
-	const scale = 1000.0
-
-	// Convert input to Clipper Paths64
-	var currentLayer clipper2.Paths64
-	for _, p := range paths {
-		cPoly := make(clipper2.Path64, len(p))
-		for i, pt := range p {
-			cPoly[i] = clipper2.Point64{
-				X: int64(pt.X * scale),
-				Y: int64(pt.Y * scale),
-			}
-		}
-		currentLayer = append(currentLayer, cPoly)
-	}
+	currentLayer := toPaths64(paths)
 
 	var pocketPaths []geom.Path
 
@@ -120,17 +81,7 @@ func GeneratePocket(paths []geom.Path, toolRadius float64, stepOver float64) []g
 
 	// Loop: Recursive StepOver
 	for len(currentLayer) > 0 {
-		// Convert current layer to Geom for output
-		for _, cPoly := range currentLayer {
-			var gPoly geom.Path
-			for _, pt := range cPoly {
-				gPoly = append(gPoly, geom.Point{
-					X: float64(pt.X) / scale,
-					Y: float64(pt.Y) / scale,
-				})
-			}
-			pocketPaths = append(pocketPaths, gPoly)
-		}
+		pocketPaths = append(pocketPaths, fromPaths64(currentLayer)...)
 
 		// Calculate Next Layer
 		coNext := clipper2.NewClipperOffset(2.0, 0.25, false, false)
@@ -143,4 +94,30 @@ func GeneratePocket(paths []geom.Path, toolRadius float64, stepOver float64) []g
 	}
 
 	return pocketPaths
+}
+
+// toPaths64 rounds coordinates to whole Clipper units: truncating would move every point up to
+// one unit towards the origin.
+func toPaths64(paths []geom.Path) clipper2.Paths64 {
+	out := make(clipper2.Paths64, 0, len(paths))
+	for _, p := range paths {
+		c := make(clipper2.Path64, len(p))
+		for i, pt := range p {
+			c[i] = clipper2.Point64{X: int64(math.Round(pt.X * scale)), Y: int64(math.Round(pt.Y * scale))}
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
+func fromPaths64(paths clipper2.Paths64) []geom.Path {
+	var out []geom.Path
+	for _, c := range paths {
+		p := make(geom.Path, len(c))
+		for i, pt := range c {
+			p[i] = geom.Point{X: float64(pt.X) / scale, Y: float64(pt.Y) / scale}
+		}
+		out = append(out, p)
+	}
+	return out
 }

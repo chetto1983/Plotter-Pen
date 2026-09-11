@@ -71,7 +71,7 @@ tools/s7sim/                  # S7-1500 OPC UA simulator (Python, not part of Co
 | Path Optimizer | `internal/service/plc/optimizer.go` | Done | Nearest-neighbor ordering |
 | PLC Extractor | `internal/service/plc/extractor.go` | Done | J/L/A/WAIT with Z-axis |
 | G-Code Gen | `pkg/gcode/generator.go` | Unused | G0/G1/G2/G3 and M30; no current endpoint uses it (used by the CAM removed in `7ad8c8f`) |
-| Clipper2 | `pkg/clipper/adapter.go` | Unused | Single-path offsets and concentric pockets on go-clipper2 v1.3.0; no current endpoint uses it (used by the CAM removed in `7ad8c8f`) |
+| Clipper2 | `pkg/clipper/adapter.go` | Unused | On go-clipper2 v1.3.0: single-path offsets, concentric pockets, and `OffsetContours` (whole contour set merged even-odd, then offset with 5 µm arcs); no current endpoint uses it |
 | Contour Chaining | `internal/service/cam/chain.go` | Unused | Joins primitives into closed contours (ends within 0.01 mm, arcs split at 5 µm, no joint where three or more ends meet); no endpoint uses it yet |
 
 ### OPC UA (Complete)
