@@ -83,6 +83,7 @@ plotter-pen/
 │   ├── service/
 │   │   ├── import/       # DXF, SVG, STL parsers, spline sampling, arc fitting
 │   │   ├── plc/          # PLC command generation, path ordering
+│   │   ├── cam/          # Contour chaining for milling (not used by current endpoints)
 │   │   └── opcua/        # OPC UA client, configuration, chunked transfer
 │   ├── persistence/      # SQLite + GORM
 │   ├── middleware/       # CORS, security headers, logging, rate limiting
