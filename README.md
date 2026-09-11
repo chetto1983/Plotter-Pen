@@ -182,6 +182,21 @@ go test -tags=s7sim -run S7Sim -v ./internal/service/opcua/
 
 ## Development
 
+### Quality Gates
+
+```bash
+make tools    # golangci-lint, deadcode, govulncheck, lefthook, ... (same list as D:\Aura)
+make hooks    # lefthook install
+make quality  # vet, lint, deadcode, tagged-tier compile, tests, govulncheck, eslint
+```
+
+Git hooks (`lefthook.yml`):
+
+- **pre-commit**: gofmt on staged Go files (re-staged), `go vet` and golangci-lint on the touched packages (lint blocks only issues on lines changed since `HEAD`), 600-line cap on added Go/JS files.
+- **pre-push**: `go build`, compile the `integration`/`s7sim` test files without running them, deadcode, eslint when `src/` changed.
+
+`make lint` and `make file-size` sweep the whole tree. `make test-race` needs cgo and a 64-bit C compiler.
+
 ### Key Algorithms
 
 - **Arc Fitting** (`internal/service/import/dxf.go`, `internal/service/plc/fit.go`): greedy fitting of arcs and lines through three-point circles; behaviour and limits in [docs/ARC_FITTING_IMPLEMENTATION.md](docs/ARC_FITTING_IMPLEMENTATION.md)

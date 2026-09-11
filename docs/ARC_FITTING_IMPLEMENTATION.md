@@ -1,6 +1,6 @@
 # Arc Fitting — Current Implementation
 
-**Last verified:** 2026-09-11 against commit `de4c0ce`
+**Last verified:** 2026-09-11 (after commit `97371a5`)
 
 This document describes how the code turns point sequences into arcs and lines today. The Taubin + RANSAC fitter described in earlier versions of this file (and in [ARC_FIX_VALIDATION.md](ARC_FIX_VALIDATION.md)) lived in `internal/service/import/arc_fitting.go` and was removed in commit `71be963`.
 
@@ -8,7 +8,7 @@ This document describes how the code turns point sequences into arcs and lines t
 
 ## Algorithm
 
-Two copies of the same greedy algorithm exist:
+Two copies of the greedy algorithm exist; they differ only in the arc acceptance test:
 
 | Function | File | Callers |
 |----------|------|---------|
@@ -17,7 +17,7 @@ Two copies of the same greedy algorithm exist:
 
 For each start index `i`:
 
-1. For every `j` from `i+2` up to `i+349`, build the circle through points `i`, `(i+j)/2` and `j`. Accept it when every vertex from `i` to `j` lies within the tolerance of the circle and the radius is between 0.005 and 1,000,000 mm. Keep the longest accepted arc.
+1. For every `j` from `i+2` up to `i+349`, build the circle through points `i`, `(i+j)/2` and `j`. Accept it when every vertex from `i` to `j` lies within the tolerance of the circle and the radius is between 0.005 and 1,000,000 mm; `FitArcsAndLines` also requires the midpoint of every chord between consecutive points to lie within the tolerance. Keep the longest accepted arc.
 2. If no arc is accepted, extend a line from `i` while every intermediate vertex stays within the tolerance of the chord (up to 119 points ahead).
 
 Closed DXF curves are first tested as full circles (`detectCircle`): at least 10 points, circle through three samples, every point within 1% of the radius.
@@ -51,8 +51,8 @@ The PLC extractor emits `A X…, Y…, Z…, I…, J…, V…`, where `I`/`J` is
 
 Verified on 2026-09-11.
 
-1. **False arcs on sparse polylines.** Three points always define a circle and only the vertices are checked, so any three non-collinear vertices are accepted as an arc, and so are four concyclic ones (every rectangle). Example: `FitArcsAndLines` on the closed rectangle (3,3)–(97,3)–(97,47)–(3,47) with tolerance 0.01 returns one arc of radius 51.894 (the circumcircle) and one line, up to 29.9 mm away from the rectangle. On tool-offset paths computed with Clipper2 for `L28YO-tree-of-life-wall-spiritual-art.dxf`, the deviation reached 1.5 mm. The import is not affected in practice because it only fits densely sampled curves. A spike showed that additionally requiring every chord midpoint within tolerance and a consistent turning direction keeps the deviation at 0.011 mm (tolerance 0.01) with about 5% more segments; this change is not applied yet.
-2. **`FitSegment` carries no direction.** Callers must take the direction from the source points (the through point). Deriving it from the cross product of the start and end radii is wrong for arcs larger than 180°.
+1. **False arcs on sparse polylines in `fitArcsToPoints`.** Three points always define a circle and the import copy checks only the vertices, so any three non-collinear vertices are accepted as an arc, and so are four concyclic ones (every rectangle): the closed rectangle (3,3)–(97,3)–(97,47)–(3,47) at tolerance 0.01 becomes one arc of radius 51.894 (the circumcircle) and one line, up to 29.9 mm away from the rectangle. The import is not affected in practice because it only fits densely sampled curves. `FitArcsAndLines` checks the chord midpoints and returns the four sides as lines; on the Clipper2 tool paths of `L28YO-tree-of-life-wall-spiritual-art.dxf` (tools Ø2, Ø3 and Ø6, tolerance 0.01) its maximum deviation is 0.011 mm, where the vertex-only check reached 1.5 mm. Adding a turning-direction check left the deviation unchanged and only added segments, so it is not applied.
+2. **`FitSegment` carries no direction.** Callers must take the direction from the source points (the through point). Deriving it from the cross product of the start and end radii is wrong for arcs larger than 180°: on the tree-of-life tool paths this happens to 1 arc in about 2000.
 3. **Bulges are ignored** in `LWPOLYLINE` and `POLYLINE`, so their arc segments arrive as straight chords.
 4. **Fixed import tolerance:** 0.05 mm, whatever the request options say.
 

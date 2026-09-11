@@ -1,0 +1,64 @@
+version: "2"
+
+# Same linter set as D:\Aura. Exclusions are limited to what exists in this repo.
+
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+  tests: true
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - misspell
+    - gosec
+    - revive
+    - dupl
+    # modernize: the Go 1.21+ simplifications (min/max, slices/maps helpers,
+    # range-over-int, strings.Cut, any).
+    - modernize
+
+  settings:
+    gosec:
+      # G115 (integer overflow on conversions) is noisy on safe numeric sources.
+      excludes:
+        - G115
+
+    dupl:
+      # Token threshold: catches a real copy-pasted block without flagging short
+      # constructors. Table-driven test boilerplate is excluded via rules below.
+      threshold: 100
+
+    revive:
+      rules:
+        - name: exported
+          arguments:
+            - "disableStutteringCheck"
+
+  exclusions:
+    paths:
+      - "node_modules" # npm packages can ship Go examples
+    rules:
+      - path: _test\.go
+        linters:
+          - gosec
+          - errcheck
+          - dupl # table-driven test cases are intentionally repetitive
+      - path: _test\.go
+        # SA5011 (possible nil deref) fires after `if x == nil { t.Fatal(...) }`
+        # because staticcheck does not model testing.T.Fatal as no-return.
+        text: SA5011
+        linters:
+          - staticcheck
+
+formatters:
+  enable:
+    - gofmt
+  exclusions:
+    paths:
+      - "node_modules"

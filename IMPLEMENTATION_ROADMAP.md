@@ -64,10 +64,10 @@ tools/s7sim/                  # S7-1500 OPC UA simulator (Python, not part of Co
 | DXF Export | – | Removed | Removed in commit `15f072e` |
 | SVG Import | `internal/service/import/svg.go` | Done | Parse SVG paths with arc fitting |
 | B-Spline | `internal/service/import/spline.go` | Done | De Boor algorithm, 800-point sampling |
-| Arc Fitting | `internal/service/import/dxf.go`, `internal/service/plc/fit.go` | Done | Greedy 3-point circle fitting; produces false arcs on sparse polylines, see [docs/ARC_FITTING_IMPLEMENTATION.md](docs/ARC_FITTING_IMPLEMENTATION.md) |
+| Arc Fitting | `internal/service/import/dxf.go`, `internal/service/plc/fit.go` | Done | Greedy 3-point circle fitting; `fit.go` also checks chord midpoints, the import copy still produces false arcs on sparse polylines, see [docs/ARC_FITTING_IMPLEMENTATION.md](docs/ARC_FITTING_IMPLEMENTATION.md) |
 | Path Optimizer | `internal/service/plc/optimizer.go` | Done | Nearest-neighbor ordering |
 | PLC Extractor | `internal/service/plc/extractor.go` | Done | J/L/A/WAIT with Z-axis |
-| G-Code Gen | `pkg/gcode/generator.go` | Unused | G0/G1/G2/G3/G4 and M30; no current endpoint uses it (used by the CAM removed in `7ad8c8f`) |
+| G-Code Gen | `pkg/gcode/generator.go` | Unused | G0/G1/G2/G3 and M30; no current endpoint uses it (used by the CAM removed in `7ad8c8f`) |
 | Clipper2 | `pkg/clipper/adapter.go` | Unused | Single-path offsets and concentric pockets on go-clipper2 v1.3.0; no current endpoint uses it (used by the CAM removed in `7ad8c8f`) |
 
 ### OPC UA (Complete)
@@ -164,19 +164,19 @@ docker compose up --build
 
 ## Code Metrics
 
-Tracked Go files; lines include comments and blank lines. Measured on 2026-09-11 with `git ls-files` and `wc -l`.
+Go files outside `node_modules`; lines include comments and blank lines. Measured on 2026-09-11 with `git ls-files` and `wc -l`.
 
 | Category | Files | Lines |
 |----------|-------|-------|
 | Handlers | 6 | 1,593 |
-| Services | 19 | 6,287 |
-| Packages (`pkg/`) | 4 | 421 |
+| Services | 19 | 6,194 |
+| Packages (`pkg/`) | 4 | 413 |
 | Middleware | 6 | 655 |
 | Persistence | 1 | 306 |
-| System | 3 | 388 |
+| System | 3 | 376 |
 | Entry point (`cmd/`) | 1 | 108 |
-| Tests | 21 | 6,741 |
-| **Total Go** | **61** | **16,499** |
+| Tests | 22 | 6,812 |
+| **Total Go** | **62** | **16,457** |
 
 ---
 

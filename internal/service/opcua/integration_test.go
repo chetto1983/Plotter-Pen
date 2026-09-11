@@ -4,11 +4,34 @@ package opcua
 
 import (
 	"context"
+	"encoding/json"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/gopcua/opcua"
 )
+
+// configManagerFromFile seeds an in-memory database with an opcua_config.json-style file and
+// returns a ConfigManager on it: the configuration now lives in SQLite, but these real-PLC
+// tests still take theirs from the file.
+func configManagerFromFile(t *testing.T, path string) *ConfigManager {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	var cfg Config
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		t.Fatalf("parse %s: %v", path, err)
+	}
+	dbCfg := configToDBConfig(cfg)
+	dbCfg.Name = "integration"
+	dbCfg.IsActive = true
+	db := setupTestDB(t)
+	seedTestConfig(db, dbCfg)
+	return NewConfigManager(db)
+}
 
 // TestPLCEndpointDiscovery discovers available OPC UA endpoints
 func TestPLCEndpointDiscovery(t *testing.T) {
@@ -36,8 +59,7 @@ func TestPLCEndpointDiscovery(t *testing.T) {
 // TestPLCConnection tests real PLC connection
 // Run with: go test -tags=integration ./internal/service/opcua/...
 func TestPLCConnection(t *testing.T) {
-	configFile := "../../../opcua_config.json"
-	configMgr := NewConfigManager(configFile)
+	configMgr := configManagerFromFile(t, "../../../opcua_config.json")
 	cfg := configMgr.Get()
 
 	t.Logf("Testing connection to: %s", cfg.Endpoint)
@@ -87,8 +109,7 @@ func TestPLCConnection(t *testing.T) {
 
 // TestPLCReadDataNode tests reading the data node
 func TestPLCReadDataNode(t *testing.T) {
-	configFile := "../../../opcua_config.json"
-	configMgr := NewConfigManager(configFile)
+	configMgr := configManagerFromFile(t, "../../../opcua_config.json")
 	cfg := configMgr.Get()
 
 	client := NewClient(configMgr)
@@ -114,8 +135,7 @@ func TestPLCReadDataNode(t *testing.T) {
 func TestPLCWriteSimple(t *testing.T) {
 	t.Skip("Skipping write test - uncomment to run manually")
 
-	configFile := "../../../opcua_config.json"
-	configMgr := NewConfigManager(configFile)
+	configMgr := configManagerFromFile(t, "../../../opcua_config.json")
 	cfg := configMgr.Get()
 
 	client := NewClient(configMgr)

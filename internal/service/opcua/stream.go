@@ -131,20 +131,6 @@ func (s *PositionStream) IsRunning() bool {
 	return s.running
 }
 
-// SetInterval updates the polling interval
-func (s *PositionStream) SetInterval(intervalMs int) {
-	interval := time.Duration(intervalMs) * time.Millisecond
-	if interval < 50*time.Millisecond {
-		interval = 50 * time.Millisecond
-	}
-	if interval > 1000*time.Millisecond {
-		interval = 1000 * time.Millisecond
-	}
-	s.mu.Lock()
-	s.interval = interval
-	s.mu.Unlock()
-}
-
 func (s *PositionStream) setRunning(running bool) {
 	s.mu.Lock()
 	s.running = running

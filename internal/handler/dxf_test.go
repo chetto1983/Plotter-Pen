@@ -237,60 +237,6 @@ func TestSmartImport_RawTextPlain_InvalidDXF(t *testing.T) {
 	}
 }
 
-// === ExportDXF Tests ===
-
-func TestExportDXF_Valid(t *testing.T) {
-	r := setupDXFRouter()
-
-	body := map[string]interface{}{
-		"primitives": []map[string]interface{}{
-			{"type": "line", "x1": 0, "y1": 0, "x2": 100, "y2": 100},
-		},
-		"options": map[string]string{"version": "AC2000", "units": "mm"},
-	}
-	jsonBody, _ := json.Marshal(body)
-
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("POST", "/api/export-dxf", bytes.NewBuffer(jsonBody))
-	req.Header.Set("Content-Type", "application/json")
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("Status = %d, want 200, body: %s", w.Code, w.Body.String())
-	}
-}
-
-func TestExportDXF_Empty(t *testing.T) {
-	r := setupDXFRouter()
-
-	body := map[string]interface{}{
-		"primitives": []interface{}{},
-	}
-	jsonBody, _ := json.Marshal(body)
-
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("POST", "/api/export-dxf", bytes.NewBuffer(jsonBody))
-	req.Header.Set("Content-Type", "application/json")
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("Status = %d, want 400 for empty primitives", w.Code)
-	}
-}
-
-func TestExportDXF_MissingPrimitives(t *testing.T) {
-	r := setupDXFRouter()
-
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("POST", "/api/export-dxf", bytes.NewBufferString(`{}`))
-	req.Header.Set("Content-Type", "application/json")
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("Status = %d, want 400", w.Code)
-	}
-}
-
 // === ParseSTL Tests ===
 
 func TestParseSTL_ValidASCII(t *testing.T) {

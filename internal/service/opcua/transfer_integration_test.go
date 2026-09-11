@@ -1,4 +1,4 @@
-// +build integration
+//go:build integration
 
 package opcua
 
@@ -34,7 +34,7 @@ func getConfigPath() string {
 // Run with: go test -tags=integration -v ./internal/service/opcua/... -run TestChunkedTransfer_RealPLC
 func TestChunkedTransfer_RealPLC(t *testing.T) {
 	// Load config from file
-	configMgr := NewConfigManager(getConfigPath())
+	configMgr := configManagerFromFile(t, getConfigPath())
 	cfg := configMgr.Get()
 
 	t.Logf("Connecting to PLC at %s", cfg.Endpoint)
@@ -132,7 +132,7 @@ func TestChunkedTransfer_RealPLC(t *testing.T) {
 
 // TestChunkedTransfer_SmallBatch tests with a single chunk
 func TestChunkedTransfer_SmallBatch_RealPLC(t *testing.T) {
-	configMgr := NewConfigManager(getConfigPath())
+	configMgr := configManagerFromFile(t, getConfigPath())
 	cfg := configMgr.Get()
 
 	client := NewClient(configMgr)
@@ -182,7 +182,7 @@ func TestChunkedTransfer_SmallBatch_RealPLC(t *testing.T) {
 
 // TestChunkedTransfer_Cancel tests cancellation
 func TestChunkedTransfer_Cancel_RealPLC(t *testing.T) {
-	configMgr := NewConfigManager(getConfigPath())
+	configMgr := configManagerFromFile(t, getConfigPath())
 	cfg := configMgr.Get()
 
 	client := NewClient(configMgr)
@@ -233,7 +233,7 @@ func TestChunkedTransfer_Cancel_RealPLC(t *testing.T) {
 
 // TestReadWriteBool_RealPLC tests direct bool node read/write
 func TestReadWriteBool_RealPLC(t *testing.T) {
-	configMgr := NewConfigManager(getConfigPath())
+	configMgr := configManagerFromFile(t, getConfigPath())
 	cfg := configMgr.Get()
 
 	client := NewClient(configMgr)
@@ -399,7 +399,7 @@ func TestReadWriteBool_RealPLC(t *testing.T) {
 
 // TestBrowseNodes_RealPLC browses PLC nodes to find correct IDs
 func TestBrowseNodes_RealPLC(t *testing.T) {
-	configMgr := NewConfigManager(getConfigPath())
+	configMgr := configManagerFromFile(t, getConfigPath())
 	cfg := configMgr.Get()
 
 	client := NewClient(configMgr)
@@ -459,7 +459,7 @@ func TestBrowseNodes_RealPLC(t *testing.T) {
 
 // TestDiscoverNodes_RealPLC discovers available nodes in PLC
 func TestDiscoverNodes_RealPLC(t *testing.T) {
-	configMgr := NewConfigManager(getConfigPath())
+	configMgr := configManagerFromFile(t, getConfigPath())
 
 	client := NewClient(configMgr)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -474,10 +474,10 @@ func TestDiscoverNodes_RealPLC(t *testing.T) {
 
 	// Browse from Objects folder (i=85) which contains application-specific nodes
 	browseNodes := []string{
-		"i=85",        // Objects folder
-		"ns=4;i=1",    // Namespace 4 root (Db_Punti)
-		"ns=4;i=79",   // Pos node
-		"ns=4;i=93",   // PointArr node
+		"i=85",      // Objects folder
+		"ns=4;i=1",  // Namespace 4 root (Db_Punti)
+		"ns=4;i=79", // Pos node
+		"ns=4;i=93", // PointArr node
 	}
 
 	for _, nodeID := range browseNodes {
@@ -495,7 +495,7 @@ func TestDiscoverNodes_RealPLC(t *testing.T) {
 
 // TestWriteStringArray_RealPLC tests string array write
 func TestWriteStringArray_RealPLC(t *testing.T) {
-	configMgr := NewConfigManager(getConfigPath())
+	configMgr := configManagerFromFile(t, getConfigPath())
 	cfg := configMgr.Get()
 
 	client := NewClient(configMgr)

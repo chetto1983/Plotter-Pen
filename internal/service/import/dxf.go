@@ -460,11 +460,6 @@ func GetLayerNames(prims []Primitive) []string {
 	return names
 }
 
-// GetSupportedFormats returns supported DXF versions.
-func GetSupportedFormats() []string {
-	return []string{"AC2000"}
-}
-
 // detectUnitsScale parses DXF content to detect units and returns scale factor to mm.
 func detectUnitsScale(content string) float64 {
 	idx := strings.Index(content, "$INSUNITS")

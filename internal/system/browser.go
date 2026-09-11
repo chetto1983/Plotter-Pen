@@ -23,11 +23,6 @@ func DefaultBrowserConfig() BrowserConfig {
 	}
 }
 
-// OpenBrowser opens the default system browser to the given URL
-func OpenBrowser(url string) error {
-	return OpenBrowserWithConfig(url, DefaultBrowserConfig())
-}
-
 // OpenBrowserWithConfig opens browser with custom configuration
 func OpenBrowserWithConfig(url string, cfg BrowserConfig) error {
 	if !cfg.Enabled {
@@ -39,13 +34,6 @@ func OpenBrowserWithConfig(url string, cfg BrowserConfig) error {
 	}
 
 	return openURL(url, cfg.Browser)
-}
-
-// OpenBrowserAsync opens browser in a goroutine
-func OpenBrowserAsync(url string) {
-	go func() {
-		OpenBrowser(url)
-	}()
 }
 
 // openURL opens a URL in the browser

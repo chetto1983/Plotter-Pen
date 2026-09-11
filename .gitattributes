@@ -1,0 +1,30 @@
+# Store and check out LF on every platform (same policy as D:\Aura). Stops the CRLF churn of
+# core.autocrlf on Windows, where gofmt flags every CRLF file, and keeps shell scripts
+# runnable in the Linux container.
+* text=auto eol=lf
+
+# Scripts and Go must always be LF regardless of autocrlf.
+*.sh     text eol=lf
+*.go     text eol=lf
+Makefile text eol=lf
+
+go.sum linguist-generated=true
+
+# Binary files: never convert line endings, never diff as text.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.pdf   binary
+*.gz    binary
+*.zip   binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary
+*.eot   binary
+*.webp  binary
+*.wasm  binary
+*.db    binary
+*.der   binary

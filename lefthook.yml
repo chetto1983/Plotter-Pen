@@ -1,0 +1,43 @@
+# Local git hooks (https://lefthook.dev), set up like D:\Aura's. They run a fast subset of
+# `make quality`, which is the full sweep (this repo has no CI).
+#
+# Install once per clone:  lefthook install   (binaries: `make tools`)
+# Bypass in an emergency:  git commit --no-verify   /   git push --no-verify
+#
+# Tests that talk to a real PLC or to tools/s7sim (build tags integration, s7sim) never run
+# here: pre-push only compiles them.
+
+pre-commit:
+  parallel: true
+  commands:
+    gofmt:
+      glob: "*.go"
+      # Script (not inline) so gofmt resolves through the Go toolchain under Git Bash too.
+      run: bash scripts/gofmt-staged.sh {staged_files}
+      stage_fixed: true
+    vet:
+      glob: "*.go"
+      run: bash scripts/vet-staged.sh {staged_files}
+    # Only issues on changed lines block the commit; see scripts/lint-staged.sh.
+    lint:
+      glob: "*.go"
+      run: bash scripts/lint-staged.sh {staged_files}
+    # AGENTS.md caps new code files at 600 lines, so only added files are checked.
+    file-size:
+      glob: "*.{go,js}"
+      files: git diff --cached --name-only --diff-filter=A
+      run: bash scripts/check-file-size.sh {files}
+
+pre-push:
+  parallel: true
+  commands:
+    build:
+      run: bash -c 'go build $(bash scripts/go_packages.sh)'
+    tagged-tier-compile:
+      run: bash scripts/tagged_tier_compile.sh
+    deadcode:
+      run: bash scripts/deadcode_pre_push.sh
+    # Frontend gate: eslint on src/ (warnings do not fail it). Skipped when src/ is untouched.
+    web:
+      glob: "src/**"
+      run: npm run lint
