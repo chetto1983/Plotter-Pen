@@ -10,7 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// DXFHandler handles DXF/SVG/STL import/export endpoints
+// DXFHandler handles DXF/SVG/STL import endpoints
 type DXFHandler struct{}
 
 // NewDXFHandler creates a new DXF handler
@@ -148,8 +148,8 @@ func (h *DXFHandler) SmartImport(c *gin.Context) {
 			Normalize:    false,
 			CenterOrigin: true,
 			ExtractPLC:   false,
-			FitArcs:      true, // ENABLED: Robust Taubin+RANSAC arc fitting
-			ArcTolerance: 0.1,  // 0.1mm tolerance
+			FitArcs:      true, // not read by the DXF path: closed SPLINEs always use ArcFitTolerance
+			ArcTolerance: 0.1,  // not read by the DXF path
 		}
 	} else {
 		// Handle JSON body

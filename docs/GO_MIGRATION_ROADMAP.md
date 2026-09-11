@@ -1,5 +1,7 @@
 # Go Backend Migration Roadmap
 
+> **Historical plan (last updated 2026-01-16), not current.** The Node.js → Go migration is done. Since then the CAM integration (Phase 5: `/api/cam/*`, `cam_settings`, `internal/service/cam`) was removed in commits `7ad8c8f` and `99cb039`, DXF export (`/api/export-dxf`) in `15f072e`, and `pkg/curve` no longer exists. Coverage figures date from 2026-01-16. For the current architecture and API see [README.md](../README.md) and [IMPLEMENTATION_ROADMAP.md](../IMPLEMENTATION_ROADMAP.md).
+
 ## SCOPE
 
 - **Migration Scope:** Backend Only (Node.js → Go)

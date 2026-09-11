@@ -1,238 +1,79 @@
-# Arc Fitting Implementation - Complete
+# Arc Fitting — Current Implementation
 
-**Date:** 2026-01-18
-**Status:** ✅ Production Ready
+**Last verified:** 2026-09-11 against commit `de4c0ce`
 
-## Summary
-
-Successfully implemented robust **Taubin circle fitting + RANSAC** algorithm to detect circular arcs in tessellated polylines from DXF imports. The system now generates true **arc commands (A)** instead of line segments for PLC output.
+This document describes how the code turns point sequences into arcs and lines today. The Taubin + RANSAC fitter described in earlier versions of this file (and in [ARC_FIX_VALIDATION.md](ARC_FIX_VALIDATION.md)) lived in `internal/service/import/arc_fitting.go` and was removed in commit `71be963`.
 
 ---
 
-## Results
+## Algorithm
 
-### DXF Import: Laser Cut Modern Love Theme Wall Clock
+Two copies of the same greedy algorithm exist:
 
-| Metric | Before | After | Improvement |
-|--------|--------|-------|-------------|
-| **Primitives** | 77 polylines | 4,619 arcs + 925 lines | 83% arc conversion |
-| **PLC Commands** | All L (lines) | 50 A (arcs) from 50 primitives | 100% arc generation |
-| **Arc Detection** | None | Taubin + RANSAC | Robust algorithm |
+| Function | File | Callers |
+|----------|------|---------|
+| `fitArcsToPoints` | `internal/service/import/dxf.go` | DXF and SVG import |
+| `FitArcsAndLines` | `internal/service/plc/fit.go` | None in production code since the CAM removal (`7ad8c8f`) |
 
-### PLC Output Sample
+For each start index `i`:
 
-```
-J X 7.605, Y 82.690, Z 5.000, V 1000.000
-WAIT 200
-L X 7.605, Y 82.690, Z -2.000, V 100.000
-A X 20.005, Y 82.830, Z -2.000, I 69.978, J 143.099, V 100.000
-J X 20.005, Y 82.830, Z 5.000, V 1000.000
-```
+1. For every `j` from `i+2` up to `i+349`, build the circle through points `i`, `(i+j)/2` and `j`. Accept it when every vertex from `i` to `j` lies within the tolerance of the circle and the radius is between 0.005 and 1,000,000 mm. Keep the longest accepted arc.
+2. If no arc is accepted, extend a line from `i` while every intermediate vertex stays within the tolerance of the chord (up to 119 points ahead).
 
-**Features:**
-- ✅ Arc commands with I,J midpoint parameters
-- ✅ 3D interpolation (Z on every command)
-- ✅ WAIT commands after Z movements
-- ✅ No linearization (true arcs preserved)
+Closed DXF curves are first tested as full circles (`detectCircle`): at least 10 points, circle through three samples, every point within 1% of the radius.
 
 ---
 
-## Implementation Details
+## Where It Runs
 
-### Algorithm: Taubin Circle Fitting
+| Input | Behaviour |
+|-------|-----------|
+| DXF `SPLINE`, closed | Sampled at 800 points (De Boor). Becomes a circle if `detectCircle` succeeds; otherwise `fitArcsToPoints` with `ArcFitTolerance` (0.05 mm), kept only when it yields fewer segments than half the samples (a closing line is added when the ends are more than 0.1 mm apart); otherwise a polygon simplified at 0.02 mm |
+| DXF `SPLINE`, open | Polyline simplified at 0.02 mm, no fitting |
+| DXF `LINE`, `ARC`, `CIRCLE` | Native primitives, no fitting |
+| DXF `LWPOLYLINE`, `POLYLINE` | Polyline or polygon from the vertices, no fitting; bulge values are ignored |
+| SVG curves | `fitArcsToPoints` when the `fitArcs` option is true (straight subsegments are split out at parse time) |
+| `/api/plc/extract` | No fitting: polylines and polygons become `L` commands |
 
-**Based on:** "Error analysis for circle fitting algorithms" by Chernov & Lesort
-**Reference:** https://people.cas.uab.edu/~mosya/cl/CPPcircle.html
-
-**Method:**
-1. Calculate centroid and center coordinates
-2. Compute moments (Mxx, Myy, Mxy, Mxz, Myz, Mzz)
-3. Solve polynomial system using Newton's method
-4. Extract circle center and radius from solution
-
-**Advantages:**
-- Algebraic (non-iterative for fitting step)
-- Statistically optimal for Gaussian noise
-- Numerically stable
-- Industry-proven algorithm
-
-### RANSAC Detection
-
-**Parameters:**
-- **Min points:** 3 (minimum for circle)
-- **Max iterations:** 20 per segment
-- **Inlier threshold:** 90% of points within tolerance
-- **Tolerance:** 0.1mm (configurable)
-- **Max radius:** 10,000mm (prevents degenerate circles)
-
-**Process:**
-1. Try different arc lengths (3-50 points)
-2. For each length, run 20 RANSAC iterations
-3. Sample 3 random points, fit circle using Taubin
-4. Count inliers (points within tolerance)
-5. Accept arc if ≥90% inlier ratio
-6. Keep longest valid arc
+`ImportOptions.FitArcs` and `ImportOptions.ArcTolerance` are not read by the DXF path (`SmartImport`), even though `internal/handler/dxf.go` sets them for raw `text/plain` requests. The SVG path reads `FitArcs` but not `ArcTolerance`.
 
 ---
 
-## Files Modified
+## Output
 
-### Backend (Go)
+The import JSON (`internal/service/import/primitive_json.go`) writes arcs as `ax`, `ay` (start), `bx`, `by` (end), `cx`, `cy`, `radius`, `startAngle` and `sweep` (radians, negative = clockwise), plus `throughPoint` (the middle sample of the fitted span). Lines use `x1`, `y1`, `x2`, `y2`.
 
-| File | Changes | Lines |
-|------|---------|-------|
-| `internal/service/import/arc_fitting.go` | Complete rewrite with Taubin+RANSAC | 256 |
-| `internal/service/import/dxf.go` | Enable arc fitting by default | 1 |
-| `internal/service/plc/types.go` | Custom JSON unmarshaling for field aliases | 40 |
-| `internal/handler/dxf.go` | Set FitArcs: true | 1 |
-
-### Total: ~300 lines
-
----
-
-## Configuration
-
-### DXF Import Options
-
-```go
-opts := importservice.ImportOptions{
-    Normalize:    false,          // Preserve mm units
-    CenterOrigin: true,            // Center at origin
-    ExtractPLC:   false,           // Extract on demand
-    FitArcs:      true,            // ✅ ENABLED: Arc fitting
-    ArcTolerance: 0.1,             // 0.1mm tolerance
-}
-```
-
-### PLC Settings (UI)
-
-- **Work Speed:** 100 mm/min
-- **Rapid Speed:** 1000 mm/min
-- **Safe Z:** 5 mm
-- **Work Z:** -2 mm
-- **Wait Time:** 200 ms
-
----
-
-## Verification Steps
-
-### 1. Import DXF with Arc Fitting
-
-```bash
-curl -X POST http://localhost:8000/api/smart-import \
-  -H "Content-Type: text/plain" \
-  --data-binary "@DXF/Laser Cut Modern Love Theme Wall Clock.dxf"
-```
-
-**Expected:** 4,619 arcs + 925 lines
-
-### 2. Extract PLC Commands
-
-```bash
-curl -X POST http://localhost:8000/api/plc/extract \
-  -H "Content-Type: application/json" \
-  -d '{
-    "primitives": [<arc_primitives>],
-    "defaultSpeed": 100,
-    "rapidSpeed": 1000,
-    "safeZ": 5,
-    "workZ": -2,
-    "waitTime": 200
-  }'
-```
-
-**Expected:** A commands with I,J parameters
-
-### 3. Browser UI Test
-
-1. Open http://localhost:8000/plotter_pen.html
-2. Import DXF file through UI
-3. Verify rendering is correct (not broken)
-4. Click "Estrai PLC"
-5. Verify output shows A commands
-
----
-
-## Technical Notes
-
-### JSON Field Mapping
-
-The system handles both field name formats:
-
-| DXF/Frontend | Internal PLC | Handled By |
-|--------------|--------------|------------|
-| `startX` | `x1` | UnmarshalJSON |
-| `startY` | `y1` | UnmarshalJSON |
-| `endX` | `x2` | UnmarshalJSON |
-| `endY` | `y2` | UnmarshalJSON |
-| `centerX` | `cx` | UnmarshalJSON |
-| `centerY` | `cy` | UnmarshalJSON |
-
-Custom `UnmarshalJSON` method in `internal/service/plc/types.go` provides transparent conversion.
-
-### Arc I,J Parameters
-
-The **midpoint on the arc** is calculated for 3D interpolation:
-
-```go
-midAngle := startAngle + sweep/2  // (or startAngle - sweep/2 for CW)
-mid := geom.Point{
-    X: center.X + radius*math.Cos(midAngle),
-    Y: center.Y + radius*math.Sin(midAngle),
-}
-```
-
-This ensures smooth arc motion with proper direction.
-
----
-
-## Performance
-
-| Operation | Time |
-|-----------|------|
-| DXF Import (77 polylines) | <100ms |
-| Arc Fitting (4,619 arcs) | <200ms |
-| PLC Extraction (50 arcs) | <10ms |
-
-**Total:** Sub-second processing for typical DXF files
+The PLC extractor emits `A X…, Y…, Z…, I…, J…, V…`, where `I`/`J` is a point on the arc, not a centre offset. It uses `throughPoint` when present, otherwise the point at `startAngle + sweep/2` (`arcAuxPoint` in `internal/service/plc/extractor.go`). The frontend converts its primitives before calling `/api/plc/extract` (`primitiveToRequest` in `src/app/PLCOutputManager.js`).
 
 ---
 
 ## Known Limitations
 
-1. **Tolerance sensitivity:** Very tight tolerance (<0.05mm) may reject valid arcs
-2. **Small arcs:** Arcs with <3 points are converted to lines
-3. **Degenerate cases:** Very large radius (>10,000mm) rejected as lines
-4. **Direction detection:** Relies on point order in polyline
+Verified on 2026-09-11.
+
+1. **False arcs on sparse polylines.** Three points always define a circle and only the vertices are checked, so any three non-collinear vertices are accepted as an arc, and so are four concyclic ones (every rectangle). Example: `FitArcsAndLines` on the closed rectangle (3,3)–(97,3)–(97,47)–(3,47) with tolerance 0.01 returns one arc of radius 51.894 (the circumcircle) and one line, up to 29.9 mm away from the rectangle. On tool-offset paths computed with Clipper2 for `L28YO-tree-of-life-wall-spiritual-art.dxf`, the deviation reached 1.5 mm. The import is not affected in practice because it only fits densely sampled curves. A spike showed that additionally requiring every chord midpoint within tolerance and a consistent turning direction keeps the deviation at 0.011 mm (tolerance 0.01) with about 5% more segments; this change is not applied yet.
+2. **`FitSegment` carries no direction.** Callers must take the direction from the source points (the through point). Deriving it from the cross product of the start and end radii is wrong for arcs larger than 180°.
+3. **Bulges are ignored** in `LWPOLYLINE` and `POLYLINE`, so their arc segments arrive as straight chords.
+4. **Fixed import tolerance:** 0.05 mm, whatever the request options say.
 
 ---
 
-## Future Enhancements
+## How to Check
 
-- [ ] Adaptive tolerance based on arc size
-- [ ] Ellipse detection (currently circles only)
-- [ ] Spline/Bezier fitting for smooth curves
-- [ ] UI toggle for arc fitting on/off
-- [ ] Tolerance slider in import dialog
+```bash
+go test ./internal/service/import/... ./internal/service/plc/...
 
----
+# Local server on port 8000 (Docker Compose publishes host port 41880)
+curl -X POST http://localhost:8000/api/smart-import \
+  -H "Content-Type: text/plain" \
+  --data-binary "@dxf/L28YO-tree-of-life-wall-spiritual-art.dxf"
+```
 
-## References
-
-1. [Chernov & Lesort - Error analysis for circle fitting](https://people.cas.uab.edu/~mosya/cl/CPPcircle.html)
-2. [Taubin Circle Fit C++ Implementation](https://github.com/tomasuciu/compass)
-3. [RANSAC - Wikipedia](https://en.wikipedia.org/wiki/Random_sample_consensus)
-4. [Fisher-Yates Shuffle Algorithm](https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle)
+Reference measurement (2026-09-11, Compose deployment on port 41880): the file above (45 closed `SPLINE` entities, `$INSUNITS` = 5, centimetres) imports as 2167 primitives (2161 arcs, 6 lines) in about 0.5 s, and the arcs chain into 45 closed contours with no gaps. The `dxf/` folder is ignored by git, so the file exists only locally.
 
 ---
 
-## Conclusion
+## History
 
-The robust Taubin+RANSAC arc fitting implementation successfully converts tessellated polylines to true circular arcs, enabling:
-
-- **Smoother toolpaths** (fewer segments)
-- **Accurate PLC commands** (I,J parameters)
-- **Better machining** (continuous arc motion)
-- **Industrial-grade quality** (proven algorithms)
-
-**Status:** ✅ **Ready for production use**
+- 2026-01-18: Taubin + RANSAC fitter in `internal/service/import/arc_fitting.go`, validated in [ARC_FIX_VALIDATION.md](ARC_FIX_VALIDATION.md).
+- Commit `71be963`: that file was removed; the greedy algorithm above is what remains.

@@ -1,5 +1,7 @@
 # Arc Rendering Fix - Complete Validation
 
+> **Historical report (2026-01-18), not current.** Since then `throughX`/`throughY` were replaced by `throughPoint`, arcs are serialised as `ax`/`ay`/`bx`/`by` (`internal/service/import/primitive_json.go`), the Taubin + RANSAC fitter was removed (commit `71be963`), and `check_arc_code.html` and `test_browser_arc.html` are not in the repository. For current behaviour see [ARC_FITTING_IMPLEMENTATION.md](ARC_FITTING_IMPLEMENTATION.md).
+
 **Date:** 2026-01-18
 **Issue:** Arc rendering broken after enabling arc fitting
 **Status:** ✅ Backend fixed, browser cache issue

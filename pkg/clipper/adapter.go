@@ -7,7 +7,7 @@ import (
 )
 
 // OffsetPath offsets an open path (Polyline)
-// endType: 0=Square, 1=Round, 2=Butt
+// endType: 0=Polygon, 1=Joined, 2=Butt, 3=Square, 4=Round (go-clipper2 EndType)
 func OffsetPath(path geom.Path, delta float64, endType clipper2.EndType) []geom.Path {
 	if len(path) < 2 {
 		return nil
