@@ -44,12 +44,24 @@ Measured on `dxf/L28YO-tree-of-life-wall-spiritual-art.dxf`:
   - Order the cuts: holes before outlines, so the part stays attached until the end.
   - For every ring and every depth pass: `J` to the start at safe Z, `L` plunge at plunge speed, then the contour as `L`/`A` through `plc.FitArcsAndLines`.
   - Take the `A` through point (`I`/`J`) from the source points in the middle of the fitted span. `FitSegment` has no direction, and the start/end cross product is wrong for arcs over 180°.
-- **Settings:** tool diameter, side (inside/outside), total depth, step-down, cutting and plunge speed in mm/s (`V` is mm/s), safe Z. Profiles "on the line" come later.
-- **Defaults accepted with "proceed"** (say so if either is wrong for the real machine):
-  - Z is 0 on the stock surface and the passes go to negative Z (−step … −depth); safe Z is positive, as for the pen.
-  - Conventional cutting by default, with climb as an option. With a router spinning clockwise seen from above:
-    - conventional: outlines counterclockwise, holes clockwise;
-    - climb: the opposite.
+- **Settings: reuse what already exists** (confirmed by the user on 2026-09-11):
+  - The "Parametri Simulazione PLC" dialog (`PLCSimulationSettings`, `GET/POST /api/plc/settings`, `src/app/plcSettingsUtils.js`, modal in `src/ui/modals/Modals.js`) already holds:
+    - Velocità Lavoro: cutting speed;
+    - Velocità Rapido: `J` moves;
+    - Altezza Sicurezza: safe Z;
+    - Altezza Lavoro: Z of the stock surface, where the cut starts;
+    - Attesa Pen Down: pause after the plunge.
+
+    Speeds are in mm/s, like `V`.
+  - The tool library (`Tool`, `/api/tools`, "Usa Utensile Selezionato") already holds the tool type (endmill, ballnose, V-bit) and diameter.
+- **To add, and only this:**
+  - Total depth, step-down and plunge speed, as new fields in the same dialog and in `PLCSimulationSettings`. `AutoMigrate` adds the columns, and a default for each keeps existing databases valid.
+  - Side (inside/outside) and cutting direction, chosen when the profile is launched.
+  - Profiles "on the line" come later.
+- **Z:** the passes go from Altezza Lavoro down by the step-down until it reaches Altezza Lavoro − depth; safe Z stays above, as for the pen. No fixed zero in the code.
+- **Default direction** (taken from "proceed"): conventional cutting, with climb as an option. With a router spinning clockwise seen from above:
+  - conventional: outlines counterclockwise, holes clockwise;
+  - climb: the opposite.
 - **Endpoint:** `POST /api/cam/profile`, with the same response shape as `/api/plc/extract` (`commands`, `output`, `count`), so the existing output list, 3D simulation and send can show it. The UI is a later piece: reuse the shell of the CAM removed in `7ad8c8f` (handler, UI, tests), not its geometry.
 - **Simulator test:** an `s7sim`-tagged Go test.
   - It generates the profile of a test shape and sends it only to `S7SIM_ENDPOINT` (default `opc.tcp://127.0.0.1:4840`), never to the active PLC in the database.
