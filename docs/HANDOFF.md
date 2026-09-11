@@ -54,10 +54,10 @@ Measured on `dxf/L28YO-tree-of-life-wall-spiritual-art.dxf`:
 
     Speeds are in mm/s, like `V`.
 - **To add, and only this:**
-  - Tool diameter, total depth, step-down and plunge speed, as new fields in the same dialog and in `PLCSimulationSettings`. `AutoMigrate` adds the columns, and a default for each keeps existing databases valid.
-  - Side (inside/outside) and cutting direction, chosen when the profile is launched.
+  - Total depth, step-down and plunge speed, as new fields in the same dialog and in `PLCSimulationSettings`: they end up in the commands as Z values and `V`. `AutoMigrate` adds the columns, and a default for each keeps existing databases valid.
+  - Tool diameter, side (inside/outside) and cutting direction, as inputs of the calculation chosen when the profile is launched and sent in the `/api/cam/profile` request. The PLC never receives the diameter: it only sets the offset (radius = diameter / 2), so it does not belong in the PLC settings.
   - Profiles "on the line" come later.
-- **Tool library, later:** the tool library window (`toolLibraryModal` in `src/ui/modals/Modals.js`: type endmill/ballnose/V-bit, diameter, "Usa Utensile Selezionato") is HTML and CSS only. Its JavaScript (`src/cam/ToolLibraryManager.js`) went with the CAM removed in `7ad8c8f`, so nothing opens it or reads `/api/tools`. The backend `Tool` CRUD still works. Reviving it so that it fills the diameter field is a separate piece.
+- **Tool library, later:** the tool library window (`toolLibraryModal` in `src/ui/modals/Modals.js`: type endmill/ballnose/V-bit, diameter, "Usa Utensile Selezionato") is HTML and CSS only. Its JavaScript (`src/cam/ToolLibraryManager.js`) went with the CAM removed in `7ad8c8f`, so nothing opens it or reads `/api/tools`. The backend `Tool` CRUD still works. Reviving it so that picking a tool fills the profile's diameter is a separate piece.
 - **Z:** the passes go from Altezza Lavoro down by the step-down until it reaches Altezza Lavoro − depth; safe Z stays above, as for the pen. No fixed zero in the code.
 - **Default direction** (taken from "proceed"): conventional cutting, with climb as an option. With a router spinning clockwise seen from above:
   - conventional: outlines counterclockwise, holes clockwise;
