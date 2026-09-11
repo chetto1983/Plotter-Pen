@@ -172,15 +172,15 @@ Go files outside `node_modules`; lines include comments and blank lines. Measure
 
 | Category | Files | Lines |
 |----------|-------|-------|
-| Handlers | 6 | 1,593 |
-| Services | 19 | 6,194 |
-| Packages (`pkg/`) | 4 | 413 |
+| Handlers | 6 | 1,599 |
+| Services | 20 | 6,409 |
+| Packages (`pkg/`) | 4 | 390 |
 | Middleware | 6 | 655 |
 | Persistence | 1 | 306 |
 | System | 3 | 376 |
 | Entry point (`cmd/`) | 1 | 108 |
-| Tests | 22 | 6,812 |
-| **Total Go** | **62** | **16,457** |
+| Tests | 26 | 7,222 |
+| **Total Go** | **67** | **17,065** |
 
 ---
 
