@@ -143,10 +143,16 @@ func (wc *WSClient) writePump() {
 	for {
 		select {
 		case <-wc.done:
-			// Shutdown signal received, drain remaining messages
+			// Shutdown signal received, drain remaining messages. readPump closes send right
+			// after done: a receive from the closed channel never blocks, so without the ok
+			// check this loop would spin forever.
 			for {
 				select {
-				case msg := <-wc.send:
+				case msg, ok := <-wc.send:
+					if !ok {
+						_ = wc.conn.WriteMessage(websocket.CloseMessage, []byte{})
+						return
+					}
 					wc.conn.SetWriteDeadline(time.Now().Add(1 * time.Second))
 					_ = wc.conn.WriteJSON(msg)
 				default:

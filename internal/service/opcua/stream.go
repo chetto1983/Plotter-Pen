@@ -52,7 +52,8 @@ func NewPositionStream(client *Client, intervalMs int) *PositionStream {
 	}
 }
 
-// Start begins streaming position updates.
+// Start begins streaming position updates. A stream runs once: after Stop, even a Stop that came
+// before Start, it returns at once.
 // Connection recovery is handled by gopcua's AutoReconnect — we just monitor state.
 func (s *PositionStream) Start(ctx context.Context, send func(WSMessage)) {
 	s.mu.Lock()
@@ -62,8 +63,6 @@ func (s *PositionStream) Start(ctx context.Context, send func(WSMessage)) {
 	}
 	s.running = true
 	s.lastNotified = true // assume connected at start
-	s.stopCh = make(chan struct{})
-	s.stopOnce = sync.Once{}
 	s.mu.Unlock()
 
 	ticker := time.NewTicker(s.interval)
@@ -112,16 +111,13 @@ func (s *PositionStream) Start(ctx context.Context, send func(WSMessage)) {
 	}
 }
 
-// Stop stops the position stream
+// Stop stops the position stream. It also works before Start has run: the WebSocket handler
+// launches Start in a goroutine and may stop the stream on disconnect before it begins.
 func (s *PositionStream) Stop() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.running && s.stopCh != nil {
-		s.stopOnce.Do(func() {
-			close(s.stopCh)
-		})
-		s.running = false
-	}
+	s.stopOnce.Do(func() {
+		close(s.stopCh)
+	})
+	s.setRunning(false)
 }
 
 // IsRunning returns whether the stream is running
