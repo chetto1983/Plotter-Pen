@@ -53,11 +53,11 @@ Measured on `dxf/L28YO-tree-of-life-wall-spiritual-art.dxf`:
     - Attesa Pen Down: pause after the plunge.
 
     Speeds are in mm/s, like `V`.
-  - The tool library (`Tool`, `/api/tools`, "Usa Utensile Selezionato") already holds the tool type (endmill, ballnose, V-bit) and diameter.
 - **To add, and only this:**
-  - Total depth, step-down and plunge speed, as new fields in the same dialog and in `PLCSimulationSettings`. `AutoMigrate` adds the columns, and a default for each keeps existing databases valid.
+  - Tool diameter, total depth, step-down and plunge speed, as new fields in the same dialog and in `PLCSimulationSettings`. `AutoMigrate` adds the columns, and a default for each keeps existing databases valid.
   - Side (inside/outside) and cutting direction, chosen when the profile is launched.
   - Profiles "on the line" come later.
+- **Tool library, later:** the tool library window (`toolLibraryModal` in `src/ui/modals/Modals.js`: type endmill/ballnose/V-bit, diameter, "Usa Utensile Selezionato") is HTML and CSS only. Its JavaScript (`src/cam/ToolLibraryManager.js`) went with the CAM removed in `7ad8c8f`, so nothing opens it or reads `/api/tools`. The backend `Tool` CRUD still works. Reviving it so that it fills the diameter field is a separate piece.
 - **Z:** the passes go from Altezza Lavoro down by the step-down until it reaches Altezza Lavoro − depth; safe Z stays above, as for the pen. No fixed zero in the code.
 - **Default direction** (taken from "proceed"): conventional cutting, with climb as an option. With a router spinning clockwise seen from above:
   - conventional: outlines counterclockwise, holes clockwise;
