@@ -72,16 +72,18 @@ Measured on `dxf/L28YO-tree-of-life-wall-spiritual-art.dxf`:
 - `cam.Profile` (`internal/service/cam/profile.go`), `POST /api/cam/profile` (`internal/handler/cam.go`), `TestProfileProgram_S7Sim` (`internal/service/opcua/s7sim_test.go`).
 - The request is the `/api/plc/extract` request (primitives, `defaultSpeed`, `rapidSpeed`, `safeZ`, `workZ`, `waitTime`) plus `toolDiameter`, `side` (`outside`/`inside`), `direction` (`conventional` when empty, or `climb`), `depth`, `stepDown`, `plungeSpeed`. Invalid settings, open contours or a tool that fits no contour are a 400.
 - Refinements of the design above:
-  - **Order:** the deepest rings first (nesting depth from `clipper.NestingDepths`), not just holes before outlines, so a part inside another part's hole is cut before that hole.
+  - **Order:** a ring is cut only after every ring inside it (containment from `clipper.Inside`), not just holes before outlines, so a part inside another part's hole is cut before that hole. Among the rings allowed next, the tool goes to the nearest one and enters it at its nearest vertex, starting from X 0 Y 0.
   - **Passes:** a ring is plunged at its start for each level without going back to safe Z in between; it retracts once at the end. The program ends at X 0 Y 0 at safe Z, like the plotter programs.
   - **Inside profiles:** the direction rule is reversed, since the finished wall is then outside the ring.
   - `FitSegment` gained `MidX`/`MidY` for the `A` through point; `pkg/plc.Generator` gained `ArcThrough` and `Lines`.
 - **Settings:** `depth` 1 mm, `stepDown` 0.5 mm and `plungeSpeed` 5 mm/s are the column defaults, so existing databases get them. The dialog now scrolls its rows when the screen is shorter than about 830 px.
 - **Measured:** on the tree-of-life DXF, 6 profiles (Ø2/Ø3/Ø6, outside and inside, 2 passes) took 85–164 ms per request, with 1014–2118 segments per pass. `/api/plc/extract` output is byte-identical to the previous build.
-- **Open points:**
-  - Contours that the tool cannot reach (a hole narrower than the tool when cutting outside) produce no ring and no warning. Only a job with no ring at all is refused.
-  - Rings of the same depth keep Clipper's order, so rapids are not minimised.
-  - Plunges go straight down, with no ramp.
+- **Unreachable contours:** a contour that gets no ring (a hole narrower than the tool when cutting outside, an outline narrower than the tool when cutting inside, or a hole closed by a part standing too close inside it) is still left uncut. The response lists it under `warnings` with its bounds; only a job with no ring at all is refused. Details narrower than the tool on a contour that does get a ring are not reported.
+- **Measured after the ordering and warnings (2026-09-14, tree-of-life DXF):**
+  - Rapid XY length went from 3768–6466 mm to 1271–1643 mm.
+  - Warnings: 4, 7 and 13 holes for Ø2, Ø3 and Ø6 outside, none inside. On all 44 holes they match an independent check of whether the tool fits in each hole on its own.
+  - Containment and warnings add 3–7 ms each; the Clipper offset still takes most of the 150–270 ms of a request.
+- **Open point:** plunges go straight down, with no ramp.
 
 ## Environment
 

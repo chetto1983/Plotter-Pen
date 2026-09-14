@@ -131,7 +131,7 @@ plotter-pen/
 |----------|--------|-------------|
 | `/api/plc/extract` | POST | Generate PLC commands |
 | `/api/plc/settings` | GET/POST | PLC simulation settings, including profile depth, step-down and plunge speed |
-| `/api/cam/profile` | POST | Profile cut of the closed contours as PLC commands (same response as `/api/plc/extract`; no UI yet) |
+| `/api/cam/profile` | POST | Profile cut of the closed contours as PLC commands (same response as `/api/plc/extract`, plus `warnings` for contours the tool cannot reach; no UI yet) |
 | `/api/opcua/config` | GET/PUT | Active OPC UA configuration |
 | `/api/opcua/plcs` | GET/POST | PLC configurations |
 | `/api/opcua/plcs/:id` | GET/DELETE | Single PLC configuration |
