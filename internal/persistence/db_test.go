@@ -305,7 +305,7 @@ func TestInitDB_ExistingPLCSettingsGetProfileDefaults(t *testing.T) {
 	if err := db.First(&got).Error; err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	if got.WorkSpeed != 250 || got.SafeZ != 12 || got.WorkZ != 3 || got.Depth != 1 || got.StepDown != 0.5 || got.PlungeSpeed != 5 {
+	if got.WorkSpeed != 250 || got.SafeZ != 12 || got.WorkZ != 3 || got.Depth != 1 || got.StepDown != 0.5 || got.PlungeSpeed != 5 || got.RampAngle != 3 {
 		t.Fatalf("settings after migration %+v", got)
 	}
 }

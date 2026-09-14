@@ -283,6 +283,7 @@ func (h *PersistenceHandler) SavePLCSimSettings(c *gin.Context) {
 		Depth       float64 `json:"depth"`
 		StepDown    float64 `json:"stepDown"`
 		PlungeSpeed float64 `json:"plungeSpeed"`
+		RampAngle   float64 `json:"rampAngle"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -298,6 +299,7 @@ func (h *PersistenceHandler) SavePLCSimSettings(c *gin.Context) {
 		"depth":        req.Depth,
 		"step_down":    req.StepDown,
 		"plunge_speed": req.PlungeSpeed,
+		"ramp_angle":   req.RampAngle,
 	}
 
 	if err := h.db.Model(&persistence.PLCSimulationSettings{}).Where("id = 1").Updates(updates).Error; err != nil {

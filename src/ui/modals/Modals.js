@@ -328,6 +328,16 @@ export class Modals {
             <span class="cad-plc-setting-unit">mm/s</span>
           </div>
         </div>
+        <div class="cad-plc-setting-row">
+          <div class="cad-plc-setting-info">
+            <label for="modalSimRampAngle">Angolo Rampa</label>
+            <span class="cad-plc-setting-desc">Fresatura: ingresso, 90 = verticale</span>
+          </div>
+          <div class="cad-plc-setting-input">
+            <input type="number" id="modalSimRampAngle" class="cad-modal-input" min="0.5" max="90" step="0.5" value="3">
+            <span class="cad-plc-setting-unit">°</span>
+          </div>
+        </div>
       </div>
     </div>
     <div class="cad-modal-footer" style="justify-content:flex-end">

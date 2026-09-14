@@ -37,8 +37,8 @@ type Tool struct {
 }
 
 // PLCSimulationSettings stores PLC simulation parameters (singleton). Speeds are in mm/s like V.
-// Depth, StepDown and PlungeSpeed are for profile cuts, which go down from WorkZ; their column
-// defaults also fill the row of databases created before them.
+// Depth, StepDown, PlungeSpeed and RampAngle (degrees) are for profile cuts, which go down from
+// WorkZ; their column defaults also fill the row of databases created before them.
 type PLCSimulationSettings struct {
 	ID          int64     `gorm:"primaryKey;check:id = 1" json:"id"`
 	WorkSpeed   float64   `gorm:"default:100" json:"workSpeed"`
@@ -49,6 +49,7 @@ type PLCSimulationSettings struct {
 	Depth       float64   `gorm:"default:1" json:"depth"`
 	StepDown    float64   `gorm:"default:0.5" json:"stepDown"`
 	PlungeSpeed float64   `gorm:"default:5" json:"plungeSpeed"`
+	RampAngle   float64   `gorm:"default:3" json:"rampAngle"`
 	UpdatedAt   time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
 }
 
@@ -191,6 +192,7 @@ func initSingletons(db *gorm.DB) {
 			Depth:       1,
 			StepDown:    0.5,
 			PlungeSpeed: 5,
+			RampAngle:   3,
 		}).Error; err != nil {
 			log.Printf("Failed to create PLCSimulationSettings singleton: %v", err)
 		}
