@@ -2,6 +2,7 @@ package clipper
 
 import (
 	"math"
+	"slices"
 	"sort"
 	"testing"
 
@@ -111,6 +112,21 @@ func TestOffsetContours_NearbyContoursMergeIntoOneRing(t *testing.T) {
 func TestOffsetContours_ShapeNarrowerThanToolGivesNothing(t *testing.T) {
 	if rings := OffsetContours([]geom.Path{rectLoop(0, 0, 4, 4)}, -3); len(rings) != 0 {
 		t.Fatalf("got %d rings, want none", len(rings))
+	}
+}
+
+// A part inside a hole of another part is nested twice; a contour beside them is not nested.
+// The island shares a corner with the hole, so that vertex alone cannot tell inside from outside.
+func TestNestingDepths_CountsEnclosingContours(t *testing.T) {
+	outline := rectLoop(0, 0, 60, 60)
+	hole := rectLoop(10, 10, 50, 50)
+	island := geom.Path{{X: 10, Y: 10}, {X: 30, Y: 20}, {X: 20, Y: 30}}
+	beside := rectLoop(70, 0, 80, 10)
+
+	got := NestingDepths([]geom.Path{island, beside, outline, hole})
+
+	if want := []int{2, 0, 0, 1}; !slices.Equal(got, want) {
+		t.Fatalf("depths %v, want %v", got, want)
 	}
 }
 

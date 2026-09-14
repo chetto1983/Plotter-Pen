@@ -60,6 +60,30 @@ func OffsetContours(loops []geom.Path, delta float64) []geom.Path {
 	return fromPaths64(rings)
 }
 
+// NestingDepths returns, for each closed contour, how many of the others enclose it. The
+// contours must not cross, as the rings of one OffsetContours call: then any vertex that is not
+// on the other contour's boundary tells whether the whole contour is inside it.
+func NestingDepths(loops []geom.Path) []int {
+	paths := toPaths64(loops)
+	depths := make([]int, len(paths))
+	for i, inner := range paths {
+		for j, outer := range paths {
+			if i == j {
+				continue
+			}
+			for _, pt := range inner {
+				if pip := clipper2.PointInPolygon(pt, outer); pip != clipper2.IsOn {
+					if pip == clipper2.IsInside {
+						depths[i]++
+					}
+					break
+				}
+			}
+		}
+	}
+	return depths
+}
+
 // GeneratePocket creates a concentric pocket toolpath
 // paths: Input geometry (Outer Boundary + Islands)
 // toolRadius: Radius of the cutter
