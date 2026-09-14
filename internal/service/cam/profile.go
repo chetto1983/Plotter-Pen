@@ -34,15 +34,16 @@ const (
 )
 
 // ProfileRequest is a profile job: the drawing and the PLC settings as sent to /api/plc/extract,
-// plus the tool and the cut. The tool diameter only sets the offset; the PLC never receives it.
+// plus the piece, the tool and the cut. The tool diameter only sets the offset; the PLC never
+// receives it.
 type ProfileRequest struct {
 	plc.ExtractRequest
+	Stock
 	ToolDiameter float64 `json:"toolDiameter"`
 	// Side is SideOutside to keep what the contours enclose, SideInside to cut it away.
 	Side string `json:"side"`
 	// Direction is CuttingConventional (the default when empty) or CuttingClimb.
 	Direction   string  `json:"direction,omitempty"`
-	Depth       float64 `json:"depth"`
 	StepDown    float64 `json:"stepDown"`
 	PlungeSpeed float64 `json:"plungeSpeed"`
 	RampAngle   float64 `json:"rampAngle"`
@@ -56,7 +57,8 @@ type ProfileResponse struct {
 }
 
 // Profile returns the PLC program that cuts around the closed contours of the drawing, one radius
-// away on the chosen side, going down by the step-down from the work Z to work Z - depth.
+// away on the chosen side, going down by the step-down from the top of the piece to the bottom of
+// the cut.
 //
 // A ring is cut after the rings inside it, so every part stays attached to the stock until its
 // own outline is cut, and the tool moves to the nearest ring it may cut next. The tool enters
@@ -125,16 +127,16 @@ func Profile(req ProfileRequest) (ProfileResponse, error) {
 }
 
 // enter takes the tool at the start of the closed ring (its last point repeats the first) from
-// zFrom down to zTo. Down to the stock surface at work Z it goes straight at the plunge speed. In
-// the material it ramps along the ring at the ramp angle, out for half the drop and back to the
-// start, so the lap at zTo still starts at the ring start. The ramp runs at the cutting speed,
-// slowed down so that the tool never sinks faster than the plunge speed.
+// zFrom down to zTo. Down to the top of the piece it goes straight at the plunge speed. In the
+// material it ramps along the ring at the ramp angle, out for half the drop and back to the start,
+// so the lap at zTo still starts at the ring start. The ramp runs at the cutting speed, slowed down
+// so that the tool never sinks faster than the plunge speed.
 //
 // The tool plunges straight to zTo instead at 90°, where the ramp has no length, and in a ring
 // shorter than the tool diameter, where the ramp would go round it many times.
 func (req ProfileRequest) enter(g *plcgen.Generator, closed geom.Path, zFrom, zTo float64) {
 	start := closed[0]
-	surface := math.Min(zFrom, req.WorkZ)
+	surface := math.Min(zFrom, req.top(req.WorkZ))
 	angle := req.RampAngle * math.Pi / 180
 	leg := (surface - zTo) / math.Tan(angle) / 2
 	if leg < plcResolution || pathLength(closed) < req.ToolDiameter {
@@ -226,12 +228,11 @@ func (req ProfileRequest) validate() error {
 	check(req.Side == SideOutside || req.Side == SideInside, fmt.Sprintf("side must be %q or %q", SideOutside, SideInside))
 	check(req.Direction == "" || req.Direction == CuttingConventional || req.Direction == CuttingClimb,
 		fmt.Sprintf("direction must be %q or %q", CuttingConventional, CuttingClimb))
-	check(req.Depth > 0, "depth must be positive")
+	req.Stock.validate(check, req.WorkZ, req.SafeZ)
 	check(req.StepDown >= plcResolution, "step-down must be at least 0.001 mm")
-	check(req.StepDown <= 0 || passCount(req.Depth, req.StepDown) <= maxPasses, "depth and step-down must make at most 1000 passes")
+	check(req.StepDown <= 0 || passCount(req.cutDepth(), req.StepDown) <= maxPasses, "depth and step-down must make at most 1000 passes")
 	check(req.DefaultSpeed > 0 && req.RapidSpeed > 0 && req.PlungeSpeed > 0, "cutting, rapid and plunge speeds must be positive")
 	check(req.RampAngle > 0 && req.RampAngle <= 90, "ramp angle must be above 0° and at most 90°")
-	check(req.SafeZ > req.WorkZ, "safe Z must be above work Z")
 	check(req.WaitTime >= 0, "wait time must not be negative")
 	if len(problems) > 0 {
 		return errors.New(strings.Join(problems, "; "))
@@ -239,11 +240,13 @@ func (req ProfileRequest) validate() error {
 	return nil
 }
 
-// levels returns the Z of every pass, the last one exactly at work Z - depth.
+// levels returns the Z of every pass down from the top of the piece, the last one exactly at the
+// bottom of the cut.
 func (req ProfileRequest) levels() []float64 {
-	levels := make([]float64, int(passCount(req.Depth, req.StepDown)))
+	top, depth := req.top(req.WorkZ), req.cutDepth()
+	levels := make([]float64, int(passCount(depth, req.StepDown)))
 	for k := range levels {
-		levels[k] = req.WorkZ - math.Min(float64(k+1)*req.StepDown, req.Depth)
+		levels[k] = top - math.Min(float64(k+1)*req.StepDown, depth)
 	}
 	return levels
 }

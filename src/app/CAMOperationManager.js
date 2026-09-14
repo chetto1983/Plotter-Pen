@@ -1,24 +1,33 @@
 /**
  * CAM Operation Manager
- * The operation whose program the PLC output shows (pen plot, profile or drilling) and its
- * parameters, kept in the database (/api/cam/operation) like the PLC settings.
+ * The operation whose program the PLC output shows (pen plot, profile or drilling), the piece the
+ * profile and the drilling cut and their parameters, kept in the database (/api/cam/operation)
+ * like the PLC settings.
  */
 
 // Same defaults as the CAMOperation columns
 const OPERATION_DEFAULTS = {
   operation: 'pen',
+  thickness: 1.6,
+  overcut: 0.2,
   toolDiameter: 2,
   side: 'outside',
   direction: 'conventional',
+  profileThrough: true,
+  profileDepth: 1,
   drillDiameter: 1,
   minHoleDiameter: 0.4,
   maxHoleDiameter: 1.2,
   peckDepth: 0,
   tipAngle: 118,
-  tipThrough: false
+  tipThrough: false,
+  drillThrough: true,
+  drillDepth: 1
 };
 
 const NUMBER_INPUTS = {
+  thickness: 'camThickness',
+  overcut: 'camOvercut',
   toolDiameter: 'camToolDiameter',
   drillDiameter: 'camDrillDiameter',
   minHoleDiameter: 'camMinHoleDiameter',
@@ -43,14 +52,19 @@ export class CAMOperationManager {
     document.querySelectorAll('.cam-op-tab').forEach((tab) => {
       tab.addEventListener('click', () => this.change({ operation: tab.dataset.operation }));
     });
-    for (const [key, id] of Object.entries(NUMBER_INPUTS)) {
+    const numberInput = (id, key) => {
       document.getElementById(id)?.addEventListener('change', (e) => {
         const value = parseFloat(e.target.value);
         // an emptied field keeps its value instead of sending NaN
-        if (Number.isFinite(value)) this.change({ [key]: value });
+        if (Number.isFinite(value)) this.change({ [key()]: value });
         else this.render();
       });
+    };
+    for (const [key, id] of Object.entries(NUMBER_INPUTS)) {
+      numberInput(id, () => key);
     }
+    numberInput('camDepth', () => this.cutKeys().depth);
+    document.getElementById('camThrough')?.addEventListener('change', (e) => this.change({ [this.cutKeys().through]: e.target.checked }));
     document.getElementById('camSide')?.addEventListener('change', (e) => this.change({ side: e.target.value }));
     document.getElementById('camDirection')?.addEventListener('change', (e) => this.change({ direction: e.target.value }));
     document.getElementById('camTipThrough')?.addEventListener('change', (e) => this.change({ tipThrough: e.target.checked }));
@@ -111,12 +125,22 @@ export class CAMOperationManager {
       tab.setAttribute('aria-checked', String(active));
     });
     document.querySelectorAll('.cam-op-params').forEach((params) => {
-      params.hidden = params.dataset.operation !== op.operation;
+      params.hidden = !params.dataset.operation.split(' ').includes(op.operation);
     });
     for (const [key, id] of Object.entries(NUMBER_INPUTS)) {
       const input = document.getElementById(id);
       if (input) input.value = op[key];
     }
+    // A through cut goes the overcut into the bed, any other cut its depth below the top of the piece
+    const cut = this.cutKeys();
+    const through = document.getElementById('camThrough');
+    if (through) through.checked = op[cut.through];
+    const depth = document.getElementById('camDepth');
+    if (depth) depth.value = op[cut.depth];
+    const overcutField = document.getElementById('camOvercutField');
+    if (overcutField) overcutField.hidden = !op[cut.through];
+    const depthField = document.getElementById('camDepthField');
+    if (depthField) depthField.hidden = op[cut.through];
     const side = document.getElementById('camSide');
     if (side) side.value = op.side;
     const direction = document.getElementById('camDirection');
@@ -127,6 +151,15 @@ export class CAMOperationManager {
 
   get label() {
     return LABELS[this.operation.operation] || LABELS.pen;
+  }
+
+  /**
+   * The keys of the through choice and of the depth of the active operation: the profile and the
+   * drilling cut the same piece, each through or to its own depth
+   */
+  cutKeys() {
+    const prefix = this.operation.operation === 'drill' ? 'drill' : 'profile';
+    return { through: `${prefix}Through`, depth: `${prefix}Depth` };
   }
 
   /**
@@ -144,13 +177,16 @@ export class CAMOperationManager {
       workZ: settings.workZ,
       waitTime: settings.waitTime
     };
+    const cut = this.cutKeys();
+    const piece = { thickness: op.thickness, overcut: op.overcut, through: op[cut.through], depth: op[cut.depth] };
     if (op.operation === 'profile') {
       return {
         url: '/api/cam/profile',
         body: {
           ...common,
+          ...piece,
           toolDiameter: op.toolDiameter, side: op.side, direction: op.direction,
-          depth: settings.depth, stepDown: settings.stepDown, plungeSpeed: settings.plungeSpeed, rampAngle: settings.rampAngle
+          stepDown: settings.stepDown, plungeSpeed: settings.plungeSpeed, rampAngle: settings.rampAngle
         }
       };
     }
@@ -159,7 +195,8 @@ export class CAMOperationManager {
         url: '/api/cam/drill',
         body: {
           ...common,
-          depth: settings.depth, plungeSpeed: settings.plungeSpeed, retractClearance: settings.retractClearance,
+          ...piece,
+          plungeSpeed: settings.plungeSpeed, retractClearance: settings.retractClearance,
           drillDiameter: op.drillDiameter, minHoleDiameter: op.minHoleDiameter, maxHoleDiameter: op.maxHoleDiameter,
           peckDepth: op.peckDepth, tipAngle: op.tipAngle, tipThrough: op.tipThrough
         }

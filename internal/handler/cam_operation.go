@@ -48,15 +48,21 @@ func (h *PersistenceHandler) SaveCAMOperation(c *gin.Context) {
 	// a map, so that false and 0 are written too
 	updates := map[string]any{
 		"operation":         req.Operation,
+		"thickness":         req.Thickness,
+		"overcut":           req.Overcut,
 		"tool_diameter":     req.ToolDiameter,
 		"side":              req.Side,
 		"direction":         req.Direction,
+		"profile_through":   req.ProfileThrough,
+		"profile_depth":     req.ProfileDepth,
 		"drill_diameter":    req.DrillDiameter,
 		"min_hole_diameter": req.MinHoleDiameter,
 		"max_hole_diameter": req.MaxHoleDiameter,
 		"peck_depth":        req.PeckDepth,
 		"tip_angle":         req.TipAngle,
 		"tip_through":       req.TipThrough,
+		"drill_through":     req.DrillThrough,
+		"drill_depth":       req.DrillDepth,
 	}
 	if err := h.db.Model(&persistence.CAMOperation{}).Where("id = 1").Updates(updates).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

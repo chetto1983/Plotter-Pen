@@ -9,7 +9,6 @@ const PLC_INPUT_IDS = {
   safeZ: 'simSafeZ',
   workZ: 'simWorkZ',
   waitTime: 'simWaitTime',
-  depth: 'simDepth',
   stepDown: 'simStepDown',
   plungeSpeed: 'simPlungeSpeed',
   rampAngle: 'simRampAngle',
@@ -23,22 +22,22 @@ const PLC_MODAL_INPUT_IDS = {
   safeZ: 'modalSimSafeZ',
   workZ: 'modalSimWorkZ',
   waitTime: 'modalSimWaitTime',
-  depth: 'modalSimDepth',
   stepDown: 'modalSimStepDown',
   plungeSpeed: 'modalSimPlungeSpeed',
   rampAngle: 'modalSimRampAngle',
   retractClearance: 'modalSimRetractClearance'
 };
 
-// depth, stepDown, plungeSpeed and rampAngle (degrees) are for profile cuts; drilling uses depth,
-// plungeSpeed and retractClearance. The defaults match the database columns
+// workZ is the paper for the pen and the bed under the piece for profiles and drilling. stepDown,
+// plungeSpeed and rampAngle (degrees) are for profile cuts; drilling uses plungeSpeed and
+// retractClearance. How deep they cut is set with the piece (CAMOperationManager). The defaults
+// match the database columns
 const PLC_DEFAULTS = {
   workSpeed: 100,
   rapidSpeed: 1000,
   safeZ: 5,
   workZ: 0,
   waitTime: 0,
-  depth: 1,
   stepDown: 0.5,
   plungeSpeed: 5,
   rampAngle: 3,
@@ -65,7 +64,6 @@ export function getPLCSettingsFromUI() {
     safeZ: toNumber(document.getElementById(PLC_INPUT_IDS.safeZ)?.value, PLC_DEFAULTS.safeZ),
     workZ: toNumber(document.getElementById(PLC_INPUT_IDS.workZ)?.value, PLC_DEFAULTS.workZ),
     waitTime: toInt(document.getElementById(PLC_INPUT_IDS.waitTime)?.value, PLC_DEFAULTS.waitTime),
-    depth: toNumber(document.getElementById(PLC_INPUT_IDS.depth)?.value, PLC_DEFAULTS.depth),
     stepDown: toNumber(document.getElementById(PLC_INPUT_IDS.stepDown)?.value, PLC_DEFAULTS.stepDown),
     plungeSpeed: toNumber(document.getElementById(PLC_INPUT_IDS.plungeSpeed)?.value, PLC_DEFAULTS.plungeSpeed),
     rampAngle: toNumber(document.getElementById(PLC_INPUT_IDS.rampAngle)?.value, PLC_DEFAULTS.rampAngle),
@@ -107,7 +105,6 @@ export function getPLCSettingsFromModal() {
     safeZ: toNumber(document.getElementById(PLC_MODAL_INPUT_IDS.safeZ)?.value, PLC_DEFAULTS.safeZ),
     workZ: toNumber(document.getElementById(PLC_MODAL_INPUT_IDS.workZ)?.value, PLC_DEFAULTS.workZ),
     waitTime: toInt(document.getElementById(PLC_MODAL_INPUT_IDS.waitTime)?.value, PLC_DEFAULTS.waitTime),
-    depth: toNumber(document.getElementById(PLC_MODAL_INPUT_IDS.depth)?.value, PLC_DEFAULTS.depth),
     stepDown: toNumber(document.getElementById(PLC_MODAL_INPUT_IDS.stepDown)?.value, PLC_DEFAULTS.stepDown),
     plungeSpeed: toNumber(document.getElementById(PLC_MODAL_INPUT_IDS.plungeSpeed)?.value, PLC_DEFAULTS.plungeSpeed),
     rampAngle: toNumber(document.getElementById(PLC_MODAL_INPUT_IDS.rampAngle)?.value, PLC_DEFAULTS.rampAngle),
@@ -128,7 +125,6 @@ export function setPLCSettingsToModal(settings) {
     [PLC_MODAL_INPUT_IDS.safeZ]: settings.safeZ ?? PLC_DEFAULTS.safeZ,
     [PLC_MODAL_INPUT_IDS.workZ]: settings.workZ ?? PLC_DEFAULTS.workZ,
     [PLC_MODAL_INPUT_IDS.waitTime]: settings.waitTime ?? PLC_DEFAULTS.waitTime,
-    [PLC_MODAL_INPUT_IDS.depth]: settings.depth ?? PLC_DEFAULTS.depth,
     [PLC_MODAL_INPUT_IDS.stepDown]: settings.stepDown ?? PLC_DEFAULTS.stepDown,
     [PLC_MODAL_INPUT_IDS.plungeSpeed]: settings.plungeSpeed ?? PLC_DEFAULTS.plungeSpeed,
     [PLC_MODAL_INPUT_IDS.rampAngle]: settings.rampAngle ?? PLC_DEFAULTS.rampAngle,

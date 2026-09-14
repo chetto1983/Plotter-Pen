@@ -10,11 +10,12 @@ import (
 	"plotter-pen/internal/service/plc"
 )
 
-// drillRequest drills the holes from 0.4 to 1.2 mm with a 1 mm drill, 1.6 mm deep, without pecks.
+// drillRequest drills the holes from 0.4 to 1.2 mm with a 1 mm drill, without pecks, through a
+// 1.6 mm piece on a bed at Z -1.6, so the top of the piece is at Z 0.
 func drillRequest(prims ...plc.Primitive) DrillRequest {
 	return DrillRequest{
-		Primitives: prims, DefaultSpeed: workSpeed, RapidSpeed: rapidSpeed, SafeZ: 5, WorkZ: 0,
-		Depth: 1.6, PlungeSpeed: plungeSpeed, RetractClearance: 1,
+		Primitives: prims, DefaultSpeed: workSpeed, RapidSpeed: rapidSpeed, SafeZ: 5, WorkZ: -1.6,
+		Thickness: 1.6, Through: true, PlungeSpeed: plungeSpeed, RetractClearance: 1,
 		DrillDiameter: 1, MinHoleDiameter: 0.4, MaxHoleDiameter: 1.2,
 	}
 }
@@ -74,6 +75,37 @@ func TestDrill_PecksOutToTheRetractPlane(t *testing.T) {
 		"J X 10.000, Y 5.000, Z -0.546, V 1000.000",
 		"L X 10.000, Y 5.000, Z -1.600, V 5.000",
 		"WAIT 200",
+		"J X 10.000, Y 5.000, Z 5.000, V 1000.000",
+		"J X 0.000, Y 0.000, Z 5.000, V 1000.000",
+	)
+}
+
+// Work Z is the bed: a through hole goes down to the overcut below it, a blind hole the depth below
+// the top of the piece. The retract plane and the pecks start from the top of the piece.
+func TestDrill_GoesThroughThePieceOrToTheDepth(t *testing.T) {
+	piece := func() DrillRequest {
+		req := drillRequest(circleP(10, 5, 0.5))
+		req.WorkZ, req.Thickness, req.Overcut = 0, 1.6, 0.2
+		return req
+	}
+
+	sameProgram(t, mustDrill(t, piece()).Output,
+		"J X 10.000, Y 5.000, Z 5.000, V 1000.000",
+		"J X 10.000, Y 5.000, Z 2.600, V 1000.000",
+		"L X 10.000, Y 5.000, Z -0.200, V 5.000",
+		"J X 10.000, Y 5.000, Z 5.000, V 1000.000",
+		"J X 0.000, Y 0.000, Z 5.000, V 1000.000",
+	)
+
+	blind := piece()
+	blind.Through, blind.Depth, blind.PeckDepth = false, 1, 0.6
+	sameProgram(t, mustDrill(t, blind).Output,
+		"J X 10.000, Y 5.000, Z 5.000, V 1000.000",
+		"J X 10.000, Y 5.000, Z 2.600, V 1000.000",
+		"L X 10.000, Y 5.000, Z 1.000, V 5.000",
+		"J X 10.000, Y 5.000, Z 2.600, V 1000.000",
+		"J X 10.000, Y 5.000, Z 1.254, V 1000.000",
+		"L X 10.000, Y 5.000, Z 0.600, V 5.000",
 		"J X 10.000, Y 5.000, Z 5.000, V 1000.000",
 		"J X 0.000, Y 0.000, Z 5.000, V 1000.000",
 	)
@@ -240,20 +272,24 @@ func TestDrill_RejectsWhatCannotBeDrilled(t *testing.T) {
 		{"no drill diameter", func(r *DrillRequest) { r.DrillDiameter = 0 }},
 		{"no smallest hole", func(r *DrillRequest) { r.MinHoleDiameter = 0 }},
 		{"smallest hole above the largest", func(r *DrillRequest) { r.MinHoleDiameter, r.MaxHoleDiameter = 1.2, 0.4 }},
-		{"no depth", func(r *DrillRequest) { r.Depth = 0 }},
+		{"no thickness", func(r *DrillRequest) { r.Thickness = 0 }},
+		{"negative overcut", func(r *DrillRequest) { r.Overcut = -0.1 }},
+		{"blind hole with no depth", func(r *DrillRequest) { r.Through, r.Depth = false, 0 }},
+		{"blind hole below the piece", func(r *DrillRequest) { r.Through, r.Depth = false, 1.7 }},
 		{"negative peck", func(r *DrillRequest) { r.PeckDepth = -1 }},
 		{"peck below the PLC resolution", func(r *DrillRequest) { r.PeckDepth = 1e-9 }},
-		{"more than 1000 pecks", func(r *DrillRequest) { r.Depth, r.PeckDepth = 1001, 1 }},
+		{"more than 1000 pecks", func(r *DrillRequest) { r.WorkZ, r.Thickness, r.PeckDepth = -1001, 1001, 1 }},
 		{"more than 1000 pecks counting the point", func(r *DrillRequest) {
-			r.Depth, r.PeckDepth, r.TipThrough, r.TipAngle = 1000, 1, true, 90 // the 90° point adds 0.5 mm
+			r.WorkZ, r.Thickness, r.PeckDepth, r.TipThrough, r.TipAngle = -1000, 1000, 1, true, 90 // the 90° point adds 0.5 mm
 		}},
 		{"negative tip angle", func(r *DrillRequest) { r.TipAngle = -118 }},
 		{"tip angle past flat", func(r *DrillRequest) { r.TipAngle = 181 }},
 		{"no plunge speed", func(r *DrillRequest) { r.PlungeSpeed = 0 }},
 		{"no rapid speed", func(r *DrillRequest) { r.RapidSpeed = 0 }},
-		{"retract plane on the stock", func(r *DrillRequest) { r.RetractClearance = 0 }},
+		{"retract plane on the piece", func(r *DrillRequest) { r.RetractClearance = 0 }},
 		{"retract plane above safe Z", func(r *DrillRequest) { r.RetractClearance = 5.5 }},
-		{"safe Z not above work Z", func(r *DrillRequest) { r.SafeZ, r.RetractClearance = r.WorkZ, 0 }},
+		{"retract plane above safe Z over the piece", func(r *DrillRequest) { r.WorkZ = 2.5 }},
+		{"piece reaching safe Z", func(r *DrillRequest) { r.WorkZ = 3.4 }},
 		{"negative wait", func(r *DrillRequest) { r.WaitTime = -1 }},
 	}
 	if _, err := Drill(valid()); err != nil {
@@ -293,23 +329,24 @@ func BenchmarkDrill_Holes(b *testing.B) {
 	}
 }
 
-// Pecks are counted from the stock surface; the last one stops at the bottom.
+// Pecks are counted from the top of the piece; the last one stops at the bottom.
 func TestDrill_LastPeckStopsAtTheBottom(t *testing.T) {
 	tests := []struct {
 		name       string
 		workZ      float64
-		depth      float64
+		thickness  float64
 		peck       float64
 		wantPlunge []float64
 	}{
-		{"peck longer than the hole", 0, 1.6, 2, []float64{-1.6}},
-		{"uneven pecks", 0, 1.6, 0.7, []float64{-0.7, -1.4, -1.6}},
-		{"from a raised surface", 2, 1.2, 0.4, []float64{1.6, 1.2, 0.8}},
+		{"peck longer than the hole", -1.6, 1.6, 2, []float64{-1.6}},
+		{"uneven pecks", -1.6, 1.6, 0.7, []float64{-0.7, -1.4, -1.6}},
+		{"from a raised bed", 0.8, 1.2, 0.4, []float64{1.6, 1.2, 0.8}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := drillRequest(circleP(0, 0, 0.5))
-			req.WorkZ, req.SafeZ, req.Depth, req.PeckDepth = tt.workZ, tt.workZ+5, tt.depth, tt.peck
+			req.WorkZ, req.Thickness, req.PeckDepth = tt.workZ, tt.thickness, tt.peck
+			req.SafeZ = tt.workZ + tt.thickness + 5
 
 			var plunges []float64
 			for _, m := range parse(t, mustDrill(t, req).Output) {

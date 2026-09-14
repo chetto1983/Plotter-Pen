@@ -306,7 +306,7 @@ func TestInitDB_ExistingPLCSettingsGetCAMDefaults(t *testing.T) {
 	if err := db.First(&got).Error; err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	if got.WorkSpeed != 250 || got.SafeZ != 12 || got.WorkZ != 3 || got.Depth != 1 || got.StepDown != 0.5 || got.PlungeSpeed != 5 || got.RampAngle != 3 ||
+	if got.WorkSpeed != 250 || got.SafeZ != 12 || got.WorkZ != 3 || got.StepDown != 0.5 || got.PlungeSpeed != 5 || got.RampAngle != 3 ||
 		got.RetractClearance != 1 {
 		t.Fatalf("settings after migration %+v", got)
 	}
@@ -325,11 +325,69 @@ func TestInitDB_CreatesCAMOperationWithDefaults(t *testing.T) {
 	if err := db.First(&got).Error; err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	want := CAMOperation{ID: 1, Operation: "pen", ToolDiameter: 2, Side: "outside", Direction: "conventional",
-		DrillDiameter: 1, MinHoleDiameter: 0.4, MaxHoleDiameter: 1.2, PeckDepth: 0, TipAngle: 118, TipThrough: false}
+	want := CAMOperation{ID: 1, Operation: "pen", Thickness: 1.6, Overcut: 0.2,
+		ToolDiameter: 2, Side: "outside", Direction: "conventional", ProfileThrough: true, ProfileDepth: 1,
+		DrillDiameter: 1, MinHoleDiameter: 0.4, MaxHoleDiameter: 1.2, PeckDepth: 0, TipAngle: 118, TipThrough: false,
+		DrillThrough: true, DrillDepth: 1}
 	got.UpdatedAt = want.UpdatedAt
 	if got != want {
 		t.Fatalf("operation %+v, want %+v", got, want)
+	}
+}
+
+// camOperationBeforeStock is the operation table of databases created before the piece thickness
+// existed.
+type camOperationBeforeStock struct {
+	ID              int64     `gorm:"primaryKey;check:id = 1"`
+	Operation       string    `gorm:"default:'pen'"`
+	ToolDiameter    float64   `gorm:"default:2"`
+	Side            string    `gorm:"default:'outside'"`
+	Direction       string    `gorm:"default:'conventional'"`
+	DrillDiameter   float64   `gorm:"default:1"`
+	MinHoleDiameter float64   `gorm:"default:0.4"`
+	MaxHoleDiameter float64   `gorm:"default:1.2"`
+	PeckDepth       float64   `gorm:"default:0"`
+	TipAngle        float64   `gorm:"default:118"`
+	TipThrough      bool      `gorm:"default:false"`
+	UpdatedAt       time.Time `gorm:"autoUpdateTime"`
+}
+
+func (camOperationBeforeStock) TableName() string { return "cam_operations" }
+
+// An existing operation keeps its parameters and gets the default piece, cut through.
+func TestInitDB_ExistingCAMOperationGetsThePieceDefaults(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "old.db")
+	old, err := gorm.Open(sqlite.Open(path), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	if err := old.AutoMigrate(&camOperationBeforeStock{}); err != nil {
+		t.Fatalf("old schema: %v", err)
+	}
+	row := camOperationBeforeStock{ID: 1, Operation: "drill", ToolDiameter: 3, Side: "inside", Direction: "climb",
+		DrillDiameter: 0.8, MinHoleDiameter: 0.5, MaxHoleDiameter: 0.9, PeckDepth: 0.4, TipAngle: 130, TipThrough: true}
+	if err := old.Create(&row).Error; err != nil {
+		t.Fatalf("old row: %v", err)
+	}
+	closeDB(t, old)
+
+	db, err := InitDB(path)
+	if err != nil {
+		t.Fatalf("InitDB: %v", err)
+	}
+	t.Cleanup(func() { closeDB(t, db) })
+
+	var got CAMOperation
+	if err := db.First(&got).Error; err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	want := CAMOperation{ID: 1, Operation: "drill", Thickness: 1.6, Overcut: 0.2,
+		ToolDiameter: 3, Side: "inside", Direction: "climb", ProfileThrough: true, ProfileDepth: 1,
+		DrillDiameter: 0.8, MinHoleDiameter: 0.5, MaxHoleDiameter: 0.9, PeckDepth: 0.4, TipAngle: 130, TipThrough: true,
+		DrillThrough: true, DrillDepth: 1}
+	got.UpdatedAt = want.UpdatedAt
+	if got != want {
+		t.Fatalf("operation after migration %+v, want %+v", got, want)
 	}
 }
 

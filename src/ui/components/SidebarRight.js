@@ -37,6 +37,19 @@ export class SidebarRight {
               <button type="button" class="cam-op-tab" role="radio" data-operation="profile">Profilo</button>
               <button type="button" class="cam-op-tab" role="radio" data-operation="drill">Foratura</button>
             </div>
+            <!-- The piece on the bed; Passante and Profondità belong to the active operation -->
+            <div class="cam-op-params" data-operation="profile drill" hidden>
+              <label class="cam-op-field">Spessore
+                <span class="cam-op-input"><input type="number" id="camThickness" min="0.1" max="200" step="0.1"><span>mm</span></span>
+              </label>
+              <label class="cam-op-field" id="camOvercutField" title="Quanto il taglio passante scende sotto il pezzo, nel piano martire">Sfondamento
+                <span class="cam-op-input"><input type="number" id="camOvercut" min="0" max="5" step="0.1"><span>mm</span></span>
+              </label>
+              <label class="cam-op-field" id="camDepthField" title="Dalla superficie del pezzo" hidden>Profondità
+                <span class="cam-op-input"><input type="number" id="camDepth" min="0.1" max="200" step="0.1"><span>mm</span></span>
+              </label>
+              <label class="cam-op-check" title="Attraversa il pezzo e scende dello sfondamento nel piano"><input type="checkbox" id="camThrough"> Passante</label>
+            </div>
             <div class="cam-op-params" data-operation="profile" hidden>
               <label class="cam-op-field">Fresa Ø
                 <span class="cam-op-input"><input type="number" id="camToolDiameter" min="0.1" max="50" step="0.1"><span>mm</span></span>
@@ -64,7 +77,7 @@ export class SidebarRight {
               <label class="cam-op-field">a Ø
                 <span class="cam-op-input"><input type="number" id="camMaxHoleDiameter" min="0.01" max="100" step="0.1"><span>mm</span></span>
               </label>
-              <label class="cam-op-check" title="La punta scende della sua lunghezza, così il diametro pieno arriva alla profondità"><input type="checkbox" id="camTipThrough"> Passante</label>
+              <label class="cam-op-check" title="La punta scende della sua lunghezza, così il diametro pieno arriva al fondo del foro"><input type="checkbox" id="camTipThrough"> Compensa punta</label>
             </div>
             <div class="cam-op-message" id="camOperationMessage" hidden></div>
           </div>
@@ -80,7 +93,6 @@ export class SidebarRight {
         <input type="hidden" id="simSafeZ" value="5">
         <input type="hidden" id="simWorkZ" value="0">
         <input type="hidden" id="simWaitTime" value="0">
-        <input type="hidden" id="simDepth" value="1">
         <input type="hidden" id="simStepDown" value="0.5">
         <input type="hidden" id="simPlungeSpeed" value="5">
         <input type="hidden" id="simRampAngle" value="3">

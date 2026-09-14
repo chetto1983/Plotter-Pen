@@ -13,12 +13,12 @@ import (
 )
 
 // DrillRequest is a drilling job: the drawing and the PLC settings as sent to /api/plc/extract,
-// plus the drill and the diameters of the circles it drills.
+// plus the piece, the drill and the diameters of the circles it drills.
 type DrillRequest struct {
 	plc.ExtractRequest
-	Depth       float64 `json:"depth"`
+	Stock
 	PlungeSpeed float64 `json:"plungeSpeed"`
-	// RetractClearance is how far above work Z the retract plane (R) lies.
+	// RetractClearance is how far above the top of the piece the retract plane (R) lies.
 	RetractClearance float64 `json:"retractClearance"`
 	DrillDiameter    float64 `json:"drillDiameter"`
 	MinHoleDiameter  float64 `json:"minHoleDiameter"`
@@ -27,7 +27,7 @@ type DrillRequest struct {
 	PeckDepth float64 `json:"peckDepth,omitempty"`
 	// TipAngle is the included angle of the drill point in degrees, 118 when zero.
 	TipAngle float64 `json:"tipAngle,omitempty"`
-	// TipThrough takes the full drill diameter, not just its tip, down to the depth.
+	// TipThrough takes the full drill diameter, not just its tip, down to the bottom of the hole.
 	TipThrough bool `json:"tipThrough,omitempty"`
 }
 
@@ -92,15 +92,14 @@ func (req DrillRequest) validate() error {
 	check(req.DrillDiameter > 0, "drill diameter must be positive")
 	check(req.MinHoleDiameter > 0 && req.MinHoleDiameter <= req.MaxHoleDiameter,
 		"the smallest hole diameter must be positive and not above the largest")
-	check(req.Depth > 0, "depth must be positive")
+	req.Stock.validate(check, req.WorkZ, req.SafeZ)
 	check(req.PeckDepth == 0 || req.PeckDepth >= plcResolution, "peck depth must be 0 or at least 0.001 mm")
 	check(req.PeckDepth <= 0 || passCount(req.drilledLength(), req.PeckDepth) <= maxPasses,
 		"depth and peck depth must make at most 1000 pecks")
 	check(req.TipAngle >= 0 && req.TipAngle <= 180, "tip angle must be above 0° and at most 180°, or 0 for 118°")
 	check(req.RapidSpeed > 0 && req.PlungeSpeed > 0, "rapid and plunge speeds must be positive")
-	check(req.SafeZ > req.WorkZ, "safe Z must be above work Z")
-	check(req.RetractClearance > 0 && req.WorkZ+req.RetractClearance <= req.SafeZ,
-		"the retract plane must be above work Z and not above safe Z")
+	check(req.RetractClearance > 0 && req.top(req.WorkZ)+req.RetractClearance <= req.SafeZ,
+		"the retract plane must be above the top of the piece and not above safe Z")
 	check(req.WaitTime >= 0, "wait time must not be negative")
 	if len(problems) > 0 {
 		return errors.New(strings.Join(problems, "; "))
@@ -161,7 +160,7 @@ func shortenRoute(holes []plc.Primitive) []plc.Primitive {
 // hole returns the commands that drill the hole centred at (x, y).
 func (req DrillRequest) hole(x, y float64) []string {
 	g := plcgen.NewGenerator()
-	retract := req.WorkZ + req.RetractClearance
+	retract := req.top(req.WorkZ) + req.RetractClearance
 	g.Jump(x, y, req.SafeZ, req.RapidSpeed)
 	g.Jump(x, y, retract, req.RapidSpeed)
 	reached := retract
@@ -178,29 +177,30 @@ func (req DrillRequest) hole(x, y float64) []string {
 	return g.Lines()
 }
 
-// drilledLength is how far below work Z the drill goes: the depth, plus the drill point when the
-// full diameter must reach the depth.
+// drilledLength is how far below the top of the piece the drill goes: the cut depth, plus the
+// drill point when the full diameter must get there.
 func (req DrillRequest) drilledLength() float64 {
 	if !req.TipThrough {
-		return req.Depth
+		return req.cutDepth()
 	}
 	angle := req.TipAngle
 	if angle == 0 {
 		angle = defaultTipAngle
 	}
-	return req.Depth + req.DrillDiameter/2/math.Tan(angle/2*math.Pi/180)
+	return req.cutDepth() + req.DrillDiameter/2/math.Tan(angle/2*math.Pi/180)
 }
 
-// pecks returns the Z every peck goes down to, counted from work Z, the last one at the bottom.
+// pecks returns the Z every peck goes down to, counted from the top of the piece, the last one at
+// the bottom.
 func (req DrillRequest) pecks() []float64 {
-	length := req.drilledLength()
-	bottom := req.WorkZ - length
+	top, length := req.top(req.WorkZ), req.drilledLength()
+	bottom := top - length
 	if req.PeckDepth <= 0 {
 		return []float64{bottom}
 	}
 	pecks := make([]float64, int(passCount(length, req.PeckDepth)))
 	for k := range pecks {
-		pecks[k] = math.Max(req.WorkZ-float64(k+1)*req.PeckDepth, bottom)
+		pecks[k] = math.Max(top-float64(k+1)*req.PeckDepth, bottom)
 	}
 	return pecks
 }

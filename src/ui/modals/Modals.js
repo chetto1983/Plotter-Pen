@@ -281,7 +281,7 @@ export class Modals {
         <div class="cad-plc-setting-row">
           <div class="cad-plc-setting-info">
             <label for="modalSimWorkZ">Altezza Lavoro (Z)</label>
-            <span class="cad-plc-setting-desc">Quota Z durante taglio/disegno</span>
+            <span class="cad-plc-setting-desc">Penna: carta; fresa e punta: piano</span>
           </div>
           <div class="cad-plc-setting-input">
             <input type="number" id="modalSimWorkZ" class="cad-modal-input" min="-50" max="50" step="0.5" value="0">
@@ -296,16 +296,6 @@ export class Modals {
           <div class="cad-plc-setting-input">
             <input type="number" id="modalSimWaitTime" class="cad-modal-input" min="0" max="5000" step="50" value="0">
             <span class="cad-plc-setting-unit">ms</span>
-          </div>
-        </div>
-        <div class="cad-plc-setting-row">
-          <div class="cad-plc-setting-info">
-            <label for="modalSimDepth">Profondità</label>
-            <span class="cad-plc-setting-desc">Fresa e punta: sotto Altezza Lavoro</span>
-          </div>
-          <div class="cad-plc-setting-input">
-            <input type="number" id="modalSimDepth" class="cad-modal-input" min="0.1" max="50" step="0.1" value="1">
-            <span class="cad-plc-setting-unit">mm</span>
           </div>
         </div>
         <div class="cad-plc-setting-row">
@@ -341,7 +331,7 @@ export class Modals {
         <div class="cad-plc-setting-row">
           <div class="cad-plc-setting-info">
             <label for="modalSimRetractClearance">Distanza Ritorno</label>
-            <span class="cad-plc-setting-desc">Foratura: sopra Altezza Lavoro</span>
+            <span class="cad-plc-setting-desc">Foratura: sopra il pezzo</span>
           </div>
           <div class="cad-plc-setting-input">
             <input type="number" id="modalSimRetractClearance" class="cad-modal-input" min="0.1" max="50" step="0.1" value="1">

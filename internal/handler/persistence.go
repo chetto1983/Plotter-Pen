@@ -284,7 +284,6 @@ func (h *PersistenceHandler) SavePLCSimSettings(c *gin.Context) {
 		SafeZ            float64 `json:"safeZ"`
 		WorkZ            float64 `json:"workZ"`
 		WaitTime         int     `json:"waitTime"`
-		Depth            float64 `json:"depth"`
 		StepDown         float64 `json:"stepDown"`
 		PlungeSpeed      float64 `json:"plungeSpeed"`
 		RampAngle        float64 `json:"rampAngle"`
@@ -301,7 +300,6 @@ func (h *PersistenceHandler) SavePLCSimSettings(c *gin.Context) {
 		"safe_z":            req.SafeZ,
 		"work_z":            req.WorkZ,
 		"wait_time":         req.WaitTime,
-		"depth":             req.Depth,
 		"step_down":         req.StepDown,
 		"plunge_speed":      req.PlungeSpeed,
 		"ramp_angle":        req.RampAngle,

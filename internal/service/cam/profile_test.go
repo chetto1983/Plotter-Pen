@@ -34,11 +34,13 @@ func circleP(cx, cy, r float64) plc.Primitive {
 	return plc.Primitive{Type: plc.PrimitiveCircle, Cx: new(cx), Cy: new(cy), Radius: new(r)}
 }
 
-// request plunges straight down (ramp angle 90°) unless a test is about ramps.
+// request cuts through a 1 mm piece on a bed at Z -1, so the top of the piece is at Z 0, and
+// plunges straight down (ramp angle 90°) unless a test is about ramps.
 func request(side string, diameter float64, prims ...plc.Primitive) ProfileRequest {
 	return ProfileRequest{
-		Primitives: prims, DefaultSpeed: workSpeed, RapidSpeed: rapidSpeed, SafeZ: 5, WorkZ: 0,
-		ToolDiameter: diameter, Side: side, Depth: 1, StepDown: 1, PlungeSpeed: plungeSpeed, RampAngle: 90,
+		Primitives: prims, DefaultSpeed: workSpeed, RapidSpeed: rapidSpeed, SafeZ: 5, WorkZ: -1,
+		Thickness: 1, Through: true,
+		ToolDiameter: diameter, Side: side, StepDown: 1, PlungeSpeed: plungeSpeed, RampAngle: 90,
 	}
 }
 
@@ -203,11 +205,12 @@ func TestProfile_OutsideSquareOnePass(t *testing.T) {
 	}
 }
 
-// Passes go down by the step-down from the stock surface at work Z, the last one exactly at the
-// full depth, and each ring is plunged again at every level without leaving the cut.
-func TestProfile_StepsDownFromWorkZ(t *testing.T) {
+// Passes go down by the step-down from the top of the piece, work Z + thickness, the last one
+// exactly at the bottom of the cut, and each ring is plunged again at every level without leaving
+// the cut.
+func TestProfile_StepsDownFromTheTopOfThePiece(t *testing.T) {
 	req := request("outside", 2, squareP(0, 0, 20, 20))
-	req.WorkZ, req.SafeZ, req.Depth, req.StepDown, req.WaitTime = 2, 7, 1.2, 0.5, 300
+	req.WorkZ, req.Thickness, req.Overcut, req.SafeZ, req.StepDown, req.WaitTime = 1, 1, 0.2, 7, 0.5, 300
 
 	res, err := Profile(req)
 	if err != nil {
@@ -233,6 +236,35 @@ func TestProfile_StepsDownFromWorkZ(t *testing.T) {
 	c := cuts(t, moves)
 	if len(c) != 3 || c[0].z != 1.5 || c[1].z != 1 || c[2].z != 0.8 {
 		t.Fatalf("got %d cuts, want one per level", len(c))
+	}
+}
+
+// Work Z is the bed: a through cut goes down to the overcut below it, any other cut the depth
+// below the top of the piece.
+func TestProfile_CutsThroughThePieceOrToTheDepth(t *testing.T) {
+	tests := []struct {
+		name    string
+		through bool
+		depth   float64
+		want    []float64
+	}{
+		{"through, into the bed by the overcut", true, 0, []float64{0.6, -0.2}},
+		{"to a depth", false, 0.5, []float64{1.1}},
+		{"to a depth as deep as the piece", false, 1.6, []float64{0.6, 0}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := request("outside", 2, squareP(0, 0, 20, 20))
+			req.WorkZ, req.Thickness, req.Overcut, req.Through, req.Depth = 0, 1.6, 0.2, tt.through, tt.depth
+
+			var levels []float64
+			for _, c := range cuts(t, mustProfile(t, req)) {
+				levels = append(levels, c.z)
+			}
+			if !slices.Equal(levels, tt.want) {
+				t.Fatalf("cuts at Z %v, want %v", levels, tt.want)
+			}
+		})
 	}
 }
 
@@ -320,7 +352,7 @@ func TestProfile_RampLeavesOutVerticesItDoesNotNeed(t *testing.T) {
 	}
 	req := request("outside", 2, polygonP(circle...))
 	// one 5 mm ramp, whose moves run at 2 / sin(5.7°) = 20.1 mm/s
-	req.Depth, req.StepDown, req.RampAngle, req.PlungeSpeed = 0.5, 0.5, math.Atan(0.1)*180/math.Pi, 2
+	req.Through, req.Depth, req.StepDown, req.RampAngle, req.PlungeSpeed = false, 0.5, 0.5, math.Atan(0.1)*180/math.Pi, 2
 
 	moves := mustProfile(t, req)
 
@@ -348,7 +380,7 @@ func TestProfile_RampLeavesOutVerticesItDoesNotNeed(t *testing.T) {
 // hundreds of moves, so the tool plunges straight down there.
 func TestProfile_PlungesStraightIntoRingsShorterThanTheTool(t *testing.T) {
 	req := request("inside", 2, squareP(0, 0, 2.4, 2.4)) // a ring 0.4 mm square
-	req.Depth, req.StepDown, req.RampAngle = 1, 0.5, 3
+	req.StepDown, req.RampAngle = 0.5, 3
 
 	moves := mustProfile(t, req)
 
@@ -514,16 +546,19 @@ func TestProfile_RejectsWhatCannotBeCut(t *testing.T) {
 		{"no tool diameter", func(r *ProfileRequest) { r.ToolDiameter = 0 }},
 		{"unknown side", func(r *ProfileRequest) { r.Side = "" }},
 		{"unknown direction", func(r *ProfileRequest) { r.Direction = "down" }},
-		{"no depth", func(r *ProfileRequest) { r.Depth = 0 }},
+		{"no thickness", func(r *ProfileRequest) { r.Thickness = 0 }},
+		{"negative overcut", func(r *ProfileRequest) { r.Overcut = -0.1 }},
+		{"no depth when not through", func(r *ProfileRequest) { r.Through, r.Depth = false, 0 }},
+		{"depth below the piece", func(r *ProfileRequest) { r.Through, r.Depth = false, 1.1 }},
 		{"no step-down", func(r *ProfileRequest) { r.StepDown = -1 }},
-		{"step-down below the PLC resolution", func(r *ProfileRequest) { r.Depth, r.StepDown = 0.001, 0.0005 }},
-		{"more than 1000 passes", func(r *ProfileRequest) { r.Depth, r.StepDown = 1001, 1 }},
+		{"step-down below the PLC resolution", func(r *ProfileRequest) { r.Through, r.Depth, r.StepDown = false, 0.001, 0.0005 }},
+		{"more than 1000 passes", func(r *ProfileRequest) { r.WorkZ, r.Thickness, r.StepDown = -1001, 1001, 1 }},
 		{"no plunge speed", func(r *ProfileRequest) { r.PlungeSpeed = 0 }},
 		{"no ramp angle", func(r *ProfileRequest) { r.RampAngle = 0 }},
 		{"ramp angle past vertical", func(r *ProfileRequest) { r.RampAngle = 91 }},
 		{"no cutting speed", func(r *ProfileRequest) { r.DefaultSpeed = 0 }},
 		{"no rapid speed", func(r *ProfileRequest) { r.RapidSpeed = 0 }},
-		{"safe Z not above work Z", func(r *ProfileRequest) { r.SafeZ = r.WorkZ }},
+		{"safe Z not above the piece", func(r *ProfileRequest) { r.SafeZ = 0 }},
 		{"negative wait", func(r *ProfileRequest) { r.WaitTime = -1 }},
 		{"malformed primitive", func(r *ProfileRequest) { r.Primitives = []plc.Primitive{{Type: plc.PrimitiveCircle}} }},
 	}

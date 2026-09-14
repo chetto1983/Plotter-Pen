@@ -40,24 +40,31 @@ func TestCAMOperation_SavesAndLoads(t *testing.T) {
 	r, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	w := camOperationRequest(r, http.MethodPost, `{"operation": "drill", "toolDiameter": 3, "side": "inside", "direction": "climb",
-		"drillDiameter": 0.8, "minHoleDiameter": 0.5, "maxHoleDiameter": 0.9, "peckDepth": 0.6, "tipAngle": 130, "tipThrough": true}`)
+	w := camOperationRequest(r, http.MethodPost, `{"operation": "drill", "thickness": 18, "overcut": 0.5,
+		"toolDiameter": 3, "side": "inside", "direction": "climb", "profileThrough": false, "profileDepth": 4,
+		"drillDiameter": 0.8, "minHoleDiameter": 0.5, "maxHoleDiameter": 0.9, "peckDepth": 0.6, "tipAngle": 130, "tipThrough": true,
+		"drillThrough": false, "drillDepth": 12}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("save: status %d, body %s", w.Code, w.Body.String())
 	}
 
 	got := loadCAMOperation(t, r)
-	want := persistence.CAMOperation{ID: 1, Operation: "drill", ToolDiameter: 3, Side: "inside", Direction: "climb",
-		DrillDiameter: 0.8, MinHoleDiameter: 0.5, MaxHoleDiameter: 0.9, PeckDepth: 0.6, TipAngle: 130, TipThrough: true}
+	want := persistence.CAMOperation{ID: 1, Operation: "drill", Thickness: 18, Overcut: 0.5,
+		ToolDiameter: 3, Side: "inside", Direction: "climb", ProfileThrough: false, ProfileDepth: 4,
+		DrillDiameter: 0.8, MinHoleDiameter: 0.5, MaxHoleDiameter: 0.9, PeckDepth: 0.6, TipAngle: 130, TipThrough: true,
+		DrillThrough: false, DrillDepth: 12}
 	got.UpdatedAt = want.UpdatedAt
 	if got != want {
 		t.Fatalf("loaded %+v, want %+v", got, want)
 	}
 
 	// false and 0 are values too, not missing fields
-	camOperationRequest(r, http.MethodPost, `{"operation": "pen", "toolDiameter": 3, "side": "inside", "direction": "climb",
-		"drillDiameter": 0.8, "minHoleDiameter": 0.5, "maxHoleDiameter": 0.9, "peckDepth": 0, "tipAngle": 130, "tipThrough": false}`)
-	if got := loadCAMOperation(t, r); got.Operation != "pen" || got.PeckDepth != 0 || got.TipThrough {
+	camOperationRequest(r, http.MethodPost, `{"operation": "pen", "thickness": 18, "overcut": 0,
+		"toolDiameter": 3, "side": "inside", "direction": "climb", "profileThrough": true, "profileDepth": 4,
+		"drillDiameter": 0.8, "minHoleDiameter": 0.5, "maxHoleDiameter": 0.9, "peckDepth": 0, "tipAngle": 130, "tipThrough": false,
+		"drillThrough": true, "drillDepth": 12}`)
+	if got := loadCAMOperation(t, r); got.Operation != "pen" || got.Overcut != 0 || got.PeckDepth != 0 || got.TipThrough ||
+		!got.ProfileThrough || !got.DrillThrough {
 		t.Fatalf("after saving zero values: %+v", got)
 	}
 }
@@ -67,8 +74,10 @@ func TestCAMOperation_SavesAndLoads(t *testing.T) {
 func TestCAMOperation_RejectsUnknownChoices(t *testing.T) {
 	r, cleanup := setupTestDB(t)
 	defer cleanup()
-	valid := map[string]any{"operation": "profile", "toolDiameter": 2, "side": "outside", "direction": "conventional",
-		"drillDiameter": 1, "minHoleDiameter": 0.4, "maxHoleDiameter": 1.2, "peckDepth": 0, "tipAngle": 118, "tipThrough": false}
+	valid := map[string]any{"operation": "profile", "thickness": 1.6, "overcut": 0.2,
+		"toolDiameter": 2, "side": "outside", "direction": "conventional", "profileThrough": true, "profileDepth": 1,
+		"drillDiameter": 1, "minHoleDiameter": 0.4, "maxHoleDiameter": 1.2, "peckDepth": 0, "tipAngle": 118, "tipThrough": false,
+		"drillThrough": true, "drillDepth": 1}
 
 	for field, value := range map[string]string{"operation": "pocket", "side": "left", "direction": "down"} {
 		body := maps.Clone(valid)

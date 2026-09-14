@@ -46,14 +46,15 @@
     color: var(--accent);
 }
 
-/* three columns keep the command list tall: the profile takes one row, the drilling two */
+/* three columns keep the command list tall: the piece takes one row, the profile one, the drilling two */
 .cam-op-params {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 6px;
 }
 
-.cam-op-params[hidden] {
+.cam-op-params[hidden],
+.cam-op-field[hidden] {
     display: none;
 }
 

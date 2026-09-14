@@ -37,9 +37,11 @@ type Tool struct {
 }
 
 // PLCSimulationSettings stores PLC simulation parameters (singleton). Speeds are in mm/s like V.
-// Depth, StepDown, PlungeSpeed and RampAngle (degrees) are for profile cuts, which go down from
-// WorkZ; drilling uses Depth and PlungeSpeed too, and RetractClearance, the height of its retract
-// plane above WorkZ. The column defaults also fill the row of databases created before them.
+// WorkZ is where the pen touches the paper, and the bed under the piece for profiles and drilling.
+// StepDown, PlungeSpeed and RampAngle (degrees) are for profile cuts; drilling uses PlungeSpeed
+// too, and RetractClearance, the height of its retract plane above the piece. How deep they go
+// belongs to the piece, in CAMOperation. The column defaults also fill the row of databases created
+// before them; the depth column those databases may still have is no longer read.
 type PLCSimulationSettings struct {
 	ID               int64     `gorm:"primaryKey;check:id = 1" json:"id"`
 	WorkSpeed        float64   `gorm:"default:100" json:"workSpeed"`
@@ -47,7 +49,6 @@ type PLCSimulationSettings struct {
 	SafeZ            float64   `gorm:"default:5" json:"safeZ"`
 	WorkZ            float64   `gorm:"default:0" json:"workZ"`
 	WaitTime         int       `gorm:"default:0" json:"waitTime"`
-	Depth            float64   `gorm:"default:1" json:"depth"`
 	StepDown         float64   `gorm:"default:0.5" json:"stepDown"`
 	PlungeSpeed      float64   `gorm:"default:5" json:"plungeSpeed"`
 	RampAngle        float64   `gorm:"default:3" json:"rampAngle"`
@@ -56,20 +57,27 @@ type PLCSimulationSettings struct {
 }
 
 // CAMOperation stores the operation whose program the PLC output shows (singleton): Operation is
-// "pen", "profile" or "drill", with the parameters of the profile and of the drilling. The PLC
-// never receives the diameters, so they live apart from PLCSimulationSettings.
+// "pen", "profile" or "drill", with the piece both cut and the parameters of the profile and of the
+// drilling. Each cuts through the piece, Overcut into the bed, or goes its depth below the top of
+// the piece. The PLC never receives the diameters, so they live apart from PLCSimulationSettings.
 type CAMOperation struct {
 	ID              int64     `gorm:"primaryKey;check:id = 1" json:"id"`
 	Operation       string    `gorm:"default:'pen'" json:"operation"`
+	Thickness       float64   `gorm:"default:1.6" json:"thickness"`
+	Overcut         float64   `gorm:"default:0.2" json:"overcut"`
 	ToolDiameter    float64   `gorm:"default:2" json:"toolDiameter"`
 	Side            string    `gorm:"default:'outside'" json:"side"`
 	Direction       string    `gorm:"default:'conventional'" json:"direction"`
+	ProfileThrough  bool      `gorm:"default:true" json:"profileThrough"`
+	ProfileDepth    float64   `gorm:"default:1" json:"profileDepth"`
 	DrillDiameter   float64   `gorm:"default:1" json:"drillDiameter"`
 	MinHoleDiameter float64   `gorm:"default:0.4" json:"minHoleDiameter"`
 	MaxHoleDiameter float64   `gorm:"default:1.2" json:"maxHoleDiameter"`
 	PeckDepth       float64   `gorm:"default:0" json:"peckDepth"`
 	TipAngle        float64   `gorm:"default:118" json:"tipAngle"`
 	TipThrough      bool      `gorm:"default:false" json:"tipThrough"`
+	DrillThrough    bool      `gorm:"default:true" json:"drillThrough"`
+	DrillDepth      float64   `gorm:"default:1" json:"drillDepth"`
 	UpdatedAt       time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
 }
 
@@ -210,7 +218,6 @@ func initSingletons(db *gorm.DB) {
 			SafeZ:            5,
 			WorkZ:            0,
 			WaitTime:         0,
-			Depth:            1,
 			StepDown:         0.5,
 			PlungeSpeed:      5,
 			RampAngle:        3,
@@ -226,13 +233,19 @@ func initSingletons(db *gorm.DB) {
 		if err := db.Create(&CAMOperation{
 			ID:              1,
 			Operation:       "pen",
+			Thickness:       1.6,
+			Overcut:         0.2,
 			ToolDiameter:    2,
 			Side:            "outside",
 			Direction:       "conventional",
+			ProfileThrough:  true,
+			ProfileDepth:    1,
 			DrillDiameter:   1,
 			MinHoleDiameter: 0.4,
 			MaxHoleDiameter: 1.2,
 			TipAngle:        118,
+			DrillThrough:    true,
+			DrillDepth:      1,
 		}).Error; err != nil {
 			log.Printf("Failed to create CAMOperation singleton: %v", err)
 		}
