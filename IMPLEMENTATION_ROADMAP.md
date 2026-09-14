@@ -10,7 +10,7 @@ internal/
 ├── handler/                   # HTTP API endpoints
 │   ├── dxf.go                # POST /api/parse-dxf, /api/smart-import, /api/parse-svg, /api/smart-import-svg, /api/parse-stl
 │   ├── plc.go                # POST /api/plc/extract
-│   ├── cam.go                # POST /api/cam/profile
+│   ├── cam.go                # POST /api/cam/profile, /api/cam/drill
 │   ├── opcua.go              # OPC UA config, PLCs, certificates, connection, transfer
 │   ├── opcua_ws.go           # WS /api/opcua/ws position stream
 │   ├── persistence.go        # State/drawings/tools CRUD, PLC simulation settings
@@ -41,7 +41,8 @@ internal/
     │
     ├── cam/
     │   ├── chain.go          # Contour chaining for milling
-    │   └── profile.go        # Profile cut: offset rings, depth passes, J/L/A program
+    │   ├── profile.go        # Profile cut: offset rings, depth passes, J/L/A program
+    │   └── drill.go          # Drilling: circles in a diameter range, G83-like pecks as J/L/WAIT
     │
     └── opcua/
         ├── client.go         # OPC UA client
@@ -76,6 +77,7 @@ tools/s7sim/                  # S7-1500 OPC UA simulator (Python, not part of Co
 | Clipper2 | `pkg/clipper/adapter.go` | Done | On go-clipper2 v1.3.0: single-path offsets, concentric pockets, `MergeContours` (even-odd merge), `OffsetContours` (merged set offset with 5 µm arcs) and `Inside` (which rings enclose which); the profile uses the last three |
 | Contour Chaining | `internal/service/cam/chain.go` | Done | Joins primitives into closed contours (ends within 0.01 mm, arcs split at 5 µm, no joint where three or more ends meet); used by the profile |
 | Profile Cut | `internal/service/cam/profile.go` | API only | `POST /api/cam/profile`: closed contours offset by the tool radius (outside or inside), each ring after the rings inside it and then the nearest one, conventional or climb, warnings for contours the tool cannot reach, passes from work Z down by the step-down entered along `L` ramps at the ramp angle, rings fitted at 0.01 mm into `L`/`A` with the arc's middle input point as `I`/`J`. No UI yet; tried on `tools/s7sim` only |
+| Drilling | `internal/service/cam/drill.go` | API only | `POST /api/cam/drill`: the circles with a diameter in the requested range (1 µm tolerance, one hole per centre within 0.01 mm), nearest hole first from X 0 Y 0 (`plc.OptimizeOrder`), rapid to safe Z over each hole and to the retract plane, then pecks at the plunge speed with a rapid out to the retract plane and back to 0.254 mm above the last peck (G83 with G98 written as `J`/`L`), optional dwell and drill point compensation. No UI yet; tried on `tools/s7sim` only |
 
 ### OPC UA (Complete)
 

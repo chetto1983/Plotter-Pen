@@ -28,6 +28,7 @@ One piece at a time: a short design approved first, then TDD, then a check on th
 | 2 | Contour chaining (`internal/service/cam/chain.go`) | Done |
 | 3 | Offset of the contour set (`pkg/clipper/adapter.go`, `OffsetContours`) | Done |
 | 4 | First complete profile down to J/L/A commands, tried on the simulator | Done 2026-09-14 (API and settings; no UI to launch it yet) |
+| 5 | Drilling of the circles in a diameter range (`internal/service/cam/drill.go`) | Done 2026-09-14 (API and settings; no UI to launch it yet) |
 | — | LWPOLYLINE/POLYLINE bulges in the DXF import | In parallel, not started |
 
 Measured on `dxf/L28YO-tree-of-life-wall-spiritual-art.dxf`:
@@ -109,6 +110,37 @@ Measured on `dxf/L28YO-tree-of-life-wall-spiritual-art.dxf`:
   | inside Ø6 | 1597 | 11933 | 5113 |
 
   At 3° a ramp over a 1.5 mm step is 28.6 mm long, and on these curved contours it needs about 45 segments to stay within 0.01 mm. Steeper angles or smaller step-downs shorten it. The simulator ran a ramped program (95 commands) to full depth.
+- **Arduino UNO R3 shield** (`dxf/Arduino UNO R3 shield - full.dxf`, in inches: 36 circles and 9 lines, a 68.55 × 53.38 mm board), profiled with the default settings (depth 1, step 0.5, ramp 3°):
+  - Outside Ø1/Ø2/Ø3 cut the outline and the 4 Ø3.175 mounting holes, and warn about the 32 Ø0.508 pin circles. With Ø3.175 the mounting holes are warned about too.
+  - An independent check of all 8 programs: no gouge (closest edge r − 0.012 mm), outline and holes covered at full depth, conventional direction, rapids at safe Z, warnings exactly the circles narrower than the tool.
+  - Outside Ø2 (648 commands) ran on the simulator through the app WebSocket transfer in 45.5 s.
+  - Inside Ø1 cuts through the 0.9 mm bridge between the mounting holes and the board edge without a warning: the known limit on details narrower than the tool.
+  - A real PCB needs a depth above its thickness: the default 1 mm does not cut through 1.6 mm FR4.
+
+### Piece 5: drilling (2026-09-14)
+
+Asked by the user after the Arduino pin circles came out as warnings ("guarda come fanno i CNC seri"). Based on the LinuxCNC canned cycles (G81/G82/G83/G73, G98/G99), the Fusion 360 drilling cycles (drill tip through bottom, same-diameter selection) and the PCB tools pcb2gcode (`nog81`, `min-milldrill-hole-diameter`, `drills-available`) and FlatCAM (one job per drill, drill Z past the board). The user chose the selection by diameter range and a retract plane setting.
+
+- `cam.Drill` (`internal/service/cam/drill.go`), `POST /api/cam/drill` (`internal/handler/cam.go`), `TestDrillProgram_S7Sim`.
+- **Request:** the `/api/plc/extract` settings plus `depth`, `plungeSpeed` and `retractClearance` from the table, and the drill chosen at launch: `drillDiameter`, `minHoleDiameter`/`maxHoleDiameter`, `peckDepth` (0 = one feed to the bottom), `tipAngle` (118° when 0), `tipThrough`.
+- **Holes:** circle primitives only, with the diameter in the range, both ends included, widened by 1 µm so values converted from inches match. Circles whose centres are within 0.01 mm are one hole. No circle in the range is a 400.
+- **Order:** nearest hole first from X 0 Y 0, with `plc.OptimizeOrder` on the centres.
+- **Cycle, G83 with G98 written as `J`/`L`/`WAIT`** (the PLC has no canned cycles, like pcb2gcode `nog81`):
+  1. `J` over the hole at safe Z, `J` down to the retract plane R = work Z + `retractClearance`.
+  2. Pecks counted from work Z, fed at the plunge speed. After each peck but the last: `J` out to R and `J` back down to 0.254 mm above the bottom reached (LinuxCNC's value).
+  3. `WAIT` of the wait time at the bottom when above 0 (G82), then `J` to safe Z.
+
+  The program ends at X 0 Y 0 at safe Z. Every command of a hole carries the circle id.
+- **Drill point:** with `tipThrough` the bottom goes down by (D/2)/tan(angle/2), 0.300·D at 118°, so the full diameter reaches the depth. The pecks cover that length too.
+- **Validation:** drill diameter > 0, 0 < min ≤ max, depth > 0, peck 0 or at least 0.001 mm, tip angle 0–180, rapid and plunge speeds > 0, safe Z above work Z, R above work Z and not above safe Z, wait ≥ 0.
+- **Setting:** `retract_clearance` in `PLCSimulationSettings` (default 1 mm, so existing databases get it), "Distanza Ritorno" in the dialog. The depth and plunge speed rows now say they serve the router and the drill.
+- **Not in this piece:** chip breaking (G73), a slower break-through feed, spindle speed and tool change (the PLC has neither: one program per drill), an order better than nearest-first, a UI to launch drilling or profiles, holes drawn as polylines or arcs. The profile still plunges from safe Z; the retract plane could serve it too.
+- **Measured on the Arduino UNO shield** (local server, settings depth 2.4, plunge 3.5, R 1; independent check of every program):
+  - Pins, Ø1.0 drill for 0.4–1.2 mm: 32 holes, 129 commands; with pecks of 0.8 and the tip through, 417 commands down to −2.700.
+  - Mounting holes, Ø3.2 drill for 3–3.3 mm with the tip through: 4 holes down to −3.361.
+  - 5–6 mm: 400, nothing to drill.
+  - Simulator: the pecked pin program with a 200 ms dwell (449 commands) went through the app WebSocket transfer in 23 chunks and ran in 69.7 s down to −2.700, stopping at X 0 Y 0 Z 7.
+  - Rapids: 221 mm for the pins against 207 mm in the drawing order, and 192 against 196 mm for the mounting holes. On these header rows nearest-first is 7% longer than the order the DXF already has.
 
 ## Environment
 
@@ -146,6 +178,7 @@ Hooks: pre-commit runs gofmt, vet, golangci-lint on changed lines and the 600-li
 - **Arc through point:** `arcAuxPoint` in `internal/service/plc/extractor.go` returns the arc centre when an arc has neither `throughPoint` nor `sweep`.
 - **Import cache:** `SmartImportCached` keys the cache on the content only and returns the cached object without copying it.
 - **Unused configuration:** `ServerConfig.OPCUAConfig` (`OPCUA_CONFIG`) is not used by anything.
+- **Tiny profile step-down:** `cam.Profile` accepts any positive `stepDown`, and `levels()` allocates depth/stepDown passes. A request with 1e-9 would need gigabytes; the same case in drilling reached 9.6 GB in a test before the peck got its 0.001 mm minimum. The profile has no such minimum yet.
 
 ## Working rules to keep
 
