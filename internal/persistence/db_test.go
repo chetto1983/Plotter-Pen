@@ -280,8 +280,9 @@ type plcSettingsBeforeProfile struct {
 
 func (plcSettingsBeforeProfile) TableName() string { return "plc_simulation_settings" }
 
-// An existing database keeps its settings and gets a usable value for each profile setting.
-func TestInitDB_ExistingPLCSettingsGetProfileDefaults(t *testing.T) {
+// An existing database keeps its settings and gets a usable value for each profile and drilling
+// setting.
+func TestInitDB_ExistingPLCSettingsGetCAMDefaults(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "old.db")
 	old, err := gorm.Open(sqlite.Open(path), &gorm.Config{})
 	if err != nil {
@@ -305,7 +306,8 @@ func TestInitDB_ExistingPLCSettingsGetProfileDefaults(t *testing.T) {
 	if err := db.First(&got).Error; err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	if got.WorkSpeed != 250 || got.SafeZ != 12 || got.WorkZ != 3 || got.Depth != 1 || got.StepDown != 0.5 || got.PlungeSpeed != 5 || got.RampAngle != 3 {
+	if got.WorkSpeed != 250 || got.SafeZ != 12 || got.WorkZ != 3 || got.Depth != 1 || got.StepDown != 0.5 || got.PlungeSpeed != 5 || got.RampAngle != 3 ||
+		got.RetractClearance != 1 {
 		t.Fatalf("settings after migration %+v", got)
 	}
 }

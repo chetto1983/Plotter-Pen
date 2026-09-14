@@ -300,8 +300,8 @@ export class Modals {
         </div>
         <div class="cad-plc-setting-row">
           <div class="cad-plc-setting-info">
-            <label for="modalSimDepth">Profondità Profilo</label>
-            <span class="cad-plc-setting-desc">Fresatura: sotto l'Altezza Lavoro</span>
+            <label for="modalSimDepth">Profondità</label>
+            <span class="cad-plc-setting-desc">Fresa e punta: sotto Altezza Lavoro</span>
           </div>
           <div class="cad-plc-setting-input">
             <input type="number" id="modalSimDepth" class="cad-modal-input" min="0.1" max="50" step="0.1" value="1">
@@ -321,7 +321,7 @@ export class Modals {
         <div class="cad-plc-setting-row">
           <div class="cad-plc-setting-info">
             <label for="modalSimPlungeSpeed">Velocità Affondamento</label>
-            <span class="cad-plc-setting-desc">Fresatura: discesa nel materiale</span>
+            <span class="cad-plc-setting-desc">Fresa e punta: nel materiale</span>
           </div>
           <div class="cad-plc-setting-input">
             <input type="number" id="modalSimPlungeSpeed" class="cad-modal-input" min="0.5" max="100" step="0.5" value="5">
@@ -336,6 +336,16 @@ export class Modals {
           <div class="cad-plc-setting-input">
             <input type="number" id="modalSimRampAngle" class="cad-modal-input" min="0.5" max="90" step="0.5" value="3">
             <span class="cad-plc-setting-unit">°</span>
+          </div>
+        </div>
+        <div class="cad-plc-setting-row">
+          <div class="cad-plc-setting-info">
+            <label for="modalSimRetractClearance">Distanza Ritorno</label>
+            <span class="cad-plc-setting-desc">Foratura: sopra Altezza Lavoro</span>
+          </div>
+          <div class="cad-plc-setting-input">
+            <input type="number" id="modalSimRetractClearance" class="cad-modal-input" min="0.1" max="50" step="0.1" value="1">
+            <span class="cad-plc-setting-unit">mm</span>
           </div>
         </div>
       </div>

@@ -12,7 +12,8 @@ const PLC_INPUT_IDS = {
   depth: 'simDepth',
   stepDown: 'simStepDown',
   plungeSpeed: 'simPlungeSpeed',
-  rampAngle: 'simRampAngle'
+  rampAngle: 'simRampAngle',
+  retractClearance: 'simRetractClearance'
 };
 
 // Modal input IDs (for PLC settings modal)
@@ -25,11 +26,12 @@ const PLC_MODAL_INPUT_IDS = {
   depth: 'modalSimDepth',
   stepDown: 'modalSimStepDown',
   plungeSpeed: 'modalSimPlungeSpeed',
-  rampAngle: 'modalSimRampAngle'
+  rampAngle: 'modalSimRampAngle',
+  retractClearance: 'modalSimRetractClearance'
 };
 
-// depth, stepDown, plungeSpeed and rampAngle (degrees) are for profile cuts; the defaults match
-// the database columns
+// depth, stepDown, plungeSpeed and rampAngle (degrees) are for profile cuts; drilling uses depth,
+// plungeSpeed and retractClearance. The defaults match the database columns
 const PLC_DEFAULTS = {
   workSpeed: 100,
   rapidSpeed: 1000,
@@ -39,7 +41,8 @@ const PLC_DEFAULTS = {
   depth: 1,
   stepDown: 0.5,
   plungeSpeed: 5,
-  rampAngle: 3
+  rampAngle: 3,
+  retractClearance: 1
 };
 
 /**
@@ -65,7 +68,8 @@ export function getPLCSettingsFromUI() {
     depth: toNumber(document.getElementById(PLC_INPUT_IDS.depth)?.value, PLC_DEFAULTS.depth),
     stepDown: toNumber(document.getElementById(PLC_INPUT_IDS.stepDown)?.value, PLC_DEFAULTS.stepDown),
     plungeSpeed: toNumber(document.getElementById(PLC_INPUT_IDS.plungeSpeed)?.value, PLC_DEFAULTS.plungeSpeed),
-    rampAngle: toNumber(document.getElementById(PLC_INPUT_IDS.rampAngle)?.value, PLC_DEFAULTS.rampAngle)
+    rampAngle: toNumber(document.getElementById(PLC_INPUT_IDS.rampAngle)?.value, PLC_DEFAULTS.rampAngle),
+    retractClearance: toNumber(document.getElementById(PLC_INPUT_IDS.retractClearance)?.value, PLC_DEFAULTS.retractClearance)
   };
 }
 
@@ -106,7 +110,8 @@ export function getPLCSettingsFromModal() {
     depth: toNumber(document.getElementById(PLC_MODAL_INPUT_IDS.depth)?.value, PLC_DEFAULTS.depth),
     stepDown: toNumber(document.getElementById(PLC_MODAL_INPUT_IDS.stepDown)?.value, PLC_DEFAULTS.stepDown),
     plungeSpeed: toNumber(document.getElementById(PLC_MODAL_INPUT_IDS.plungeSpeed)?.value, PLC_DEFAULTS.plungeSpeed),
-    rampAngle: toNumber(document.getElementById(PLC_MODAL_INPUT_IDS.rampAngle)?.value, PLC_DEFAULTS.rampAngle)
+    rampAngle: toNumber(document.getElementById(PLC_MODAL_INPUT_IDS.rampAngle)?.value, PLC_DEFAULTS.rampAngle),
+    retractClearance: toNumber(document.getElementById(PLC_MODAL_INPUT_IDS.retractClearance)?.value, PLC_DEFAULTS.retractClearance)
   };
 }
 
@@ -126,7 +131,8 @@ export function setPLCSettingsToModal(settings) {
     [PLC_MODAL_INPUT_IDS.depth]: settings.depth ?? PLC_DEFAULTS.depth,
     [PLC_MODAL_INPUT_IDS.stepDown]: settings.stepDown ?? PLC_DEFAULTS.stepDown,
     [PLC_MODAL_INPUT_IDS.plungeSpeed]: settings.plungeSpeed ?? PLC_DEFAULTS.plungeSpeed,
-    [PLC_MODAL_INPUT_IDS.rampAngle]: settings.rampAngle ?? PLC_DEFAULTS.rampAngle
+    [PLC_MODAL_INPUT_IDS.rampAngle]: settings.rampAngle ?? PLC_DEFAULTS.rampAngle,
+    [PLC_MODAL_INPUT_IDS.retractClearance]: settings.retractClearance ?? PLC_DEFAULTS.retractClearance
   };
 
   for (const [id, val] of Object.entries(values)) {

@@ -275,15 +275,16 @@ func (h *PersistenceHandler) GetPLCSimSettings(c *gin.Context) {
 
 func (h *PersistenceHandler) SavePLCSimSettings(c *gin.Context) {
 	var req struct {
-		WorkSpeed   float64 `json:"workSpeed"`
-		RapidSpeed  float64 `json:"rapidSpeed"`
-		SafeZ       float64 `json:"safeZ"`
-		WorkZ       float64 `json:"workZ"`
-		WaitTime    int     `json:"waitTime"`
-		Depth       float64 `json:"depth"`
-		StepDown    float64 `json:"stepDown"`
-		PlungeSpeed float64 `json:"plungeSpeed"`
-		RampAngle   float64 `json:"rampAngle"`
+		WorkSpeed        float64 `json:"workSpeed"`
+		RapidSpeed       float64 `json:"rapidSpeed"`
+		SafeZ            float64 `json:"safeZ"`
+		WorkZ            float64 `json:"workZ"`
+		WaitTime         int     `json:"waitTime"`
+		Depth            float64 `json:"depth"`
+		StepDown         float64 `json:"stepDown"`
+		PlungeSpeed      float64 `json:"plungeSpeed"`
+		RampAngle        float64 `json:"rampAngle"`
+		RetractClearance float64 `json:"retractClearance"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -291,15 +292,16 @@ func (h *PersistenceHandler) SavePLCSimSettings(c *gin.Context) {
 	}
 
 	updates := map[string]interface{}{
-		"work_speed":   req.WorkSpeed,
-		"rapid_speed":  req.RapidSpeed,
-		"safe_z":       req.SafeZ,
-		"work_z":       req.WorkZ,
-		"wait_time":    req.WaitTime,
-		"depth":        req.Depth,
-		"step_down":    req.StepDown,
-		"plunge_speed": req.PlungeSpeed,
-		"ramp_angle":   req.RampAngle,
+		"work_speed":        req.WorkSpeed,
+		"rapid_speed":       req.RapidSpeed,
+		"safe_z":            req.SafeZ,
+		"work_z":            req.WorkZ,
+		"wait_time":         req.WaitTime,
+		"depth":             req.Depth,
+		"step_down":         req.StepDown,
+		"plunge_speed":      req.PlungeSpeed,
+		"ramp_angle":        req.RampAngle,
+		"retract_clearance": req.RetractClearance,
 	}
 
 	if err := h.db.Model(&persistence.PLCSimulationSettings{}).Where("id = 1").Updates(updates).Error; err != nil {

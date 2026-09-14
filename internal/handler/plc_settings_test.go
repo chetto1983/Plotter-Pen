@@ -10,14 +10,14 @@ import (
 	"plotter-pen/internal/persistence"
 )
 
-// The profile settings travel with the pen settings in the same dialog and request.
-func TestPLCSimSettings_SavesProfileSettings(t *testing.T) {
+// The profile and drilling settings travel with the pen settings in the same dialog and request.
+func TestPLCSimSettings_SavesCAMSettings(t *testing.T) {
 	r, cleanup := setupTestDB(t)
 	defer cleanup()
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/plc/settings", strings.NewReader(
-		`{"workSpeed": 40, "rapidSpeed": 800, "safeZ": 10, "workZ": 2, "waitTime": 100, "depth": 1.6, "stepDown": 0.4, "plungeSpeed": 3, "rampAngle": 7.5}`))
+		`{"workSpeed": 40, "rapidSpeed": 800, "safeZ": 10, "workZ": 2, "waitTime": 100, "depth": 1.6, "stepDown": 0.4, "plungeSpeed": 3, "rampAngle": 7.5, "retractClearance": 2.5}`))
 	req.Header.Set("Content-Type", "application/json")
 	r.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
@@ -33,7 +33,7 @@ func TestPLCSimSettings_SavesProfileSettings(t *testing.T) {
 		t.Fatalf("load: %v, body %s", err, w.Body.String())
 	}
 	got := resp.Data
-	if got.WorkSpeed != 40 || got.WorkZ != 2 || got.Depth != 1.6 || got.StepDown != 0.4 || got.PlungeSpeed != 3 || got.RampAngle != 7.5 {
+	if got.WorkSpeed != 40 || got.WorkZ != 2 || got.Depth != 1.6 || got.StepDown != 0.4 || got.PlungeSpeed != 3 || got.RampAngle != 7.5 || got.RetractClearance != 2.5 {
 		t.Fatalf("loaded %+v", got)
 	}
 }

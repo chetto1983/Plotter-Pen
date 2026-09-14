@@ -46,6 +46,7 @@ export class SidebarRight {
         <input type="hidden" id="simStepDown" value="0.5">
         <input type="hidden" id="simPlungeSpeed" value="5">
         <input type="hidden" id="simRampAngle" value="3">
+        <input type="hidden" id="simRetractClearance" value="1">
       </div>
         `;
         return aside;
