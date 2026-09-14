@@ -45,7 +45,8 @@ const (
 )
 
 // Drill returns the PLC program that drills the circles of the drawing whose diameter is in the
-// requested range, one hole after the other.
+// requested range, one hole after the other: nearest hole first from X 0 Y 0, then the route
+// shortened with 2-opt.
 //
 // Each hole follows G83 with G98: rapid over the hole at safe Z and down to the retract plane,
 // then pecks fed at the plunge speed. Between pecks the drill rapids out to the retract plane and
@@ -62,7 +63,7 @@ func Drill(req DrillRequest) (plc.ExtractResponse, error) {
 	}
 
 	var lines, ids []string
-	for _, h := range plc.OptimizeOrder(holes, geom.Point{}) {
+	for _, h := range shortenRoute(plc.OptimizeOrder(holes, geom.Point{})) {
 		x, y, _ := h.GetCircleParams()
 		hole := req.hole(x, y)
 		lines = append(lines, hole...)
@@ -109,7 +110,7 @@ func (req DrillRequest) validate() error {
 
 // holes returns the circles to drill: those with a diameter in the range, the first of the
 // circles that share a centre. Each is shrunk to its centre, where a circle of radius 0 starts, so
-// the nearest-neighbour order of plc.OptimizeOrder goes from centre to centre.
+// plc.OptimizeOrder and shortenRoute measure from centre to centre.
 func (req DrillRequest) holes() []plc.Primitive {
 	var holes []plc.Primitive
 	for _, p := range req.Primitives {
@@ -127,6 +128,34 @@ func (req DrillRequest) holes() []plc.Primitive {
 		holes = append(holes, plc.Primitive{Type: plc.PrimitiveCircle, ID: p.ID, Cx: new(x), Cy: new(y), Radius: new(0.0)})
 	}
 	return holes
+}
+
+// shortenRoute improves the route that leaves X 0 Y 0, visits the holes in order and comes back,
+// with 2-opt as CAM path optimisers do: while reversing the holes between two legs makes the route
+// shorter, it reverses them. No two legs of the result can be uncrossed that way, though it is not
+// always the shortest route.
+func shortenRoute(holes []plc.Primitive) []plc.Primitive {
+	route := slices.Clone(holes)
+	stops := make([]geom.Point, len(route)+2) // X 0 Y 0, the holes, X 0 Y 0
+	for i, h := range route {
+		stops[i+1] = h.GetStartPoint()
+	}
+	for improved := true; improved; {
+		improved = false
+		for i := 1; i < len(stops)-2; i++ {
+			for j := i + 1; j < len(stops)-1; j++ {
+				saved := stops[i-1].Distance(stops[i]) + stops[j].Distance(stops[j+1]) -
+					stops[i-1].Distance(stops[j]) - stops[i].Distance(stops[j+1])
+				// every reversal shortens the route by more than this, so the loop ends
+				if saved > 1e-9 {
+					slices.Reverse(stops[i : j+1])
+					slices.Reverse(route[i-1 : j])
+					improved = true
+				}
+			}
+		}
+	}
+	return route
 }
 
 // hole returns the commands that drill the hole centred at (x, y).

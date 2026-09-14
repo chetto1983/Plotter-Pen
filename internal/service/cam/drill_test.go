@@ -1,6 +1,8 @@
 package cam
 
 import (
+	"fmt"
+	"math"
 	"slices"
 	"strings"
 	"testing"
@@ -157,12 +159,72 @@ func TestDrill_DrillsCoincidentCirclesOnce(t *testing.T) {
 	}
 }
 
-// From X 0 Y 0 the drill always goes to the nearest hole not drilled yet, whatever the drawing order.
-func TestDrill_GoesToTheNearestHole(t *testing.T) {
-	req := drillRequest(circleP(30, 0, 0.5), circleP(10, 0, 0.5), circleP(-5, 0, 0.5), circleP(20, 1, 0.5))
+// routeLength is the rapid travel from X 0 Y 0 through the holes and back, as the program ends there.
+func routeLength(route [][2]float64) float64 {
+	total, px, py := 0.0, 0.0, 0.0
+	for _, h := range route {
+		total += math.Hypot(h[0]-px, h[1]-py)
+		px, py = h[0], h[1]
+	}
+	return total + math.Hypot(px, py)
+}
 
-	if got, want := holes(t, mustDrill(t, req).Output), [][2]float64{{-5, 0}, {10, 0}, {20, 1}, {30, 0}}; !slices.Equal(got, want) {
-		t.Fatalf("drilled %v, want %v", got, want)
+// Two rows of pins with X 0 Y 0 between them, like the headers of a shield: going to the nearest
+// hole each time makes 92.559 mm, crossing between the rows. The route is the shortest of all
+// 40320 orders.
+func TestDrill_TakesTheShortestRouteBetweenTwoRows(t *testing.T) {
+	var prims []plc.Primitive
+	var pins [][2]float64
+	for k := range 4 {
+		x := -15 + 10*float64(k)
+		prims = append(prims, circleP(x, -4, 0.5), circleP(x, 6, 0.5))
+		pins = append(pins, [2]float64{x, -4}, [2]float64{x, 6})
+	}
+
+	route := holes(t, mustDrill(t, drillRequest(prims...)).Output)
+
+	best := math.Inf(1)
+	var permute func(k int)
+	permute = func(k int) {
+		if k == len(pins) {
+			best = min(best, routeLength(pins))
+			return
+		}
+		for i := k; i < len(pins); i++ {
+			pins[k], pins[i] = pins[i], pins[k]
+			permute(k + 1)
+			pins[k], pins[i] = pins[i], pins[k]
+		}
+	}
+	permute(0)
+	if len(route) != 8 || math.Abs(routeLength(route)-best) > 1e-9 {
+		t.Fatalf("route %v is %.3f mm, the best is %.3f mm", route, routeLength(route), best)
+	}
+}
+
+// Like 2-opt: no two legs of the route cross, since reversing the holes between them would shorten
+// it. Checked on 40 holes scattered without a pattern.
+func TestDrill_NoTwoLegsOfTheRouteCanBeUncrossed(t *testing.T) {
+	var prims []plc.Primitive
+	seed := uint32(7)
+	next := func() float64 { // a fixed pseudo-random sequence, 0.1 mm steps up to 100 mm
+		seed = seed*1664525 + 1013904223
+		return float64(seed>>16%1000) / 10
+	}
+	for range 40 {
+		prims = append(prims, circleP(next()-50, next()-50, 0.5))
+	}
+
+	route := holes(t, mustDrill(t, drillRequest(prims...)).Output)
+
+	stops := append(append([][2]float64{{0, 0}}, route...), [2]float64{0, 0})
+	leg := func(a, b int) float64 { return math.Hypot(stops[a][0]-stops[b][0], stops[a][1]-stops[b][1]) }
+	for i := 1; i < len(stops)-2; i++ {
+		for j := i + 1; j < len(stops)-1; j++ {
+			if saved := leg(i-1, i) + leg(j, j+1) - leg(i-1, j) - leg(i, j+1); saved > 1e-6 {
+				t.Fatalf("reversing stops %d..%d of %d saves %.4f mm", i, j, len(route), saved)
+			}
+		}
 	}
 }
 
@@ -203,6 +265,29 @@ func TestDrill_RejectsWhatCannotBeDrilled(t *testing.T) {
 			tt.change(&req)
 			if res, err := Drill(req); err == nil {
 				t.Fatalf("want an error, got %d commands", res.Count)
+			}
+		})
+	}
+}
+
+// BenchmarkDrill_Holes times the whole program, where the route shortening dominates, for
+// boards with many holes.
+func BenchmarkDrill_Holes(b *testing.B) {
+	for _, n := range []int{100, 1000, 3000} {
+		b.Run(fmt.Sprint(n), func(b *testing.B) {
+			var prims []plc.Primitive
+			seed := uint32(11)
+			next := func() float64 {
+				seed = seed*1664525 + 1013904223
+				return float64(seed>>8%100000) / 1000
+			}
+			for range n {
+				prims = append(prims, circleP(next(), next(), 0.5))
+			}
+			for b.Loop() {
+				if _, err := Drill(drillRequest(prims...)); err != nil {
+					b.Fatal(err)
+				}
 			}
 		})
 	}
