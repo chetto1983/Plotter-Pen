@@ -75,7 +75,7 @@ tools/s7sim/                  # S7-1500 OPC UA simulator (Python, not part of Co
 | G-Code Gen | `pkg/gcode/generator.go` | Unused | G0/G1/G2/G3 and M30; no current endpoint uses it (used by the CAM removed in `7ad8c8f`) |
 | Clipper2 | `pkg/clipper/adapter.go` | Done | On go-clipper2 v1.3.0: single-path offsets, concentric pockets, `MergeContours` (even-odd merge), `OffsetContours` (merged set offset with 5 µm arcs) and `Inside` (which rings enclose which); the profile uses the last three |
 | Contour Chaining | `internal/service/cam/chain.go` | Done | Joins primitives into closed contours (ends within 0.01 mm, arcs split at 5 µm, no joint where three or more ends meet); used by the profile |
-| Profile Cut | `internal/service/cam/profile.go` | API only | `POST /api/cam/profile`: closed contours offset by the tool radius (outside or inside), each ring after the rings inside it and then the nearest one, conventional or climb, warnings for contours the tool cannot reach, passes from work Z down by the step-down, rings fitted at 0.01 mm into `L`/`A` with the arc's middle input point as `I`/`J`. No UI yet; tried on `tools/s7sim` only |
+| Profile Cut | `internal/service/cam/profile.go` | API only | `POST /api/cam/profile`: closed contours offset by the tool radius (outside or inside), each ring after the rings inside it and then the nearest one, conventional or climb, warnings for contours the tool cannot reach, passes from work Z down by the step-down entered along `L` ramps at the ramp angle, rings fitted at 0.01 mm into `L`/`A` with the arc's middle input point as `I`/`J`. No UI yet; tried on `tools/s7sim` only |
 
 ### OPC UA (Complete)
 
@@ -94,7 +94,7 @@ tools/s7sim/                  # S7-1500 OPC UA simulator (Python, not part of Co
 | AppState | Done | Singleton autosave |
 | Drawing | Done | Saved designs CRUD |
 | Tool | Done | Tool library |
-| PLCSimulationSettings | Done | Speed, Z heights, wait; profile depth, step-down and plunge speed |
+| PLCSimulationSettings | Done | Speed, Z heights, wait; profile depth, step-down, plunge speed and ramp angle |
 | OPCUAConfig | Done | Multi-PLC with auth |
 | MachineConfig | Model only | Table and default seed; no API since commit `7ad8c8f` |
 

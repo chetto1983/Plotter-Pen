@@ -73,17 +73,34 @@ Measured on `dxf/L28YO-tree-of-life-wall-spiritual-art.dxf`:
 - The request is the `/api/plc/extract` request (primitives, `defaultSpeed`, `rapidSpeed`, `safeZ`, `workZ`, `waitTime`) plus `toolDiameter`, `side` (`outside`/`inside`), `direction` (`conventional` when empty, or `climb`), `depth`, `stepDown`, `plungeSpeed`. Invalid settings, open contours or a tool that fits no contour are a 400.
 - Refinements of the design above:
   - **Order:** a ring is cut only after every ring inside it (containment from `clipper.Inside`), not just holes before outlines, so a part inside another part's hole is cut before that hole. Among the rings allowed next, the tool goes to the nearest one and enters it at its nearest vertex, starting from X 0 Y 0.
-  - **Passes:** a ring is plunged at its start for each level without going back to safe Z in between; it retracts once at the end. The program ends at X 0 Y 0 at safe Z, like the plotter programs.
+  - **Passes:** a ring is entered at its start for each level without going back to safe Z in between; it retracts once at the end. The program ends at X 0 Y 0 at safe Z, like the plotter programs.
   - **Inside profiles:** the direction rule is reversed, since the finished wall is then outside the ring.
   - `FitSegment` gained `MidX`/`MidY` for the `A` through point; `pkg/plc.Generator` gained `ArcThrough` and `Lines`.
-- **Settings:** `depth` 1 mm, `stepDown` 0.5 mm and `plungeSpeed` 5 mm/s are the column defaults, so existing databases get them. The dialog now scrolls its rows when the screen is shorter than about 830 px.
+- **Settings:** `depth` 1 mm, `stepDown` 0.5 mm, `plungeSpeed` 5 mm/s and `rampAngle` 3° are the column defaults, so existing databases get them. The dialog scrolls its rows when the screen is shorter than about 900 px.
 - **Measured:** on the tree-of-life DXF, 6 profiles (Ø2/Ø3/Ø6, outside and inside, 2 passes) took 85–164 ms per request, with 1014–2118 segments per pass. `/api/plc/extract` output is byte-identical to the previous build.
 - **Unreachable contours:** a contour that gets no ring (a hole narrower than the tool when cutting outside, an outline narrower than the tool when cutting inside, or a hole closed by a part standing too close inside it) is still left uncut. The response lists it under `warnings` with its bounds; only a job with no ring at all is refused. Details narrower than the tool on a contour that does get a ring are not reported.
 - **Measured after the ordering and warnings (2026-09-14, tree-of-life DXF):**
   - Rapid XY length went from 3768–6466 mm to 1271–1643 mm.
   - Warnings: 4, 7 and 13 holes for Ø2, Ø3 and Ø6 outside, none inside. On all 44 holes they match an independent check of whether the tool fits in each hole on its own.
   - Containment and warnings add 3–7 ms each; the Clipper offset still takes most of the 150–270 ms of a request.
-- **Open point:** plunges go straight down, with no ramp.
+- **Ramps (option 1 chosen by the user on 2026-09-14: `L` moves only).** Whether the real PLC takes an `A` with changing Z as a helix is unknown, so every `A` stays at a constant Z.
+  - **Entry:** down to Altezza Lavoro the tool goes straight at the plunge speed. For each level it then ramps along the ring at the ramp angle, out for half the drop and back to the ring start, and cuts the lap from there.
+  - **Speed:** the ramp runs at the cutting speed, limited so the tool never sinks faster than the plunge speed: V = min(cutting, plunge / sin angle).
+  - **Tolerance:** the ramp follows the ring simplified at 0.01 mm (`clipper.SimplifyPath`, go-clipper2's `SimplifyPath64`).
+  - **Straight plunges:** at 90°, and in rings shorter than the tool diameter, the tool plunges straight down.
+  - **Setting:** `rampAngle` in the request, and "Angolo Rampa" (default 3°) in the dialog and in `PLCSimulationSettings`.
+- **Program size with ramps, measured on the tree-of-life DXF (2 passes of 1.5 mm):**
+
+  | Profile | 90° (no ramp) | 3°, every ring vertex | 3°, simplified at 0.01 mm |
+  |---|---|---|---|
+  | outside Ø2 | 4545 | 28145 | 15038 |
+  | outside Ø3 | 3825 | 27740 | 12977 |
+  | outside Ø6 | 2241 | 17847 | 8023 |
+  | inside Ø2 | 4541 | 16275 | 11445 |
+  | inside Ø3 | 3783 | 23854 | 11483 |
+  | inside Ø6 | 1597 | 11933 | 5113 |
+
+  At 3° a ramp over a 1.5 mm step is 28.6 mm long, and on these curved contours it needs about 45 segments to stay within 0.01 mm. Steeper angles or smaller step-downs shorten it. The simulator ran a ramped program (95 commands) to full depth.
 
 ## Environment
 
@@ -122,6 +139,9 @@ Hooks: pre-commit runs gofmt, vet, golangci-lint on changed lines and the 600-li
 - **Import cache:** `SmartImportCached` keys the cache on the content only and returns the cached object without copying it.
 - **Unused configuration:** `ServerConfig.OPCUAConfig` (`OPCUA_CONFIG`) is not used by anything.
 - **Two sources for the PLC settings:** at startup the frontend loads the settings table (`/api/plc/settings`) and the `plcSettings` copy in the saved app state (`/api/state`) concurrently, and the one that arrives last fills the inputs. Saving from the dialog writes only the table, so a stale state copy can win until the next autosave. Seen on 2026-09-14: the server log shows the two requests in either order, and a state copy won over the table. Since then a state without a field (saved before the profile fields) no longer resets that field to its default.
+  - **Reproduced the same day:** "Angolo Rampa" was saved as 7.5 (table 7.5) and the page reloaded right away. The dialog showed 3, the value the autosave had put in the state when the page first loaded. Pressing "Applica" there would write 3 back to the table.
+  - **Undo/redo:** the snapshots also restore `plcSettings` (`src/app/StateManager.js`).
+  - **Before fixing:** decide which source wins.
 
 ## Working rules to keep
 
