@@ -27,7 +27,7 @@ One piece at a time: a short design approved first, then TDD, then a check on th
 | 1 | Chord-midpoint check in `FitArcsAndLines` (`internal/service/plc/fit.go`) | Done |
 | 2 | Contour chaining (`internal/service/cam/chain.go`) | Done |
 | 3 | Offset of the contour set (`pkg/clipper/adapter.go`, `OffsetContours`) | Done |
-| 4 | First complete profile down to J/L/A commands, tried on the simulator | **Next** |
+| 4 | First complete profile down to J/L/A commands, tried on the simulator | Done 2026-09-14 (API and settings; no UI to launch it yet) |
 | — | LWPOLYLINE/POLYLINE bulges in the DXF import | In parallel, not started |
 
 Measured on `dxf/L28YO-tree-of-life-wall-spiritual-art.dxf`:
@@ -67,6 +67,22 @@ Measured on `dxf/L28YO-tree-of-life-wall-spiritual-art.dxf`:
   - It generates the profile of a test shape and sends it only to `S7SIM_ENDPOINT` (default `opc.tcp://127.0.0.1:4840`), never to the active PLC in the database.
   - It checks End_Of_File and that the final Pos X/Y/Z equals the last command.
 
+### Piece 4 as built (2026-09-14)
+
+- `cam.Profile` (`internal/service/cam/profile.go`), `POST /api/cam/profile` (`internal/handler/cam.go`), `TestProfileProgram_S7Sim` (`internal/service/opcua/s7sim_test.go`).
+- The request is the `/api/plc/extract` request (primitives, `defaultSpeed`, `rapidSpeed`, `safeZ`, `workZ`, `waitTime`) plus `toolDiameter`, `side` (`outside`/`inside`), `direction` (`conventional` when empty, or `climb`), `depth`, `stepDown`, `plungeSpeed`. Invalid settings, open contours or a tool that fits no contour are a 400.
+- Refinements of the design above:
+  - **Order:** the deepest rings first (nesting depth from `clipper.NestingDepths`), not just holes before outlines, so a part inside another part's hole is cut before that hole.
+  - **Passes:** a ring is plunged at its start for each level without going back to safe Z in between; it retracts once at the end. The program ends at X 0 Y 0 at safe Z, like the plotter programs.
+  - **Inside profiles:** the direction rule is reversed, since the finished wall is then outside the ring.
+  - `FitSegment` gained `MidX`/`MidY` for the `A` through point; `pkg/plc.Generator` gained `ArcThrough` and `Lines`.
+- **Settings:** `depth` 1 mm, `stepDown` 0.5 mm and `plungeSpeed` 5 mm/s are the column defaults, so existing databases get them. The dialog now scrolls its rows when the screen is shorter than about 830 px.
+- **Measured:** on the tree-of-life DXF, 6 profiles (Ø2/Ø3/Ø6, outside and inside, 2 passes) took 85–164 ms per request, with 1014–2118 segments per pass. `/api/plc/extract` output is byte-identical to the previous build.
+- **Open points:**
+  - Contours that the tool cannot reach (a hole narrower than the tool when cutting outside) produce no ring and no warning. Only a job with no ring at all is refused.
+  - Rings of the same depth keep Clipper's order, so rapids are not minimised.
+  - Plunges go straight down, with no ramp.
+
 ## Environment
 
 - **Containers:** `plotter-pen` (Compose, host port 41880) and `plotter-pen-s7sim` (standalone simulator, host port 4840).
@@ -103,6 +119,7 @@ Hooks: pre-commit runs gofmt, vet, golangci-lint on changed lines and the 600-li
 - **Arc through point:** `arcAuxPoint` in `internal/service/plc/extractor.go` returns the arc centre when an arc has neither `throughPoint` nor `sweep`.
 - **Import cache:** `SmartImportCached` keys the cache on the content only and returns the cached object without copying it.
 - **Unused configuration:** `ServerConfig.OPCUAConfig` (`OPCUA_CONFIG`) is not used by anything.
+- **Two sources for the PLC settings:** at startup the frontend loads the settings table (`/api/plc/settings`) and the `plcSettings` copy in the saved app state (`/api/state`) concurrently, and the one that arrives last fills the inputs. Saving from the dialog writes only the table, so a stale state copy can win until the next autosave. Seen on 2026-09-14: the server log shows the two requests in either order, and a state copy won over the table. Since then a state without a field (saved before the profile fields) no longer resets that field to its default.
 
 ## Working rules to keep
 

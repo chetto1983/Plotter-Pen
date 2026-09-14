@@ -34,6 +34,7 @@ Closed DXF curves are first tested as full circles (`detectCircle`): at least 10
 | DXF `LWPOLYLINE`, `POLYLINE` | Polyline or polygon from the vertices, no fitting; bulge values are ignored |
 | SVG curves | `fitArcsToPoints` when the `fitArcs` option is true (straight subsegments are split out at parse time) |
 | `/api/plc/extract` | No fitting: polylines and polygons become `L` commands |
+| `/api/cam/profile` | `FitArcsAndLines` at 0.01 mm on every offset ring (`internal/service/cam/profile.go`) |
 
 `ImportOptions.FitArcs` and `ImportOptions.ArcTolerance` are not read by the DXF path (`SmartImport`), even though `internal/handler/dxf.go` sets them for raw `text/plain` requests. The SVG path reads `FitArcs` but not `ArcTolerance`.
 
@@ -43,7 +44,7 @@ Closed DXF curves are first tested as full circles (`detectCircle`): at least 10
 
 The import JSON (`internal/service/import/primitive_json.go`) writes arcs as `ax`, `ay` (start), `bx`, `by` (end), `cx`, `cy`, `radius`, `startAngle` and `sweep` (radians, negative = clockwise), plus `throughPoint` (the middle sample of the fitted span). Lines use `x1`, `y1`, `x2`, `y2`.
 
-The PLC extractor emits `A X…, Y…, Z…, I…, J…, V…`, where `I`/`J` is a point on the arc, not a centre offset. It uses `throughPoint` when present, otherwise the point at `startAngle + sweep/2` (`arcAuxPoint` in `internal/service/plc/extractor.go`). The frontend converts its primitives before calling `/api/plc/extract` (`primitiveToRequest` in `src/app/PLCOutputManager.js`).
+The PLC extractor emits `A X…, Y…, Z…, I…, J…, V…`, where `I`/`J` is a point on the arc, not a centre offset. It uses `throughPoint` when present, otherwise the point at `startAngle + sweep/2` (`arcAuxPoint` in `internal/service/plc/extractor.go`). The frontend converts its primitives before calling `/api/plc/extract` (`primitiveToRequest` in `src/app/PLCOutputManager.js`). The profile cut writes `I`/`J` from `FitSegment.MidX`/`MidY`, the input point in the middle of the fitted span.
 
 ---
 
@@ -52,7 +53,7 @@ The PLC extractor emits `A X…, Y…, Z…, I…, J…, V…`, where `I`/`J` is
 Verified on 2026-09-11.
 
 1. **False arcs on sparse polylines in `fitArcsToPoints`.** Three points always define a circle and the import copy checks only the vertices, so any three non-collinear vertices are accepted as an arc, and so are four concyclic ones (every rectangle): the closed rectangle (3,3)–(97,3)–(97,47)–(3,47) at tolerance 0.01 becomes one arc of radius 51.894 (the circumcircle) and one line, up to 29.9 mm away from the rectangle. The import is not affected in practice because it only fits densely sampled curves. `FitArcsAndLines` checks the chord midpoints and returns the four sides as lines; on the Clipper2 tool paths of `L28YO-tree-of-life-wall-spiritual-art.dxf` (tools Ø2, Ø3 and Ø6, tolerance 0.01) its maximum deviation is 0.011 mm, where the vertex-only check reached 1.5 mm. Adding a turning-direction check left the deviation unchanged and only added segments, so it is not applied.
-2. **`FitSegment` carries no direction.** Callers must take the direction from the source points (the through point). Deriving it from the cross product of the start and end radii is wrong for arcs larger than 180°: on the tree-of-life tool paths this happens to 1 arc in about 2000.
+2. **The direction of a `FitSegment` arc is in `MidX`/`MidY` only.** End points, centre and radius do not tell which way the arc turns; `MidX`/`MidY` is the input point in the middle of the span and lies on the arc. Deriving the direction from the cross product of the start and end radii instead is wrong for arcs larger than 180°: on the tree-of-life tool paths this happens to 1 arc in about 2000.
 3. **Bulges are ignored** in `LWPOLYLINE` and `POLYLINE`, so their arc segments arrive as straight chords.
 4. **Fixed import tolerance:** 0.05 mm, whatever the request options say.
 

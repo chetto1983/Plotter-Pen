@@ -10,6 +10,7 @@ internal/
 ├── handler/                   # HTTP API endpoints
 │   ├── dxf.go                # POST /api/parse-dxf, /api/smart-import, /api/parse-svg, /api/smart-import-svg, /api/parse-stl
 │   ├── plc.go                # POST /api/plc/extract
+│   ├── cam.go                # POST /api/cam/profile
 │   ├── opcua.go              # OPC UA config, PLCs, certificates, connection, transfer
 │   ├── opcua_ws.go           # WS /api/opcua/ws position stream
 │   ├── persistence.go        # State/drawings/tools CRUD, PLC simulation settings
@@ -39,7 +40,8 @@ internal/
     │   └── optimizer.go      # Nearest-neighbor ordering
     │
     ├── cam/
-    │   └── chain.go          # Contour chaining for milling (no endpoint yet)
+    │   ├── chain.go          # Contour chaining for milling
+    │   └── profile.go        # Profile cut: offset rings, depth passes, J/L/A program
     │
     └── opcua/
         ├── client.go         # OPC UA client
@@ -71,8 +73,9 @@ tools/s7sim/                  # S7-1500 OPC UA simulator (Python, not part of Co
 | Path Optimizer | `internal/service/plc/optimizer.go` | Done | Nearest-neighbor ordering |
 | PLC Extractor | `internal/service/plc/extractor.go` | Done | J/L/A/WAIT with Z-axis |
 | G-Code Gen | `pkg/gcode/generator.go` | Unused | G0/G1/G2/G3 and M30; no current endpoint uses it (used by the CAM removed in `7ad8c8f`) |
-| Clipper2 | `pkg/clipper/adapter.go` | Unused | On go-clipper2 v1.3.0: single-path offsets, concentric pockets, and `OffsetContours` (whole contour set merged even-odd, then offset with 5 µm arcs); no current endpoint uses it |
-| Contour Chaining | `internal/service/cam/chain.go` | Unused | Joins primitives into closed contours (ends within 0.01 mm, arcs split at 5 µm, no joint where three or more ends meet); no endpoint uses it yet |
+| Clipper2 | `pkg/clipper/adapter.go` | Done | On go-clipper2 v1.3.0: single-path offsets, concentric pockets, `OffsetContours` (whole contour set merged even-odd, then offset with 5 µm arcs) and `NestingDepths`; the profile uses the last two |
+| Contour Chaining | `internal/service/cam/chain.go` | Done | Joins primitives into closed contours (ends within 0.01 mm, arcs split at 5 µm, no joint where three or more ends meet); used by the profile |
+| Profile Cut | `internal/service/cam/profile.go` | API only | `POST /api/cam/profile`: closed contours offset by the tool radius (outside or inside), innermost rings first, conventional or climb, passes from work Z down by the step-down, rings fitted at 0.01 mm into `L`/`A` with the arc's middle input point as `I`/`J`. No UI yet; tried on `tools/s7sim` only |
 
 ### OPC UA (Complete)
 
@@ -91,7 +94,7 @@ tools/s7sim/                  # S7-1500 OPC UA simulator (Python, not part of Co
 | AppState | Done | Singleton autosave |
 | Drawing | Done | Saved designs CRUD |
 | Tool | Done | Tool library |
-| PLCSimulationSettings | Done | Speed, Z heights, wait |
+| PLCSimulationSettings | Done | Speed, Z heights, wait; profile depth, step-down and plunge speed |
 | OPCUAConfig | Done | Multi-PLC with auth |
 | MachineConfig | Model only | Table and default seed; no API since commit `7ad8c8f` |
 

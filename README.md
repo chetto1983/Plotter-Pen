@@ -83,7 +83,7 @@ plotter-pen/
 │   ├── service/
 │   │   ├── import/       # DXF, SVG, STL parsers, spline sampling, arc fitting
 │   │   ├── plc/          # PLC command generation, path ordering
-│   │   ├── cam/          # Contour chaining for milling (not used by current endpoints)
+│   │   ├── cam/          # Milling: contour chaining, profile cuts as PLC programs
 │   │   └── opcua/        # OPC UA client, configuration, chunked transfer
 │   ├── persistence/      # SQLite + GORM
 │   ├── middleware/       # CORS, security headers, logging, rate limiting
@@ -91,8 +91,8 @@ plotter-pen/
 ├── pkg/
 │   ├── geom/             # Geometry primitives
 │   ├── gcode/            # G-code builder (not used by current endpoints)
-│   ├── plc/              # PLC command builder (not used by current endpoints)
-│   └── clipper/          # Clipper2 offsets and pockets (not used by current endpoints)
+│   ├── plc/              # PLC command builder (used by the profile cut)
+│   └── clipper/          # Clipper2 offsets and pockets (offsets used by the profile cut)
 ├── src/                  # JavaScript frontend
 │   ├── geometry/         # Primitives and geometric operations
 │   ├── plc/              # 3D visualization (Three.js Line2, touch)
@@ -130,7 +130,8 @@ plotter-pen/
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/plc/extract` | POST | Generate PLC commands |
-| `/api/plc/settings` | GET/POST | PLC simulation settings |
+| `/api/plc/settings` | GET/POST | PLC simulation settings, including profile depth, step-down and plunge speed |
+| `/api/cam/profile` | POST | Profile cut of the closed contours as PLC commands (same response as `/api/plc/extract`; no UI yet) |
 | `/api/opcua/config` | GET/PUT | Active OPC UA configuration |
 | `/api/opcua/plcs` | GET/POST | PLC configurations |
 | `/api/opcua/plcs/:id` | GET/DELETE | Single PLC configuration |
