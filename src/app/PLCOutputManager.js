@@ -1,10 +1,12 @@
 import { PLCSimulator3D } from '../plc/PLCSimulator3D.js';
 import { PLC3DAnimator } from '../plc/PLC3DAnimator.js';
 import { getPLCSettingsFromUI, setPLCSettingsToUI, getPLCSettingsFromModal, setPLCSettingsToModal } from './plcSettingsUtils.js';
+import { CAMOperationManager } from './CAMOperationManager.js';
 
 export class PLCOutputManager {
   constructor(app) {
     this.app = app;
+    this.operation = new CAMOperationManager(app);
     this.simulator3D = null;
     this.animator3D = null;
     this._is3DInitialized = false;
@@ -38,8 +40,8 @@ export class PLCOutputManager {
     // Initialize collapsible PLC panel
     this.initCollapsiblePLCPanel();
 
-    // Load saved settings from database
-    await this.loadSimulationSettings();
+    // Load saved settings and operation from database
+    await Promise.all([this.loadSimulationSettings(), this.operation.init()]);
   }
 
   /**
@@ -431,11 +433,22 @@ export class PLCOutputManager {
     }
 
     this._extractRun++;
-    this.app.plcCommands = [];
-    this.app.plcOutput = [];
-    this.app.ui.displayPLCOutput([], this.app);
+    this.clearOutput();
+    this.operation.showReport();
   }
 
+  /**
+   * Empty the output, so that nothing stale can be simulated, copied or sent
+   */
+  clearOutput(emptyText) {
+    this.app.plcCommands = [];
+    this.app.plcOutput = [];
+    this.app.ui.displayPLCOutput([], this.app, emptyText);
+  }
+
+  /**
+   * Generate the program of the active operation (pen, profile or drilling) for the whole drawing
+   */
   async extractPLC() {
     // Extractions can answer out of order; only the latest one started may show its commands
     const run = ++this._extractRun;
@@ -444,29 +457,31 @@ export class PLCOutputManager {
       return;
     }
 
-    // Get config from UI
-    const settings = getPLCSettingsFromUI();
-    const { workSpeed: defaultSpeed, rapidSpeed, safeZ, workZ, waitTime } = settings;
-
     // Convert primitives to API format
     const supportedTypes = new Set(["line", "arc", "circle", "rectangle", "polygon", "polyline"]);
     const primitives = this.app.primitives
       .filter((p) => supportedTypes.has(p.type))
       .map((p) => this.primitiveToRequest(p));
+    const label = this.operation.label;
+    const { url, body } = this.operation.request(primitives, getPLCSettingsFromUI());
 
     try {
-      const response = await fetch("/api/plc/extract", {
+      const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ primitives, defaultSpeed, rapidSpeed, safeZ, workZ, waitTime })
+        body: JSON.stringify(body)
       });
+      const result = await response.json().catch(() => ({}));
+      if (run !== this._extractRun) return;
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        // A program that does not match the parameters must not stay around to be sent
+        this.clearOutput("Nessun comando: vedi il messaggio sopra");
+        this.operation.showReport({ error: result.error || `HTTP ${response.status}` });
+        this.app.ui.updateStatus(`${label}: programma non generato`);
+        return;
       }
-
-      const result = await response.json();
-      if (run !== this._extractRun) return;
+      this.operation.showReport({ warnings: result.warnings });
 
       // Map commands back to source primitives for UI highlighting
       const primMap = new Map(this.app.primitives.map(p => [p.id, p]));
@@ -483,12 +498,15 @@ export class PLCOutputManager {
 
       this.app.ui.displayPLCOutput(displayCommands, this.app);
       this.app.ui.updateStats();
-      this.app.ui.updateStatus(`Estratte ${this.app.plcOutput.length} istruzioni PLC`);
+      this.app.ui.updateStatus(`${label}: ${this.app.plcOutput.length} istruzioni PLC`);
 
       // Update 3D simulation if visible
       this.update3DSimulation();
     } catch (err) {
-      if (run === this._extractRun) this.app.ui.updateStatus(`Errore estrazione PLC: ${err.message}`);
+      if (run !== this._extractRun) return;
+      this.clearOutput("Nessun comando: vedi il messaggio sopra");
+      this.operation.showReport({ error: err.message });
+      this.app.ui.updateStatus(`Errore estrazione PLC: ${err.message}`);
     }
   }
 

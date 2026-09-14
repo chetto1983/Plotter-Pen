@@ -30,6 +30,44 @@ export class SidebarRight {
            </div>
         </div>
         <div class="cad-panel-body-collapsible" id="plcPanelBody">
+          <!-- Operation whose program the output shows (CAMOperationManager) -->
+          <div class="cam-op" id="camOperation">
+            <div class="cam-op-tabs" role="radiogroup" aria-label="Operazione">
+              <button type="button" class="cam-op-tab" role="radio" data-operation="pen">Penna</button>
+              <button type="button" class="cam-op-tab" role="radio" data-operation="profile">Profilo</button>
+              <button type="button" class="cam-op-tab" role="radio" data-operation="drill">Foratura</button>
+            </div>
+            <div class="cam-op-params" data-operation="profile" hidden>
+              <label class="cam-op-field">Fresa Ø
+                <span class="cam-op-input"><input type="number" id="camToolDiameter" min="0.1" max="50" step="0.1"><span>mm</span></span>
+              </label>
+              <label class="cam-op-field">Lato
+                <select id="camSide"><option value="outside">Esterno</option><option value="inside">Interno</option></select>
+              </label>
+              <label class="cam-op-field">Verso
+                <select id="camDirection"><option value="conventional">Discorde</option><option value="climb">Concorde</option></select>
+              </label>
+            </div>
+            <div class="cam-op-params" data-operation="drill" hidden>
+              <label class="cam-op-field">Punta Ø
+                <span class="cam-op-input"><input type="number" id="camDrillDiameter" min="0.1" max="50" step="0.1"><span>mm</span></span>
+              </label>
+              <label class="cam-op-field" title="0 = un solo affondo">Scarico
+                <span class="cam-op-input"><input type="number" id="camPeckDepth" min="0" max="50" step="0.1"><span>mm</span></span>
+              </label>
+              <label class="cam-op-field">Angolo
+                <span class="cam-op-input"><input type="number" id="camTipAngle" min="1" max="180" step="1"><span>°</span></span>
+              </label>
+              <label class="cam-op-field">Fori da Ø
+                <span class="cam-op-input"><input type="number" id="camMinHoleDiameter" min="0.01" max="100" step="0.1"><span>mm</span></span>
+              </label>
+              <label class="cam-op-field">a Ø
+                <span class="cam-op-input"><input type="number" id="camMaxHoleDiameter" min="0.01" max="100" step="0.1"><span>mm</span></span>
+              </label>
+              <label class="cam-op-check" title="La punta scende della sua lunghezza, così il diametro pieno arriva alla profondità"><input type="checkbox" id="camTipThrough"> Passante</label>
+            </div>
+            <div class="cam-op-message" id="camOperationMessage" hidden></div>
+          </div>
           <div class="cad-panel-content cad-output-content">
             <div class="cad-output-grid" id="outputGrid">
               <div class="cad-output-empty">Disegna primitive per generare i comandi PLC</div>

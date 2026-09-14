@@ -475,7 +475,7 @@ export class UIController {
    * Display PLC output in grid with primitive highlighting
    * Uses Event Delegation for performance
    */
-  displayPLCOutput(plcCommands) {
+  displayPLCOutput(plcCommands, _app, emptyText = 'Disegna primitive per generare i comandi PLC') {
     const grid = document.getElementById('outputGrid');
     if (!grid) return;
 
@@ -508,7 +508,11 @@ export class UIController {
       [];
 
     if (commands.length === 0) {
-      grid.innerHTML = '<div class="cad-output-empty">Disegna primitive per generare i comandi PLC</div>';
+      grid.replaceChildren();
+      const empty = document.createElement('div');
+      empty.className = 'cad-output-empty';
+      empty.textContent = emptyText;
+      grid.appendChild(empty);
       return;
     }
 
