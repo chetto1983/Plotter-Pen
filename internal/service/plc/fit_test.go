@@ -81,6 +81,19 @@ func TestFitArcsAndLines_ArcEndsBeforeChordAcrossCircle(t *testing.T) {
 	})
 }
 
+// End points and centre cannot tell which way a 270° arc turns, so the PLC gets a point on the
+// arc: the input point in the middle of the fitted span.
+func TestFitArcsAndLines_ArcKeepsInputPointInTheMiddle(t *testing.T) {
+	points := arcPoints(0, 0, 10, 0, 270, 54)
+
+	got := FitArcsAndLines(points, 0.01)
+
+	requireSegments(t, got, []FitSegment{arc(10, 0, 0, -10, 0, 0, 10)})
+	if mid := points[27]; math.Abs(got[0].MidX-mid.X) > 1e-12 || math.Abs(got[0].MidY-mid.Y) > 1e-12 {
+		t.Fatalf("mid point (%v, %v), want input point 27 %v", got[0].MidX, got[0].MidY, mid)
+	}
+}
+
 // Dense R3 corners joined by two-point edges: the corners must come back as arcs even though
 // their chords sag 0.004 mm inside the circle, and the edges as lines.
 func TestFitArcsAndLines_RoundedRectangle(t *testing.T) {

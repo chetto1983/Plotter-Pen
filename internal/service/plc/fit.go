@@ -11,6 +11,9 @@ type FitSegment struct {
 	X1, Y1    float64 // Start point
 	X2, Y2    float64 // End point
 	Cx, Cy, R float64 // Center and radius (for arcs)
+	// MidX, MidY is the input point in the middle of an arc's span: it lies on the arc, so it
+	// fixes the turning direction that end points and centre leave open.
+	MidX, MidY float64
 }
 
 type fitCircle struct {
@@ -62,6 +65,7 @@ func FitArcsAndLines(points []geom.Point, tolerance float64) []FitSegment {
 		}
 
 		if bestArcEnd > i+1 && bestCircle != nil {
+			mid := points[(i+bestArcEnd)/2]
 			result = append(result, FitSegment{
 				Type: "arc",
 				X1:   points[i].X,
@@ -71,6 +75,8 @@ func FitArcsAndLines(points []geom.Point, tolerance float64) []FitSegment {
 				Cx:   bestCircle.Cx,
 				Cy:   bestCircle.Cy,
 				R:    bestCircle.R,
+				MidX: mid.X,
+				MidY: mid.Y,
 			})
 			i = bestArcEnd
 			continue
