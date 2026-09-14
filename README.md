@@ -131,8 +131,9 @@ plotter-pen/
 |----------|--------|-------------|
 | `/api/plc/extract` | POST | Generate PLC commands |
 | `/api/plc/settings` | GET/POST | PLC simulation settings, including profile depth, step-down, plunge speed, ramp angle and the drilling retract clearance |
-| `/api/cam/profile` | POST | Profile cut of the closed contours as PLC commands (same response as `/api/plc/extract`, plus `warnings` for contours the tool cannot reach; no UI yet) |
-| `/api/cam/drill` | POST | Drilling of the circles in a diameter range as PLC commands, with optional pecks and drill point compensation (same response as `/api/plc/extract`; no UI yet) |
+| `/api/cam/profile` | POST | Profile cut of the closed contours as PLC commands (same response as `/api/plc/extract`, plus `warnings` for contours the tool cannot reach) |
+| `/api/cam/drill` | POST | Drilling of the circles in a diameter range as PLC commands, with optional pecks and drill point compensation (same response as `/api/plc/extract`) |
+| `/api/cam/operation` | GET/POST | The operation the PLC output panel shows (pen, profile or drill) and its parameters |
 | `/api/opcua/config` | GET/PUT | Active OPC UA configuration |
 | `/api/opcua/plcs` | GET/POST | PLC configurations |
 | `/api/opcua/plcs/:id` | GET/DELETE | Single PLC configuration |

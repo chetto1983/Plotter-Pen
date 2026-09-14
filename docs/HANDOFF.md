@@ -27,8 +27,9 @@ One piece at a time: a short design approved first, then TDD, then a check on th
 | 1 | Chord-midpoint check in `FitArcsAndLines` (`internal/service/plc/fit.go`) | Done |
 | 2 | Contour chaining (`internal/service/cam/chain.go`) | Done |
 | 3 | Offset of the contour set (`pkg/clipper/adapter.go`, `OffsetContours`) | Done |
-| 4 | First complete profile down to J/L/A commands, tried on the simulator | Done 2026-09-14 (API and settings; no UI to launch it yet) |
-| 5 | Drilling of the circles in a diameter range (`internal/service/cam/drill.go`) | Done 2026-09-14 (API and settings; no UI to launch it yet) |
+| 4 | First complete profile down to J/L/A commands, tried on the simulator | Done 2026-09-14 |
+| 5 | Drilling of the circles in a diameter range (`internal/service/cam/drill.go`) | Done 2026-09-14 |
+| 6 | Operation selector in the PLC output panel: pen, profile or drilling (`src/app/CAMOperationManager.js`) | Done 2026-09-14 |
 | — | LWPOLYLINE/POLYLINE bulges in the DXF import | In parallel, not started |
 
 Measured on `dxf/L28YO-tree-of-life-wall-spiritual-art.dxf`:
@@ -135,7 +136,7 @@ Asked by the user after the Arduino pin circles came out as warnings ("guarda co
 - **Drill point:** with `tipThrough` the bottom goes down by (D/2)/tan(angle/2), 0.300·D at 118°, so the full diameter reaches the depth. The pecks cover that length too.
 - **Validation:** drill diameter > 0, 0 < min ≤ max, depth > 0, peck 0 or at least 0.001 mm, tip angle 0–180, rapid and plunge speeds > 0, safe Z above work Z, R above work Z and not above safe Z, wait ≥ 0.
 - **Setting:** `retract_clearance` in `PLCSimulationSettings` (default 1 mm, so existing databases get it), "Distanza Ritorno" in the dialog. The depth and plunge speed rows now say they serve the router and the drill.
-- **Not in this piece:** chip breaking (G73), a slower break-through feed, spindle speed and tool change (the PLC has neither: one program per drill), a UI to launch drilling or profiles, holes drawn as polylines or arcs. The profile still plunges from safe Z; the retract plane could serve it too.
+- **Not in this piece:** chip breaking (G73), a slower break-through feed, spindle speed and tool change (the PLC has neither: one program per drill), holes drawn as polylines or arcs. The profile still plunges from safe Z; the retract plane could serve it too.
 - **Measured on the Arduino UNO shield** (local server, settings depth 2.4, plunge 3.5, R 1; independent check of every program):
   - Pins, Ø1.0 drill for 0.4–1.2 mm: 32 holes, 129 commands; with pecks of 0.8 and the tip through, 417 commands down to −2.700.
   - Mounting holes, Ø3.2 drill for 3–3.3 mm with the tip through: 4 holes down to −3.361.
@@ -144,6 +145,32 @@ Asked by the user after the Arduino pin circles came out as warnings ("guarda co
   - Rapids with nearest-first alone: 221 mm for the pins against 207 mm in the drawing order, and 192 against 196 mm for the mounting holes. On these header rows nearest-first was 7% longer than the order the DXF already has.
   - With 2-opt added the same day: 205.1 mm for the pins (drawing order 206.7) and 192.3 mm for the mounting holes (195.6). On two rows of 4 pins with X 0 Y 0 between them, nearest-first makes 92.559 mm and 2-opt 82.806 mm, the best of all 40320 orders (`TestDrill_TakesTheShortestRouteBetweenTwoRows`).
   - Whole drilling program, route included (`BenchmarkDrill_Holes`, i7-11850H): 0.9 ms for 100 scattered holes, 100 ms for 1000, 0.91 s for 3000.
+
+### Piece 6: operation selector (2026-09-14)
+
+The user asked for the interface and chose: one active operation, on the whole drawing, saved in the database.
+
+- **Panel:** at the top of "Output PLC", the tabs Penna | Profilo | Foratura and the parameters of the active one.
+  - Profilo: Fresa Ø, Lato (Esterno/Interno), Verso (Discorde = conventional, Concorde = climb).
+  - Foratura: Punta Ø, Scarico, Angolo, Fori da Ø … a Ø, Passante.
+  - Penna has no parameters: its settings stay in the "Parametri Simulazione PLC" dialog.
+- **Program:** `extractPLC` (`src/app/PLCOutputManager.js`) generates the active operation through `/api/plc/extract`, `/api/cam/profile` or `/api/cam/drill`, with the settings table and the operation parameters. It runs whenever it ran before (drawing, settings, undo, session load) and when a parameter changes; the latest generation started wins.
+  - An error (400) shows above the list, and the output is emptied so that Simula, Copia, Scarica and Invia cannot use a program that no longer matches the parameters.
+  - Profile warnings show as a closed summary ("32 contorni non raggiungibili con Ø2 mm") that opens on the list.
+  - The list, the highlight on the drawing (drilling commands carry the circle), the 3D view and the transfer are unchanged.
+- **Saved:** `CAMOperation` singleton (`GET/POST /api/cam/operation`, `internal/handler/cam_operation.go`), defaults pen, Ø2 outside conventional, drill Ø1 for 0.4–1.2 mm, no pecks, 118°, not through. The POST refuses unknown operation, side or direction; the numbers are checked when the program is generated.
+- **Checked in headless Chrome** on the Arduino UNO shield (local server, simulator as the active PLC):
+  - The pen program is the same as `/api/plc/extract`.
+  - Foratura drills the 32 pin circles; 5–6 mm shows the error and empties the output; pecks with the tip through reach −1.300.
+  - Profilo shows the 32 warnings; the operation and all parameters come back after a reload.
+  - Deleting a pin circle regenerates 31 holes, undo brings back 32.
+  - "PLC" in the ribbon sent the 257-command drilling program, which ran to its end on the simulator in 34.8 s.
+  - No page errors. At 1280×720 the parameters take 154–173 px and the command list keeps about 190 px.
+- **Limits:**
+  - The error texts come from the API in English, after an Italian prefix.
+  - The operation works on the whole drawing only.
+  - Firefox 78 is left to the Babel build and was not measured.
+  - A fresh database has the real PLC (192.168.0.1) as the active configuration, with node IDs that the simulator refuses (`StatusBadUserAccessDenied` on End_Of_File). For a browser check, point it at the simulator with the node IDs of `connectS7Sim` before opening a page.
 
 ## Environment
 
