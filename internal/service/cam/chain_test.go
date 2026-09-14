@@ -17,16 +17,6 @@ func arcP(x1, y1, x2, y2, cx, cy, sweep float64) plc.Primitive {
 		Cx: new(cx), Cy: new(cy), Sweep: new(sweep)}
 }
 
-// signedArea is the shoelace area of a closed path: positive when counterclockwise.
-func signedArea(p geom.Path) float64 {
-	a := 0.0
-	for i := range p {
-		q := p[(i+1)%len(p)]
-		a += p[i].X*q.Y - q.X*p[i].Y
-	}
-	return a / 2
-}
-
 func requirePaths(t *testing.T, kind string, got, want []geom.Path) {
 	t.Helper()
 	same := len(got) == len(want)

@@ -98,6 +98,10 @@ func registerHandlers(api *gin.RouterGroup, db *gorm.DB) {
 	plcHandler := handler.NewPLCHandler()
 	plcHandler.RegisterRoutes(api)
 
+	// CAM handlers (profile cuts as PLC programs)
+	camHandler := handler.NewCAMHandler()
+	camHandler.RegisterRoutes(api)
+
 	// OPC UA handlers (database-backed config)
 	opcuaHandler := handler.NewOpcuaHandler(db)
 	opcuaHandler.RegisterRoutes(api)
