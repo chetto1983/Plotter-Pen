@@ -860,7 +860,7 @@ export class PLCSimulator3D {
 
         // ViewCube HUD (bottom-right corner)
         if (this.viewCubeHelper) {
-            this.viewCubeHelper.render(this.renderer, this.camera, this.canvas.width, this.canvas.height);
+            this.viewCubeHelper.render(this.renderer, this.camera, this.canvas.width);
         }
     }
 

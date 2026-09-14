@@ -203,10 +203,10 @@ export class ViewCubeHelper {
      * Render the ViewCube in the corner of the canvas
      * @param {THREE.WebGLRenderer} renderer - The main renderer
      * @param {THREE.Camera} mainCamera - The main scene camera
-     * @param {number} canvasWidth - Canvas width in pixels
-     * @param {number} canvasHeight - Canvas height in pixels
+     * @param {number} canvasWidth - Canvas width in pixels; the WebGL viewport starts at the bottom, so
+     *   the bottom-right corner needs no height
      */
-    render(renderer, mainCamera, canvasWidth, canvasHeight) {
+    render(renderer, mainCamera, canvasWidth) {
         if (!this.cube) return;
 
         // Sync cube rotation with main camera (inverse)
