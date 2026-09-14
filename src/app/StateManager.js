@@ -3,7 +3,6 @@
  */
 
 import { Line, Arc, Circle, Rectangle, Polygon, Polyline, Dimension, AngularDimension, RadiusDimension } from '../geometry/primitives.js';
-import { getPLCSettingsFromUI, setPLCSettingsToUI } from './plcSettingsUtils.js';
 
 export class StateManager {
   constructor(app, maxHistory = 50) {
@@ -122,16 +121,13 @@ export class StateManager {
       gridSpacing: this.app.gridSpacing
     };
 
-    // PLC settings from UI inputs (using centralized utility)
-    const plcSettings = getPLCSettingsFromUI();
-
+    // The PLC settings are not part of the state: their table (/api/plc/settings) is their only source
     const state = {
       primitives: this.app.primitives.map(p => p.toJSON()),
       layers: this.app.layerManager ? this.app.layerManager.serialize() : null,
       view,
       workspace,
       grid,
-      plcSettings,
       snapSettings
     };
     return JSON.stringify(state);
@@ -226,9 +222,6 @@ export class StateManager {
             }
             if (restoreView) {
               this.applyViewSettings(msg);
-            } else if (msg.plcSettings) {
-              // Always restore PLC settings even without view
-              this.applyPlcSettings(msg.plcSettings);
             }
             if (this.app.ui) {
               this.app.ui.updateStatus(`Caricamento ${msg.totalPrimitives} primitive...`);
@@ -324,14 +317,7 @@ export class StateManager {
   }
 
   /**
-   * Apply PLC settings to UI inputs
-   */
-  applyPlcSettings(p) {
-    setPLCSettingsToUI(p);
-  }
-
-  /**
-   * Apply view/workspace/grid/plc settings
+   * Apply view/workspace/grid settings
    */
   applyViewSettings(data) {
     if (data.workspace && this.app.renderer) {
@@ -385,8 +371,6 @@ export class StateManager {
       this.app.renderer.view = { ...data.view };
       this.app.renderer.isCacheDirty = true;
     }
-    // Restore PLC settings (always restore, doesn't need renderer)
-    this.applyPlcSettings(data.plcSettings);
   }
 
   /**

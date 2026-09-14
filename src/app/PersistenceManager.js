@@ -70,7 +70,7 @@ export class PersistenceManager {
                     this.app.renderer.invalidateCache();
                 }
 
-                // Refresh PLC output with loaded settings
+                // Refresh PLC output for the loaded drawing
                 if (this.app.plcOutputManager) {
                     this.app.plcOutputManager.refreshPLCOutput();
                 }

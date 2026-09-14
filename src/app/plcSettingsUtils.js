@@ -76,9 +76,7 @@ export function getPLCSettingsFromUI() {
 export function setPLCSettingsToUI(settings) {
   if (!settings) return;
 
-  // The saved app state and the settings table are restored concurrently at startup. A state
-  // saved before a field existed has no value for it, so the input keeps what it has instead of
-  // going back to the default over the value read from the table.
+  // A field without a value leaves its input as it is
   for (const [key, id] of Object.entries(PLC_INPUT_IDS)) {
     const el = document.getElementById(id);
     if (el && settings[key] != null) el.value = settings[key];

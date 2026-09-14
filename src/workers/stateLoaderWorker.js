@@ -22,7 +22,6 @@ self.onmessage = function(e) {
       workspace: data.workspace || null,
       grid: data.grid || null,
       snapSettings: data.snapSettings || null,
-      plcSettings: data.plcSettings || null,
       total: total
     });
 

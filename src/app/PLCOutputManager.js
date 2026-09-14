@@ -9,6 +9,7 @@ export class PLCOutputManager {
     this.animator3D = null;
     this._is3DInitialized = false;
     this._saveTimeout = null;
+    this._extractRun = 0;
   }
 
   /**
@@ -176,7 +177,7 @@ export class PLCOutputManager {
   }
 
   /**
-   * Load simulation settings from database
+   * Load simulation settings from database, their only source
    */
   async loadSimulationSettings() {
     try {
@@ -186,6 +187,10 @@ export class PLCOutputManager {
       const result = await response.json();
       if (result.data) {
         setPLCSettingsToUI(result.data);
+        // The saved drawing may have been restored and extracted before the settings arrived
+        if (this.app.primitives.length > 0) {
+          this.extractPLC();
+        }
       }
     } catch {
       // Silent fail - settings will use defaults
@@ -425,12 +430,15 @@ export class PLCOutputManager {
       return;
     }
 
+    this._extractRun++;
     this.app.plcCommands = [];
     this.app.plcOutput = [];
     this.app.ui.displayPLCOutput([], this.app);
   }
 
   async extractPLC() {
+    // Extractions can answer out of order; only the latest one started may show its commands
+    const run = ++this._extractRun;
     if (this.app.primitives.length === 0) {
       this.app.ui.updateStatus("Nessuna primitiva da estrarre");
       return;
@@ -458,6 +466,7 @@ export class PLCOutputManager {
       }
 
       const result = await response.json();
+      if (run !== this._extractRun) return;
 
       // Map commands back to source primitives for UI highlighting
       const primMap = new Map(this.app.primitives.map(p => [p.id, p]));
@@ -479,7 +488,7 @@ export class PLCOutputManager {
       // Update 3D simulation if visible
       this.update3DSimulation();
     } catch (err) {
-      this.app.ui.updateStatus(`Errore estrazione PLC: ${err.message}`);
+      if (run === this._extractRun) this.app.ui.updateStatus(`Errore estrazione PLC: ${err.message}`);
     }
   }
 
