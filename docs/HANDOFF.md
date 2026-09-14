@@ -78,6 +78,7 @@ Measured on `dxf/L28YO-tree-of-life-wall-spiritual-art.dxf`:
   - **Inside profiles:** the direction rule is reversed, since the finished wall is then outside the ring.
   - `FitSegment` gained `MidX`/`MidY` for the `A` through point; `pkg/plc.Generator` gained `ArcThrough` and `Lines`.
 - **Settings:** `depth` 1 mm, `stepDown` 0.5 mm, `plungeSpeed` 5 mm/s and `rampAngle` 3° are the column defaults, so existing databases get them. The dialog scrolls its rows when the screen is shorter than about 900 px.
+- **Bounds (2026-09-14):** the step-down must be at least 0.001 mm, the PLC resolution, and depth / step-down at most 1000 passes. Drilling has the same bounds on its pecks, counting the drill point. Before, a step-down of 1e-9 made `levels()` allocate gigabytes; the same case in drilling reached 9.6 GB in a test.
 - **Settings source (the user chose "tutto su DB", 2026-09-14):** the table (`/api/plc/settings`) is the only source of the PLC settings in the frontend.
   - **Before:** the saved app state (`/api/state`) also carried a `plcSettings` copy. At startup the table and the state loaded concurrently and the one that arrived last filled the inputs, so a stale copy could beat a value just saved from the dialog. Undo/redo never restored it; loading a session did.
   - **Now:** the state no longer stores the settings, and a copy in an older state is ignored. When the table arrives after the drawing has been restored, the commands are extracted again. Only the latest extraction started may show its commands, so an older one answering late cannot put stale values back.
@@ -124,7 +125,7 @@ Asked by the user after the Arduino pin circles came out as warnings ("guarda co
 - `cam.Drill` (`internal/service/cam/drill.go`), `POST /api/cam/drill` (`internal/handler/cam.go`), `TestDrillProgram_S7Sim`.
 - **Request:** the `/api/plc/extract` settings plus `depth`, `plungeSpeed` and `retractClearance` from the table, and the drill chosen at launch: `drillDiameter`, `minHoleDiameter`/`maxHoleDiameter`, `peckDepth` (0 = one feed to the bottom), `tipAngle` (118° when 0), `tipThrough`.
 - **Holes:** circle primitives only, with the diameter in the range, both ends included, widened by 1 µm so values converted from inches match. Circles whose centres are within 0.01 mm are one hole. No circle in the range is a 400.
-- **Order:** nearest hole first from X 0 Y 0, with `plc.OptimizeOrder` on the centres.
+- **Order:** nearest hole first from X 0 Y 0 (`plc.OptimizeOrder` on the centres), then 2-opt on the route back to X 0 Y 0: holes between two legs are reversed while that shortens the route. Only drilling uses it; the pen extract keeps nearest-first.
 - **Cycle, G83 with G98 written as `J`/`L`/`WAIT`** (the PLC has no canned cycles, like pcb2gcode `nog81`):
   1. `J` over the hole at safe Z, `J` down to the retract plane R = work Z + `retractClearance`.
   2. Pecks counted from work Z, fed at the plunge speed. After each peck but the last: `J` out to R and `J` back down to 0.254 mm above the bottom reached (LinuxCNC's value).
@@ -134,13 +135,15 @@ Asked by the user after the Arduino pin circles came out as warnings ("guarda co
 - **Drill point:** with `tipThrough` the bottom goes down by (D/2)/tan(angle/2), 0.300·D at 118°, so the full diameter reaches the depth. The pecks cover that length too.
 - **Validation:** drill diameter > 0, 0 < min ≤ max, depth > 0, peck 0 or at least 0.001 mm, tip angle 0–180, rapid and plunge speeds > 0, safe Z above work Z, R above work Z and not above safe Z, wait ≥ 0.
 - **Setting:** `retract_clearance` in `PLCSimulationSettings` (default 1 mm, so existing databases get it), "Distanza Ritorno" in the dialog. The depth and plunge speed rows now say they serve the router and the drill.
-- **Not in this piece:** chip breaking (G73), a slower break-through feed, spindle speed and tool change (the PLC has neither: one program per drill), an order better than nearest-first, a UI to launch drilling or profiles, holes drawn as polylines or arcs. The profile still plunges from safe Z; the retract plane could serve it too.
+- **Not in this piece:** chip breaking (G73), a slower break-through feed, spindle speed and tool change (the PLC has neither: one program per drill), a UI to launch drilling or profiles, holes drawn as polylines or arcs. The profile still plunges from safe Z; the retract plane could serve it too.
 - **Measured on the Arduino UNO shield** (local server, settings depth 2.4, plunge 3.5, R 1; independent check of every program):
   - Pins, Ø1.0 drill for 0.4–1.2 mm: 32 holes, 129 commands; with pecks of 0.8 and the tip through, 417 commands down to −2.700.
   - Mounting holes, Ø3.2 drill for 3–3.3 mm with the tip through: 4 holes down to −3.361.
   - 5–6 mm: 400, nothing to drill.
   - Simulator: the pecked pin program with a 200 ms dwell (449 commands) went through the app WebSocket transfer in 23 chunks and ran in 69.7 s down to −2.700, stopping at X 0 Y 0 Z 7.
-  - Rapids: 221 mm for the pins against 207 mm in the drawing order, and 192 against 196 mm for the mounting holes. On these header rows nearest-first is 7% longer than the order the DXF already has.
+  - Rapids with nearest-first alone: 221 mm for the pins against 207 mm in the drawing order, and 192 against 196 mm for the mounting holes. On these header rows nearest-first was 7% longer than the order the DXF already has.
+  - With 2-opt added the same day: 205.1 mm for the pins (drawing order 206.7) and 192.3 mm for the mounting holes (195.6). On two rows of 4 pins with X 0 Y 0 between them, nearest-first makes 92.559 mm and 2-opt 82.806 mm, the best of all 40320 orders (`TestDrill_TakesTheShortestRouteBetweenTwoRows`).
+  - Whole drilling program, route included (`BenchmarkDrill_Holes`, i7-11850H): 0.9 ms for 100 scattered holes, 100 ms for 1000, 0.91 s for 3000.
 
 ## Environment
 
@@ -178,7 +181,7 @@ Hooks: pre-commit runs gofmt, vet, golangci-lint on changed lines and the 600-li
 - **Arc through point:** `arcAuxPoint` in `internal/service/plc/extractor.go` returns the arc centre when an arc has neither `throughPoint` nor `sweep`.
 - **Import cache:** `SmartImportCached` keys the cache on the content only and returns the cached object without copying it.
 - **Unused configuration:** `ServerConfig.OPCUAConfig` (`OPCUA_CONFIG`) is not used by anything.
-- **Tiny profile step-down:** `cam.Profile` accepts any positive `stepDown`, and `levels()` allocates depth/stepDown passes. A request with 1e-9 would need gigabytes; the same case in drilling reached 9.6 GB in a test before the peck got its 0.001 mm minimum. The profile has no such minimum yet.
+- **Tiny ramp angle:** `cam.Profile` accepts any ramp angle above 0°. The ramp is (drop / tan angle) / 2 long, so an angle of 1e-9° would walk round the ring for kilometres and fill the memory. The dialog allows 0.5° at least, the API has no minimum. Found while bounding the step-down (below); not fixed.
 
 ## Working rules to keep
 
