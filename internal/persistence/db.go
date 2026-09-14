@@ -55,6 +55,24 @@ type PLCSimulationSettings struct {
 	UpdatedAt        time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
 }
 
+// CAMOperation stores the operation whose program the PLC output shows (singleton): Operation is
+// "pen", "profile" or "drill", with the parameters of the profile and of the drilling. The PLC
+// never receives the diameters, so they live apart from PLCSimulationSettings.
+type CAMOperation struct {
+	ID              int64     `gorm:"primaryKey;check:id = 1" json:"id"`
+	Operation       string    `gorm:"default:'pen'" json:"operation"`
+	ToolDiameter    float64   `gorm:"default:2" json:"toolDiameter"`
+	Side            string    `gorm:"default:'outside'" json:"side"`
+	Direction       string    `gorm:"default:'conventional'" json:"direction"`
+	DrillDiameter   float64   `gorm:"default:1" json:"drillDiameter"`
+	MinHoleDiameter float64   `gorm:"default:0.4" json:"minHoleDiameter"`
+	MaxHoleDiameter float64   `gorm:"default:1.2" json:"maxHoleDiameter"`
+	PeckDepth       float64   `gorm:"default:0" json:"peckDepth"`
+	TipAngle        float64   `gorm:"default:118" json:"tipAngle"`
+	TipThrough      bool      `gorm:"default:false" json:"tipThrough"`
+	UpdatedAt       time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
+}
+
 // MachineConfig stores machine configuration
 type MachineConfig struct {
 	ID        int64     `gorm:"primaryKey;autoIncrement" json:"id"`
@@ -150,6 +168,7 @@ func InitDBWithConfig(dbPath string, cfg DBConfig) (*gorm.DB, error) {
 		&Drawing{},
 		&Tool{},
 		&PLCSimulationSettings{},
+		&CAMOperation{},
 		&MachineConfig{},
 		&OPCUAConfig{},
 	)
@@ -198,6 +217,24 @@ func initSingletons(db *gorm.DB) {
 			RetractClearance: 1,
 		}).Error; err != nil {
 			log.Printf("Failed to create PLCSimulationSettings singleton: %v", err)
+		}
+	}
+
+	// CAMOperation singleton: the pen, with usable profile and drilling parameters
+	var camOperation CAMOperation
+	if db.First(&camOperation).Error != nil {
+		if err := db.Create(&CAMOperation{
+			ID:              1,
+			Operation:       "pen",
+			ToolDiameter:    2,
+			Side:            "outside",
+			Direction:       "conventional",
+			DrillDiameter:   1,
+			MinHoleDiameter: 0.4,
+			MaxHoleDiameter: 1.2,
+			TipAngle:        118,
+		}).Error; err != nil {
+			log.Printf("Failed to create CAMOperation singleton: %v", err)
 		}
 	}
 }

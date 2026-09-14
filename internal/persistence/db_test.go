@@ -312,6 +312,27 @@ func TestInitDB_ExistingPLCSettingsGetCAMDefaults(t *testing.T) {
 	}
 }
 
+// A new database starts with the pen as the operation of the PLC output and usable profile and
+// drilling parameters.
+func TestInitDB_CreatesCAMOperationWithDefaults(t *testing.T) {
+	db, err := InitDB(filepath.Join(t.TempDir(), "new.db"))
+	if err != nil {
+		t.Fatalf("InitDB: %v", err)
+	}
+	t.Cleanup(func() { closeDB(t, db) })
+
+	var got CAMOperation
+	if err := db.First(&got).Error; err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	want := CAMOperation{ID: 1, Operation: "pen", ToolDiameter: 2, Side: "outside", Direction: "conventional",
+		DrillDiameter: 1, MinHoleDiameter: 0.4, MaxHoleDiameter: 1.2, PeckDepth: 0, TipAngle: 118, TipThrough: false}
+	got.UpdatedAt = want.UpdatedAt
+	if got != want {
+		t.Fatalf("operation %+v, want %+v", got, want)
+	}
+}
+
 func closeDB(t *testing.T, db *gorm.DB) {
 	t.Helper()
 	sqlDB, err := db.DB()

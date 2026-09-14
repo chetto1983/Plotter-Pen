@@ -41,6 +41,10 @@ func (h *PersistenceHandler) RegisterRoutes(r *gin.RouterGroup) {
 	// PLC Simulation Settings
 	r.GET("/plc/settings", h.GetPLCSimSettings)
 	r.POST("/plc/settings", h.SavePLCSimSettings)
+
+	// Operation shown in the PLC output (cam_operation.go)
+	r.GET("/cam/operation", h.GetCAMOperation)
+	r.POST("/cam/operation", h.SaveCAMOperation)
 }
 
 // === App State ===
