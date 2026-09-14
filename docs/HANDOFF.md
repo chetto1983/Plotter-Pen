@@ -30,6 +30,7 @@ One piece at a time: a short design approved first, then TDD, then a check on th
 | 4 | First complete profile down to J/L/A commands, tried on the simulator | Done 2026-09-14 |
 | 5 | Drilling of the circles in a diameter range (`internal/service/cam/drill.go`) | Done 2026-09-14 |
 | 6 | Operation selector in the PLC output panel: pen, profile or drilling (`src/app/CAMOperationManager.js`) | Done 2026-09-14 |
+| 7 | Piece thickness: work Z is the bed, cuts through or to a depth (`internal/service/cam/stock.go`) | Done 2026-09-14 |
 | — | LWPOLYLINE/POLYLINE bulges in the DXF import | In parallel, not started |
 
 Measured on `dxf/L28YO-tree-of-life-wall-spiritual-art.dxf`:
@@ -60,7 +61,7 @@ Measured on `dxf/L28YO-tree-of-life-wall-spiritual-art.dxf`:
   - Tool diameter, side (inside/outside) and cutting direction, as inputs of the calculation chosen when the profile is launched and sent in the `/api/cam/profile` request. The PLC never receives the diameter: it only sets the offset (radius = diameter / 2), so it does not belong in the PLC settings.
   - Profiles "on the line" come later.
 - **Tool library, later:** the tool library window (`toolLibraryModal` in `src/ui/modals/Modals.js`: type endmill/ballnose/V-bit, diameter, "Usa Utensile Selezionato") is HTML and CSS only. Its JavaScript (`src/cam/ToolLibraryManager.js`) went with the CAM removed in `7ad8c8f`, so nothing opens it or reads `/api/tools`. The backend `Tool` CRUD still works. Reviving it so that picking a tool fills the profile's diameter is a separate piece.
-- **Z:** the passes go from Altezza Lavoro down by the step-down until it reaches Altezza Lavoro − depth; safe Z stays above, as for the pen. No fixed zero in the code.
+- **Z:** the passes go from Altezza Lavoro down by the step-down until it reaches Altezza Lavoro − depth; safe Z stays above, as for the pen. No fixed zero in the code. Replaced by piece 7: Altezza Lavoro is now the bed and the passes start from the top of the piece.
 - **Default direction** (taken from "proceed"): conventional cutting, with climb as an option. With a router spinning clockwise seen from above:
   - conventional: outlines counterclockwise, holes clockwise;
   - climb: the opposite.
@@ -127,7 +128,7 @@ Asked by the user after the Arduino pin circles came out as warnings ("guarda co
 - **Request:** the `/api/plc/extract` settings plus `depth`, `plungeSpeed` and `retractClearance` from the table, and the drill chosen at launch: `drillDiameter`, `minHoleDiameter`/`maxHoleDiameter`, `peckDepth` (0 = one feed to the bottom), `tipAngle` (118° when 0), `tipThrough`.
 - **Holes:** circle primitives only, with the diameter in the range, both ends included, widened by 1 µm so values converted from inches match. Circles whose centres are within 0.01 mm are one hole. No circle in the range is a 400.
 - **Order:** nearest hole first from X 0 Y 0 (`plc.OptimizeOrder` on the centres), then 2-opt on the route back to X 0 Y 0: holes between two legs are reversed while that shortens the route. Only drilling uses it; the pen extract keeps nearest-first.
-- **Cycle, G83 with G98 written as `J`/`L`/`WAIT`** (the PLC has no canned cycles, like pcb2gcode `nog81`):
+- **Cycle, G83 with G98 written as `J`/`L`/`WAIT`** (the PLC has no canned cycles, like pcb2gcode `nog81`). Since piece 7, R and the pecks count from the top of the piece instead of work Z:
   1. `J` over the hole at safe Z, `J` down to the retract plane R = work Z + `retractClearance`.
   2. Pecks counted from work Z, fed at the plunge speed. After each peck but the last: `J` out to R and `J` back down to 0.254 mm above the bottom reached (LinuxCNC's value).
   3. `WAIT` of the wait time at the bottom when above 0 (G82), then `J` to safe Z.
@@ -171,6 +172,38 @@ The user asked for the interface and chose: one active operation, on the whole d
   - The operation works on the whole drawing only.
   - Firefox 78 is left to the Babel build and was not measured.
   - A fresh database has the real PLC (192.168.0.1) as the active configuration, with node IDs that the simulator refuses (`StatusBadUserAccessDenied` on End_Of_File). For a browser check, point it at the simulator with the node IDs of `connectS7Sim` before opening a page.
+
+### Piece 7: piece thickness (2026-09-14)
+
+The user noticed the piece thickness was missing. They chose work Z on the bed and, per operation, a cut through the piece or to a depth.
+
+- **Z:** Altezza Lavoro is the bed, as the paper is for the pen; the pen does not change.
+  - The top of the piece is work Z + thickness.
+  - Through: the bottom is work Z − overcut, whatever the actual thickness. Otherwise it is the depth below the top, at most the thickness.
+  - Profile passes and ramps start from the top of the piece. The drilling retract plane is top + `retractClearance`, the pecks count from the top, and the drill point adds below the bottom.
+- **API:** `cam.Stock` (`internal/service/cam/stock.go`) is embedded in `ProfileRequest` and `DrillRequest`, and replaces their `depth`. The requests carry `thickness`, `overcut`, `through` and `depth` (from the top, used only without `through`).
+  - Validation: thickness > 0, overcut ≥ 0, depth in (0, thickness] unless through, safe Z above the top of the piece, and R not above safe Z.
+- **Saved:** in `CAMOperation`:
+  - `thickness` 1.6 and `overcut` 0.2, shared by profile and drilling;
+  - `profileThrough`/`profileDepth` and `drillThrough`/`drillDepth`, true and 1 mm.
+
+  The column defaults fill existing rows. `depth` left `PLCSimulationSettings`, the API and the dialog; old databases keep an unread column.
+- **Panel:** Profilo and Foratura show one piece row: Spessore | Sfondamento | Passante. Without Passante, Profondità of that operation takes the place of Sfondamento. The drilling "Passante" became "Compensa punta".
+  - Dialog descriptions: Altezza Lavoro "Penna: carta; fresa e punta: piano", Distanza Ritorno "Foratura: sopra il pezzo".
+- **Checked:**
+  - Go tests. The simulator ran the profile through a 0.8 mm piece (95 commands) down to −0.200, and the pecked drilling through 1.6 mm with the point (23 commands) down to −0.500.
+  - The browser database of piece 6 migrated with its operation kept and the new defaults.
+  - **Headless Chrome, Arduino UNO shield, bed at Z 0** (14 checks, all passed):
+    - drilling through: R 2.600, bottom −0.200; with the point, −0.500; 1 mm deep, 0.600;
+    - a depth of 2 and an 18 mm piece under a 5 mm safe Z show the error and empty the output;
+    - each operation keeps its own Passante and depth, after a reload too;
+    - "PLC" in the ribbon sent the 353-command drilling, which ran to its end on the simulator in 46.0 s;
+    - no page errors.
+  - **Layout:** at 1280×720 the parameters take 228–231 px and the command list keeps about 133 px (190 px before). At 1600×1000 the list keeps 423–442 px. No field is cut off; "Compensa punta" wraps on two lines.
+- **Limits:**
+  - A work Z calibrated on the top of a piece now means the bed: the cut goes shallower, not deeper, but work Z must be set on the bed before cutting on the machine.
+  - The 3D view does not draw the piece.
+  - Firefox 78 was not measured.
 
 ## Environment
 
