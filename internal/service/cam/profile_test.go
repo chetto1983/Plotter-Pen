@@ -516,6 +516,8 @@ func TestProfile_RejectsWhatCannotBeCut(t *testing.T) {
 		{"unknown direction", func(r *ProfileRequest) { r.Direction = "down" }},
 		{"no depth", func(r *ProfileRequest) { r.Depth = 0 }},
 		{"no step-down", func(r *ProfileRequest) { r.StepDown = -1 }},
+		{"step-down below the PLC resolution", func(r *ProfileRequest) { r.Depth, r.StepDown = 0.001, 0.0005 }},
+		{"more than 1000 passes", func(r *ProfileRequest) { r.Depth, r.StepDown = 1001, 1 }},
 		{"no plunge speed", func(r *ProfileRequest) { r.PlungeSpeed = 0 }},
 		{"no ramp angle", func(r *ProfileRequest) { r.RampAngle = 0 }},
 		{"ramp angle past vertical", func(r *ProfileRequest) { r.RampAngle = 91 }},

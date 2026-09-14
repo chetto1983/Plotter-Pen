@@ -17,8 +17,12 @@ const (
 	// fitTolerance is the largest distance between an offset ring and the lines and arcs sent to
 	// the PLC in its place.
 	fitTolerance = 0.01
-	// rampResolution is the shortest ramp worth sending: the PLC coordinates have 0.001 mm steps.
-	rampResolution = 0.001
+	// plcResolution is the step of the PLC coordinates, in mm: no shorter ramp, step-down or peck
+	// is worth sending.
+	plcResolution = 0.001
+	// maxPasses bounds the passes of a profile and the pecks of a hole, and with them the program
+	// a request can ask for: 1000 passes of 0.1 mm are 100 mm, beyond any job of a small router.
+	maxPasses = 1000
 )
 
 // Cut sides and directions of a profile.
@@ -133,7 +137,7 @@ func (req ProfileRequest) enter(g *plcgen.Generator, closed geom.Path, zFrom, zT
 	surface := math.Min(zFrom, req.WorkZ)
 	angle := req.RampAngle * math.Pi / 180
 	leg := (surface - zTo) / math.Tan(angle) / 2
-	if leg < rampResolution || pathLength(closed) < req.ToolDiameter {
+	if leg < plcResolution || pathLength(closed) < req.ToolDiameter {
 		g.Line(start.X, start.Y, zTo, req.PlungeSpeed)
 		return
 	}
@@ -223,7 +227,8 @@ func (req ProfileRequest) validate() error {
 	check(req.Direction == "" || req.Direction == CuttingConventional || req.Direction == CuttingClimb,
 		fmt.Sprintf("direction must be %q or %q", CuttingConventional, CuttingClimb))
 	check(req.Depth > 0, "depth must be positive")
-	check(req.StepDown > 0, "step-down must be positive")
+	check(req.StepDown >= plcResolution, "step-down must be at least 0.001 mm")
+	check(req.StepDown <= 0 || passCount(req.Depth, req.StepDown) <= maxPasses, "depth and step-down must make at most 1000 passes")
 	check(req.DefaultSpeed > 0 && req.RapidSpeed > 0 && req.PlungeSpeed > 0, "cutting, rapid and plunge speeds must be positive")
 	check(req.RampAngle > 0 && req.RampAngle <= 90, "ramp angle must be above 0° and at most 90°")
 	check(req.SafeZ > req.WorkZ, "safe Z must be above work Z")
@@ -236,13 +241,18 @@ func (req ProfileRequest) validate() error {
 
 // levels returns the Z of every pass, the last one exactly at work Z - depth.
 func (req ProfileRequest) levels() []float64 {
-	// the epsilon keeps 1.2 / 0.4 = 3.0000000000000004 from adding a fourth, empty pass
-	n := int(math.Ceil(req.Depth/req.StepDown - 1e-9))
-	levels := make([]float64, n)
+	levels := make([]float64, int(passCount(req.Depth, req.StepDown)))
 	for k := range levels {
 		levels[k] = req.WorkZ - math.Min(float64(k+1)*req.StepDown, req.Depth)
 	}
 	return levels
+}
+
+// passCount is how many passes of at most step it takes to go length deep. It stays a float64 so
+// that an absurd request is compared with maxPasses instead of overflowing an int.
+func passCount(length, step float64) float64 {
+	// the epsilon keeps 1.2 / 0.4 = 3.0000000000000004 from adding a fourth, empty pass
+	return math.Ceil(length/step - 1e-9)
 }
 
 // orderRings returns the rings in cutting order, each turned the way the cut needs and starting

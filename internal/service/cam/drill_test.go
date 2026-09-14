@@ -181,6 +181,10 @@ func TestDrill_RejectsWhatCannotBeDrilled(t *testing.T) {
 		{"no depth", func(r *DrillRequest) { r.Depth = 0 }},
 		{"negative peck", func(r *DrillRequest) { r.PeckDepth = -1 }},
 		{"peck below the PLC resolution", func(r *DrillRequest) { r.PeckDepth = 1e-9 }},
+		{"more than 1000 pecks", func(r *DrillRequest) { r.Depth, r.PeckDepth = 1001, 1 }},
+		{"more than 1000 pecks counting the point", func(r *DrillRequest) {
+			r.Depth, r.PeckDepth, r.TipThrough, r.TipAngle = 1000, 1, true, 90 // the 90° point adds 0.5 mm
+		}},
 		{"negative tip angle", func(r *DrillRequest) { r.TipAngle = -118 }},
 		{"tip angle past flat", func(r *DrillRequest) { r.TipAngle = 181 }},
 		{"no plunge speed", func(r *DrillRequest) { r.PlungeSpeed = 0 }},

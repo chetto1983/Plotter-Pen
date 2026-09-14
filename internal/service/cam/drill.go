@@ -42,8 +42,6 @@ const (
 	sizeTolerance = 0.001
 	// sameCentre is the distance within which circles are one hole, such as a pad over its hole.
 	sameCentre = 0.01
-	// plcResolution is the step of the PLC coordinates, in mm.
-	plcResolution = 0.001
 )
 
 // Drill returns the PLC program that drills the circles of the drawing whose diameter is in the
@@ -94,8 +92,9 @@ func (req DrillRequest) validate() error {
 	check(req.MinHoleDiameter > 0 && req.MinHoleDiameter <= req.MaxHoleDiameter,
 		"the smallest hole diameter must be positive and not above the largest")
 	check(req.Depth > 0, "depth must be positive")
-	// a shorter peck cannot be told apart in the PLC coordinates, and would only pile up commands
 	check(req.PeckDepth == 0 || req.PeckDepth >= plcResolution, "peck depth must be 0 or at least 0.001 mm")
+	check(req.PeckDepth <= 0 || passCount(req.drilledLength(), req.PeckDepth) <= maxPasses,
+		"depth and peck depth must make at most 1000 pecks")
 	check(req.TipAngle >= 0 && req.TipAngle <= 180, "tip angle must be above 0° and at most 180°, or 0 for 118°")
 	check(req.RapidSpeed > 0 && req.PlungeSpeed > 0, "rapid and plunge speeds must be positive")
 	check(req.SafeZ > req.WorkZ, "safe Z must be above work Z")
@@ -150,23 +149,27 @@ func (req DrillRequest) hole(x, y float64) []string {
 	return g.Lines()
 }
 
+// drilledLength is how far below work Z the drill goes: the depth, plus the drill point when the
+// full diameter must reach the depth.
+func (req DrillRequest) drilledLength() float64 {
+	if !req.TipThrough {
+		return req.Depth
+	}
+	angle := req.TipAngle
+	if angle == 0 {
+		angle = defaultTipAngle
+	}
+	return req.Depth + req.DrillDiameter/2/math.Tan(angle/2*math.Pi/180)
+}
+
 // pecks returns the Z every peck goes down to, counted from work Z, the last one at the bottom.
 func (req DrillRequest) pecks() []float64 {
-	length := req.Depth
-	if req.TipThrough {
-		angle := req.TipAngle
-		if angle == 0 {
-			angle = defaultTipAngle
-		}
-		length += req.DrillDiameter / 2 / math.Tan(angle/2*math.Pi/180)
-	}
+	length := req.drilledLength()
 	bottom := req.WorkZ - length
 	if req.PeckDepth <= 0 {
 		return []float64{bottom}
 	}
-	// the epsilon keeps 1.2 / 0.4 = 3.0000000000000004 from adding a fourth, empty peck
-	n := int(math.Ceil(length/req.PeckDepth - 1e-9))
-	pecks := make([]float64, n)
+	pecks := make([]float64, int(passCount(length, req.PeckDepth)))
 	for k := range pecks {
 		pecks[k] = math.Max(req.WorkZ-float64(k+1)*req.PeckDepth, bottom)
 	}
