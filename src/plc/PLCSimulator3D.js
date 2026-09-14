@@ -54,6 +54,8 @@ export class PLCSimulator3D {
         // Clamp pixel ratio for industrial displays (high DPI kills performance)
         const maxPixelRatio = 1.5;
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxPixelRatio));
+        // Canvas size in CSS pixels, reused by every frame
+        this.viewSize = new THREE.Vector2();
 
         // Handle WebGL context loss (common on industrial/embedded systems)
         this.canvas.addEventListener('webglcontextlost', (event) => {
@@ -853,14 +855,16 @@ export class PLCSimulator3D {
     renderFrame() {
         if (!this.renderer || !this.scene || !this.camera) return;
 
-        // Main scene render
+        // Main scene render. setViewport takes CSS pixels and scales them by the pixel ratio, so the
+        // drawing buffer size (canvas.width) would enlarge the scene past the canvas above ratio 1
+        this.renderer.getSize(this.viewSize);
         this.renderer.setScissorTest(false);
-        this.renderer.setViewport(0, 0, this.canvas.width, this.canvas.height);
+        this.renderer.setViewport(0, 0, this.viewSize.x, this.viewSize.y);
         this.renderer.render(this.scene, this.camera);
 
         // ViewCube HUD (bottom-right corner)
         if (this.viewCubeHelper) {
-            this.viewCubeHelper.render(this.renderer, this.camera, this.canvas.width);
+            this.viewCubeHelper.render(this.renderer, this.camera, this.viewSize.x);
         }
     }
 
