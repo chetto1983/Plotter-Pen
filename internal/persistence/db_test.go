@@ -6,6 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/glebarez/sqlite"
+	"gorm.io/gorm"
 )
 
 func TestInitDB(t *testing.T) {
@@ -260,6 +263,61 @@ func TestInitDB_InvalidPath(t *testing.T) {
 	if err == nil {
 		// On some systems this may succeed if it creates the dir
 		t.Log("InitDB did not fail for invalid path - OS may have created directory")
+	}
+}
+
+// plcSettingsBeforeProfile is the PLC settings table of databases created before the profile
+// settings existed.
+type plcSettingsBeforeProfile struct {
+	ID         int64     `gorm:"primaryKey;check:id = 1"`
+	WorkSpeed  float64   `gorm:"default:100"`
+	RapidSpeed float64   `gorm:"default:1000"`
+	SafeZ      float64   `gorm:"default:5"`
+	WorkZ      float64   `gorm:"default:0"`
+	WaitTime   int       `gorm:"default:0"`
+	UpdatedAt  time.Time `gorm:"autoUpdateTime"`
+}
+
+func (plcSettingsBeforeProfile) TableName() string { return "plc_simulation_settings" }
+
+// An existing database keeps its settings and gets a usable value for each profile setting.
+func TestInitDB_ExistingPLCSettingsGetProfileDefaults(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "old.db")
+	old, err := gorm.Open(sqlite.Open(path), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	if err := old.AutoMigrate(&plcSettingsBeforeProfile{}); err != nil {
+		t.Fatalf("old schema: %v", err)
+	}
+	if err := old.Create(&plcSettingsBeforeProfile{ID: 1, WorkSpeed: 250, RapidSpeed: 900, SafeZ: 12, WorkZ: 3}).Error; err != nil {
+		t.Fatalf("old row: %v", err)
+	}
+	closeDB(t, old)
+
+	db, err := InitDB(path)
+	if err != nil {
+		t.Fatalf("InitDB: %v", err)
+	}
+	t.Cleanup(func() { closeDB(t, db) })
+
+	var got PLCSimulationSettings
+	if err := db.First(&got).Error; err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if got.WorkSpeed != 250 || got.SafeZ != 12 || got.WorkZ != 3 || got.Depth != 1 || got.StepDown != 0.5 || got.PlungeSpeed != 5 {
+		t.Fatalf("settings after migration %+v", got)
+	}
+}
+
+func closeDB(t *testing.T, db *gorm.DB) {
+	t.Helper()
+	sqlDB, err := db.DB()
+	if err == nil {
+		err = sqlDB.Close()
+	}
+	if err != nil {
+		t.Fatalf("close: %v", err)
 	}
 }
 

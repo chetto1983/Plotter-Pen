@@ -298,6 +298,36 @@ export class Modals {
             <span class="cad-plc-setting-unit">ms</span>
           </div>
         </div>
+        <div class="cad-plc-setting-row">
+          <div class="cad-plc-setting-info">
+            <label for="modalSimDepth">Profondità Profilo</label>
+            <span class="cad-plc-setting-desc">Fresatura: sotto l'Altezza Lavoro</span>
+          </div>
+          <div class="cad-plc-setting-input">
+            <input type="number" id="modalSimDepth" class="cad-modal-input" min="0.1" max="50" step="0.1" value="1">
+            <span class="cad-plc-setting-unit">mm</span>
+          </div>
+        </div>
+        <div class="cad-plc-setting-row">
+          <div class="cad-plc-setting-info">
+            <label for="modalSimStepDown">Passo in Profondità</label>
+            <span class="cad-plc-setting-desc">Fresatura: discesa per passata</span>
+          </div>
+          <div class="cad-plc-setting-input">
+            <input type="number" id="modalSimStepDown" class="cad-modal-input" min="0.05" max="50" step="0.05" value="0.5">
+            <span class="cad-plc-setting-unit">mm</span>
+          </div>
+        </div>
+        <div class="cad-plc-setting-row">
+          <div class="cad-plc-setting-info">
+            <label for="modalSimPlungeSpeed">Velocità Affondamento</label>
+            <span class="cad-plc-setting-desc">Fresatura: discesa nel materiale</span>
+          </div>
+          <div class="cad-plc-setting-input">
+            <input type="number" id="modalSimPlungeSpeed" class="cad-modal-input" min="0.5" max="100" step="0.5" value="5">
+            <span class="cad-plc-setting-unit">mm/s</span>
+          </div>
+        </div>
       </div>
     </div>
     <div class="cad-modal-footer" style="justify-content:flex-end">

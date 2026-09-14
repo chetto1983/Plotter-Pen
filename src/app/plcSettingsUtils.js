@@ -8,7 +8,10 @@ const PLC_INPUT_IDS = {
   rapidSpeed: 'simRapidSpeed',
   safeZ: 'simSafeZ',
   workZ: 'simWorkZ',
-  waitTime: 'simWaitTime'
+  waitTime: 'simWaitTime',
+  depth: 'simDepth',
+  stepDown: 'simStepDown',
+  plungeSpeed: 'simPlungeSpeed'
 };
 
 // Modal input IDs (for PLC settings modal)
@@ -17,15 +20,22 @@ const PLC_MODAL_INPUT_IDS = {
   rapidSpeed: 'modalSimRapidSpeed',
   safeZ: 'modalSimSafeZ',
   workZ: 'modalSimWorkZ',
-  waitTime: 'modalSimWaitTime'
+  waitTime: 'modalSimWaitTime',
+  depth: 'modalSimDepth',
+  stepDown: 'modalSimStepDown',
+  plungeSpeed: 'modalSimPlungeSpeed'
 };
 
+// depth, stepDown and plungeSpeed are for profile cuts; the defaults match the database columns
 const PLC_DEFAULTS = {
   workSpeed: 100,
   rapidSpeed: 1000,
   safeZ: 5,
   workZ: 0,
-  waitTime: 0
+  waitTime: 0,
+  depth: 1,
+  stepDown: 0.5,
+  plungeSpeed: 5
 };
 
 /**
@@ -47,7 +57,10 @@ export function getPLCSettingsFromUI() {
     rapidSpeed: toNumber(document.getElementById(PLC_INPUT_IDS.rapidSpeed)?.value, PLC_DEFAULTS.rapidSpeed),
     safeZ: toNumber(document.getElementById(PLC_INPUT_IDS.safeZ)?.value, PLC_DEFAULTS.safeZ),
     workZ: toNumber(document.getElementById(PLC_INPUT_IDS.workZ)?.value, PLC_DEFAULTS.workZ),
-    waitTime: toInt(document.getElementById(PLC_INPUT_IDS.waitTime)?.value, PLC_DEFAULTS.waitTime)
+    waitTime: toInt(document.getElementById(PLC_INPUT_IDS.waitTime)?.value, PLC_DEFAULTS.waitTime),
+    depth: toNumber(document.getElementById(PLC_INPUT_IDS.depth)?.value, PLC_DEFAULTS.depth),
+    stepDown: toNumber(document.getElementById(PLC_INPUT_IDS.stepDown)?.value, PLC_DEFAULTS.stepDown),
+    plungeSpeed: toNumber(document.getElementById(PLC_INPUT_IDS.plungeSpeed)?.value, PLC_DEFAULTS.plungeSpeed)
   };
 }
 
@@ -58,17 +71,12 @@ export function getPLCSettingsFromUI() {
 export function setPLCSettingsToUI(settings) {
   if (!settings) return;
 
-  const values = {
-    [PLC_INPUT_IDS.workSpeed]: settings.workSpeed ?? PLC_DEFAULTS.workSpeed,
-    [PLC_INPUT_IDS.rapidSpeed]: settings.rapidSpeed ?? PLC_DEFAULTS.rapidSpeed,
-    [PLC_INPUT_IDS.safeZ]: settings.safeZ ?? PLC_DEFAULTS.safeZ,
-    [PLC_INPUT_IDS.workZ]: settings.workZ ?? PLC_DEFAULTS.workZ,
-    [PLC_INPUT_IDS.waitTime]: settings.waitTime ?? PLC_DEFAULTS.waitTime
-  };
-
-  for (const [id, val] of Object.entries(values)) {
+  // The saved app state and the settings table are restored concurrently at startup. A state
+  // saved before a field existed has no value for it, so the input keeps what it has instead of
+  // going back to the default over the value read from the table.
+  for (const [key, id] of Object.entries(PLC_INPUT_IDS)) {
     const el = document.getElementById(id);
-    if (el) el.value = val;
+    if (el && settings[key] != null) el.value = settings[key];
   }
 }
 
@@ -91,7 +99,10 @@ export function getPLCSettingsFromModal() {
     rapidSpeed: toNumber(document.getElementById(PLC_MODAL_INPUT_IDS.rapidSpeed)?.value, PLC_DEFAULTS.rapidSpeed),
     safeZ: toNumber(document.getElementById(PLC_MODAL_INPUT_IDS.safeZ)?.value, PLC_DEFAULTS.safeZ),
     workZ: toNumber(document.getElementById(PLC_MODAL_INPUT_IDS.workZ)?.value, PLC_DEFAULTS.workZ),
-    waitTime: toInt(document.getElementById(PLC_MODAL_INPUT_IDS.waitTime)?.value, PLC_DEFAULTS.waitTime)
+    waitTime: toInt(document.getElementById(PLC_MODAL_INPUT_IDS.waitTime)?.value, PLC_DEFAULTS.waitTime),
+    depth: toNumber(document.getElementById(PLC_MODAL_INPUT_IDS.depth)?.value, PLC_DEFAULTS.depth),
+    stepDown: toNumber(document.getElementById(PLC_MODAL_INPUT_IDS.stepDown)?.value, PLC_DEFAULTS.stepDown),
+    plungeSpeed: toNumber(document.getElementById(PLC_MODAL_INPUT_IDS.plungeSpeed)?.value, PLC_DEFAULTS.plungeSpeed)
   };
 }
 
@@ -107,7 +118,10 @@ export function setPLCSettingsToModal(settings) {
     [PLC_MODAL_INPUT_IDS.rapidSpeed]: settings.rapidSpeed ?? PLC_DEFAULTS.rapidSpeed,
     [PLC_MODAL_INPUT_IDS.safeZ]: settings.safeZ ?? PLC_DEFAULTS.safeZ,
     [PLC_MODAL_INPUT_IDS.workZ]: settings.workZ ?? PLC_DEFAULTS.workZ,
-    [PLC_MODAL_INPUT_IDS.waitTime]: settings.waitTime ?? PLC_DEFAULTS.waitTime
+    [PLC_MODAL_INPUT_IDS.waitTime]: settings.waitTime ?? PLC_DEFAULTS.waitTime,
+    [PLC_MODAL_INPUT_IDS.depth]: settings.depth ?? PLC_DEFAULTS.depth,
+    [PLC_MODAL_INPUT_IDS.stepDown]: settings.stepDown ?? PLC_DEFAULTS.stepDown,
+    [PLC_MODAL_INPUT_IDS.plungeSpeed]: settings.plungeSpeed ?? PLC_DEFAULTS.plungeSpeed
   };
 
   for (const [id, val] of Object.entries(values)) {

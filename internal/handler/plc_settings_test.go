@@ -1,0 +1,39 @@
+package handler
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"plotter-pen/internal/persistence"
+)
+
+// The profile settings travel with the pen settings in the same dialog and request.
+func TestPLCSimSettings_SavesProfileSettings(t *testing.T) {
+	r, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/plc/settings", strings.NewReader(
+		`{"workSpeed": 40, "rapidSpeed": 800, "safeZ": 10, "workZ": 2, "waitTime": 100, "depth": 1.6, "stepDown": 0.4, "plungeSpeed": 3}`))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("save: status %d, body %s", w.Code, w.Body.String())
+	}
+
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/plc/settings", nil))
+	var resp struct {
+		Data persistence.PLCSimulationSettings `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("load: %v, body %s", err, w.Body.String())
+	}
+	got := resp.Data
+	if got.WorkSpeed != 40 || got.WorkZ != 2 || got.Depth != 1.6 || got.StepDown != 0.4 || got.PlungeSpeed != 3 {
+		t.Fatalf("loaded %+v", got)
+	}
+}

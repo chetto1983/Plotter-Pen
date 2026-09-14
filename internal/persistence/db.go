@@ -36,15 +36,20 @@ type Tool struct {
 	CreatedAt   time.Time `gorm:"autoCreateTime" json:"createdAt"`
 }
 
-// PLCSimulationSettings stores PLC simulation parameters (singleton)
+// PLCSimulationSettings stores PLC simulation parameters (singleton). Speeds are in mm/s like V.
+// Depth, StepDown and PlungeSpeed are for profile cuts, which go down from WorkZ; their column
+// defaults also fill the row of databases created before them.
 type PLCSimulationSettings struct {
-	ID         int64     `gorm:"primaryKey;check:id = 1" json:"id"`
-	WorkSpeed  float64   `gorm:"default:100" json:"workSpeed"`
-	RapidSpeed float64   `gorm:"default:1000" json:"rapidSpeed"`
-	SafeZ      float64   `gorm:"default:5" json:"safeZ"`
-	WorkZ      float64   `gorm:"default:0" json:"workZ"`
-	WaitTime   int       `gorm:"default:0" json:"waitTime"`
-	UpdatedAt  time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
+	ID          int64     `gorm:"primaryKey;check:id = 1" json:"id"`
+	WorkSpeed   float64   `gorm:"default:100" json:"workSpeed"`
+	RapidSpeed  float64   `gorm:"default:1000" json:"rapidSpeed"`
+	SafeZ       float64   `gorm:"default:5" json:"safeZ"`
+	WorkZ       float64   `gorm:"default:0" json:"workZ"`
+	WaitTime    int       `gorm:"default:0" json:"waitTime"`
+	Depth       float64   `gorm:"default:1" json:"depth"`
+	StepDown    float64   `gorm:"default:0.5" json:"stepDown"`
+	PlungeSpeed float64   `gorm:"default:5" json:"plungeSpeed"`
+	UpdatedAt   time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
 }
 
 // MachineConfig stores machine configuration
@@ -177,12 +182,15 @@ func initSingletons(db *gorm.DB) {
 	var plcSettings PLCSimulationSettings
 	if db.First(&plcSettings).Error != nil {
 		if err := db.Create(&PLCSimulationSettings{
-			ID:         1,
-			WorkSpeed:  100,
-			RapidSpeed: 1000,
-			SafeZ:      5,
-			WorkZ:      0,
-			WaitTime:   0,
+			ID:          1,
+			WorkSpeed:   100,
+			RapidSpeed:  1000,
+			SafeZ:       5,
+			WorkZ:       0,
+			WaitTime:    0,
+			Depth:       1,
+			StepDown:    0.5,
+			PlungeSpeed: 5,
 		}).Error; err != nil {
 			log.Printf("Failed to create PLCSimulationSettings singleton: %v", err)
 		}

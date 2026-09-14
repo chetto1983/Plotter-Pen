@@ -403,6 +403,16 @@
 .cad-modal-plc-settings {
     width: 420px;
     max-width: calc(100vw - 32px);
+    /* the pen and milling settings are taller than small HMI screens: keep the title and the
+       buttons in view and scroll the settings */
+    max-height: calc(100vh - 32px);
+    display: flex;
+    flex-direction: column;
+}
+
+.cad-modal-plc-settings .cad-modal-body {
+    min-height: 0;
+    overflow-y: auto;
 }
 
 .cad-plc-settings-grid {
