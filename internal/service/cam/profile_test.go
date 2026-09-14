@@ -282,8 +282,36 @@ func TestProfile_DirectionFollowsSideAndCutting(t *testing.T) {
 	}
 }
 
+// After each ring the tool goes to the nearest ring it may cut and enters it at its nearest
+// vertex: from X 0 Y 0 to the square at the origin, then x 50, then x 100, whatever the drawing
+// order.
+func TestProfile_RapidsGoToTheNearestRing(t *testing.T) {
+	req := request("outside", 2, squareP(100, 0, 110, 10), squareP(0, 0, 10, 10), squareP(50, 0, 60, 10))
+
+	c := cuts(t, mustProfile(t, req))
+
+	if len(c) != 3 {
+		t.Fatalf("got %d cuts, want 3", len(c))
+	}
+	var pos geom.Point
+	for k, wantMinX := range []float64{-1, 49, 99} {
+		if minX, _, _, _ := c[k].path.Bounds(); math.Abs(minX-wantMinX) > 0.01 {
+			t.Fatalf("cut %d starts at x %.3f, want the ring from x %.0f", k, minX, wantMinX)
+		}
+		start := c[k].path[0]
+		for _, p := range c[k].path {
+			// arc samples may come up to the fit tolerance closer than the vertices
+			if pos.Distance(p) < pos.Distance(start)-0.02 {
+				t.Fatalf("cut %d enters at %v, but %v is nearer to %v", k, start, p, pos)
+			}
+		}
+		pos = start
+	}
+}
+
 // A part standing inside the hole of another part: cutting the hole first would free the slug
-// that still holds the inner part, so the deepest contours are cut first.
+// that still holds the inner part, so a ring is cut only after the rings inside it, even when
+// the outline is nearer to X 0 Y 0.
 func TestProfile_CutsInnermostContoursFirst(t *testing.T) {
 	req := request("outside", 2, squareP(0, 0, 60, 60), squareP(80, 0, 90, 10), squareP(25, 25, 35, 35), squareP(10, 10, 50, 50))
 

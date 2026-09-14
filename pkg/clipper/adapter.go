@@ -60,28 +60,25 @@ func OffsetContours(loops []geom.Path, delta float64) []geom.Path {
 	return fromPaths64(rings)
 }
 
-// NestingDepths returns, for each closed contour, how many of the others enclose it. The
-// contours must not cross, as the rings of one OffsetContours call: then any vertex that is not
-// on the other contour's boundary tells whether the whole contour is inside it.
-func NestingDepths(loops []geom.Path) []int {
-	paths := toPaths64(loops)
-	depths := make([]int, len(paths))
-	for i, inner := range paths {
-		for j, outer := range paths {
-			if i == j {
-				continue
-			}
-			for _, pt := range inner {
-				if pip := clipper2.PointInPolygon(pt, outer); pip != clipper2.IsOn {
-					if pip == clipper2.IsInside {
-						depths[i]++
-					}
+// Inside reports, for each ring of inner, which rings of outer enclose it: the result has a row
+// per inner ring and a column per outer ring. No two rings may cross, as within the result of
+// OffsetContours: then any vertex of the inner ring that is not on the outer ring's boundary
+// tells whether the whole ring is inside. A ring is not inside itself.
+func Inside(inner, outer []geom.Path) [][]bool {
+	outerPaths := toPaths64(outer)
+	result := make([][]bool, len(inner))
+	for i, ring := range toPaths64(inner) {
+		result[i] = make([]bool, len(outerPaths))
+		for j, around := range outerPaths {
+			for _, pt := range ring {
+				if pip := clipper2.PointInPolygon(pt, around); pip != clipper2.IsOn {
+					result[i][j] = pip == clipper2.IsInside
 					break
 				}
 			}
 		}
 	}
-	return depths
+	return result
 }
 
 // GeneratePocket creates a concentric pocket toolpath

@@ -115,18 +115,28 @@ func TestOffsetContours_ShapeNarrowerThanToolGivesNothing(t *testing.T) {
 	}
 }
 
-// A part inside a hole of another part is nested twice; a contour beside them is not nested.
-// The island shares a corner with the hole, so that vertex alone cannot tell inside from outside.
-func TestNestingDepths_CountsEnclosingContours(t *testing.T) {
+// A part inside a hole of another part is inside the hole and the outline; a contour beside them
+// is inside nothing, and no ring is inside itself. The island shares a corner with the hole, so
+// that vertex alone cannot tell inside from outside. Rings of another set, like a tool ring in the
+// hole beside the island, are tested the same way.
+func TestInside_TellsWhichRingsEncloseEachRing(t *testing.T) {
 	outline := rectLoop(0, 0, 60, 60)
 	hole := rectLoop(10, 10, 50, 50)
 	island := geom.Path{{X: 10, Y: 10}, {X: 30, Y: 20}, {X: 20, Y: 30}}
 	beside := rectLoop(70, 0, 80, 10)
+	drawing := []geom.Path{island, beside, outline, hole}
 
-	got := NestingDepths([]geom.Path{island, beside, outline, hole})
+	got := Inside(append(slices.Clone(drawing), rectLoop(35, 35, 45, 45)), drawing)
 
-	if want := []int{2, 0, 0, 1}; !slices.Equal(got, want) {
-		t.Fatalf("depths %v, want %v", got, want)
+	want := [][]bool{
+		{false, false, true, true},
+		{false, false, false, false},
+		{false, false, false, false},
+		{false, false, true, false},
+		{false, false, true, true},
+	}
+	if !slices.EqualFunc(got, want, slices.Equal) {
+		t.Fatalf("inside %v, want %v", got, want)
 	}
 }
 

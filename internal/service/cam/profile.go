@@ -42,10 +42,10 @@ type ProfileRequest struct {
 // Profile returns the PLC program that cuts around the closed contours of the drawing, one radius
 // away on the chosen side, going down by the step-down from the work Z to work Z - depth.
 //
-// Innermost contours are cut first, so every part stays attached to the stock until its own
-// outline is cut. Each ring is plunged at its start and cut at every level without leaving the
-// slot, then the tool goes back to safe Z; the program starts and ends at safe Z, ending at X 0
-// Y 0 like the plotter programs.
+// A ring is cut after the rings inside it, so every part stays attached to the stock until its
+// own outline is cut, and the tool moves to the nearest ring it may cut next. Each ring is
+// plunged at its start and cut at every level without leaving the slot, then the tool goes back
+// to safe Z; the program starts and ends at safe Z, ending at X 0 Y 0 like the plotter programs.
 func Profile(req ProfileRequest) (plc.ExtractResponse, error) {
 	if err := req.validate(); err != nil {
 		return plc.ExtractResponse{}, err
@@ -129,28 +129,60 @@ func (req ProfileRequest) levels() []float64 {
 	return levels
 }
 
-// orderRings puts the deepest rings first and turns each one the way the cut needs. With the
-// spindle turning clockwise seen from above, conventional cutting keeps the finished wall on the
-// left of the tool. Outside a contour set that wall is the material the rings enclose: outer
-// rings counterclockwise, holes clockwise. Inside it the wall is on the other side, and climb
-// cutting reverses both.
+// orderRings returns the rings in cutting order, each turned the way the cut needs and starting
+// at its vertex nearest to where the tool comes from.
+//
+// A ring is cut only after every ring inside it, so a part stays attached to the stock until its
+// own outline is cut. Among the rings that may be cut, the tool goes to the nearest one, starting
+// from X 0 Y 0.
+//
+// With the spindle turning clockwise seen from above, conventional cutting keeps the finished
+// wall on the left of the tool. Outside a contour set that wall is the material the rings
+// enclose: outer rings counterclockwise, holes clockwise. Inside it the wall is on the other
+// side, and climb cutting reverses both.
 func orderRings(rings []geom.Path, side, direction string) []geom.Path {
-	depths := clipper.NestingDepths(rings)
-	order := make([]int, len(rings))
-	for i := range order {
-		order[i] = i
-	}
-	slices.SortStableFunc(order, func(a, b int) int { return depths[b] - depths[a] })
-
+	inside := clipper.Inside(rings, rings)
 	flip := (side == SideInside) != (direction == CuttingClimb)
-	out := make([]geom.Path, 0, len(rings))
-	for _, i := range order {
-		counterclockwise := (depths[i]%2 == 0) != flip
-		ring := rings[i]
-		if (signedArea(ring) > 0) != counterclockwise {
-			ring = ring.Reverse()
+	oriented := make([]geom.Path, len(rings))
+	waiting := make([]int, len(rings)) // rings inside each ring that are not cut yet
+	for i, around := range inside {
+		depth := 0
+		for j, in := range around {
+			if in {
+				depth++
+				waiting[j]++
+			}
 		}
+		oriented[i] = rings[i]
+		if (signedArea(rings[i]) > 0) != ((depth%2 == 0) != flip) {
+			oriented[i] = rings[i].Reverse()
+		}
+	}
+
+	out := make([]geom.Path, 0, len(rings))
+	done := make([]bool, len(rings))
+	var pos geom.Point
+	for range rings {
+		next, entry, nearest := -1, 0, math.Inf(1)
+		for i, ring := range oriented {
+			if done[i] || waiting[i] > 0 {
+				continue
+			}
+			for v, p := range ring {
+				if d := pos.DistanceSq(p); d < nearest {
+					next, entry, nearest = i, v, d
+				}
+			}
+		}
+		done[next] = true
+		for j, in := range inside[next] {
+			if in {
+				waiting[j]--
+			}
+		}
+		ring := append(slices.Clone(oriented[next][entry:]), oriented[next][:entry]...)
 		out = append(out, ring)
+		pos = ring[0]
 	}
 	return out
 }
