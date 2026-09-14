@@ -19,6 +19,7 @@ func NewCAMHandler() *CAMHandler {
 func (h *CAMHandler) RegisterRoutes(rg *gin.RouterGroup) {
 	g := rg.Group("/cam")
 	g.POST("/profile", h.Profile)
+	g.POST("/drill", h.Drill)
 }
 
 // Profile handles POST /api/cam/profile: the PLC program of a profile cut, in the response shape
@@ -31,6 +32,24 @@ func (h *CAMHandler) Profile(c *gin.Context) {
 	}
 
 	result, err := cam.Profile(req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+// Drill handles POST /api/cam/drill: the PLC program that drills the circles in a diameter range,
+// in the response shape of /api/plc/extract. Settings or a drawing with nothing to drill are a bad
+// request.
+func (h *CAMHandler) Drill(c *gin.Context) {
+	var req cam.DrillRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	result, err := cam.Drill(req)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

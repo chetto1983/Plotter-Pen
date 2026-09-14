@@ -127,16 +127,48 @@ func TestProfileProgram_S7Sim(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Profile: %v", err)
 	}
-	last := res.Output[len(res.Output)-1]
+
+	sendS7Sim(ctx, t, client, cfg, res.Output)
+	waitForProgramEnd(ctx, t, client, res.Output, -1)
+}
+
+// TestDrillProgram_S7Sim sends a pecked drilling program to the simulator and checks that it runs
+// to its last command, through the bottom of the holes.
+func TestDrillProgram_S7Sim(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	client, cfg := connectS7Sim(ctx, t)
+
+	res, err := cam.Drill(cam.DrillRequest{
+		Primitives: []plc.Primitive{
+			{Type: plc.PrimitiveCircle, Cx: new(10.0), Cy: new(5.0), Radius: new(0.5)},
+			{Type: plc.PrimitiveCircle, Cx: new(12.54), Cy: new(5.0), Radius: new(0.5)},
+			{Type: plc.PrimitiveCircle, Cx: new(20.0), Cy: new(10.0), Radius: new(1.6)},
+		},
+		// the dwell holds the drill at the bottom long enough for the 20 ms position polls to see it
+		WaitTime: 300, RapidSpeed: 1000, SafeZ: 5, WorkZ: 0, Depth: 1.6, PlungeSpeed: 20, RetractClearance: 1,
+		DrillDiameter: 1, MinHoleDiameter: 0.4, MaxHoleDiameter: 1.2, PeckDepth: 0.8, TipThrough: true,
+	})
+	if err != nil {
+		t.Fatalf("Drill: %v", err)
+	}
+
+	sendS7Sim(ctx, t, client, cfg, res.Output)
+	// 1.6 mm plus the 0.300 mm point of a 1 mm 118° drill
+	waitForProgramEnd(ctx, t, client, res.Output, -1.9)
+}
+
+// waitForProgramEnd waits until the axes rest at the position of the last command of program.
+// The axes may already rest there from an earlier run: only a position seen after the tool went
+// down to bottom proves that the program ran to its end.
+func waitForProgramEnd(ctx context.Context, t *testing.T, client *Client, program []string, bottom float64) {
+	t.Helper()
+	last := program[len(program)-1]
 	var want Position
 	if _, err := fmt.Sscanf(last, "J X %f, Y %f, Z %f", &want.X, &want.Y, &want.Z); err != nil {
 		t.Fatalf("last command %q: %v", last, err)
 	}
 
-	sendS7Sim(ctx, t, client, cfg, res.Output)
-
-	// The axes may already rest at the final position from an earlier run: only a position seen
-	// after the tool went down to the full depth proves that the program ran to its end.
 	lowest := math.Inf(1)
 	for {
 		pos, err := client.ReadPosition(ctx)
@@ -144,8 +176,8 @@ func TestProfileProgram_S7Sim(t *testing.T) {
 			t.Fatalf("read position: %v", err)
 		}
 		lowest = math.Min(lowest, pos.Z)
-		if lowest <= -1+1e-3 && math.Abs(pos.X-want.X) < 1e-3 && math.Abs(pos.Y-want.Y) < 1e-3 && math.Abs(pos.Z-want.Z) < 1e-3 {
-			t.Logf("program of %d commands ran: lowest Z %.3f, stopped at %+v", res.Count, lowest, pos)
+		if lowest <= bottom+1e-3 && math.Abs(pos.X-want.X) < 1e-3 && math.Abs(pos.Y-want.Y) < 1e-3 && math.Abs(pos.Z-want.Z) < 1e-3 {
+			t.Logf("program of %d commands ran: lowest Z %.3f, stopped at %+v", len(program), lowest, pos)
 			return
 		}
 		select {

@@ -13,12 +13,17 @@ import (
 
 func postCAMProfile(t *testing.T, body string) *httptest.ResponseRecorder {
 	t.Helper()
+	return postCAM(t, "/api/cam/profile", body)
+}
+
+func postCAM(t *testing.T, path, body string) *httptest.ResponseRecorder {
+	t.Helper()
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	NewCAMHandler().RegisterRoutes(r.Group("/api"))
 
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/cam/profile", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	r.ServeHTTP(w, req)
 	return w
@@ -75,6 +80,48 @@ func TestCAMProfile_ListsUnreachableContoursAsWarnings(t *testing.T) {
 	}
 	if resp.Count == 0 || len(resp.Warnings) != 1 {
 		t.Fatalf("count %d, warnings %q; want the outline cut and one warning for the hole", resp.Count, resp.Warnings)
+	}
+}
+
+// The drilling request carries the PLC settings like the profile and the extract, and the
+// response has the extract shape with each hole's commands naming its circle.
+func TestCAMDrill_ReturnsProgramInExtractShape(t *testing.T) {
+	w := postCAM(t, "/api/cam/drill", `{
+		"primitives": [
+			{"type": "circle", "id": "pin", "cx": 10, "cy": 5, "radius": 0.5},
+			{"type": "circle", "id": "mount", "cx": 20, "cy": 5, "radius": 1.6}
+		],
+		"defaultSpeed": 50, "rapidSpeed": 1000, "safeZ": 5, "workZ": 0, "waitTime": 0,
+		"depth": 1.6, "plungeSpeed": 5, "retractClearance": 1,
+		"drillDiameter": 1, "minHoleDiameter": 0.4, "maxHoleDiameter": 1.2,
+		"peckDepth": 0.8, "tipAngle": 118, "tipThrough": true
+	}`)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", w.Code, w.Body.String())
+	}
+	var resp plc.ExtractResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("response: %v", err)
+	}
+	if resp.Count == 0 || resp.Count != len(resp.Output) || len(resp.Commands) != resp.Count {
+		t.Fatalf("count %d, %d output lines, %d commands", resp.Count, len(resp.Output), len(resp.Commands))
+	}
+	program := strings.Join(resp.Output, "\n")
+	if resp.Commands[0].PrimitiveID != "pin" || strings.Contains(program, "X 20.000") || !strings.Contains(program, "Z -1.900, V 5.000") {
+		t.Fatalf("want only the pin drilled, tip through, down to -1.900:\n%s", program)
+	}
+}
+
+func TestCAMDrill_NoHoleInTheRangeIsBadRequest(t *testing.T) {
+	w := postCAM(t, "/api/cam/drill", `{
+		"primitives": [{"type": "circle", "cx": 20, "cy": 5, "radius": 1.6}],
+		"rapidSpeed": 1000, "safeZ": 5, "workZ": 0, "depth": 1.6, "plungeSpeed": 5, "retractClearance": 1,
+		"drillDiameter": 1, "minHoleDiameter": 0.4, "maxHoleDiameter": 1.2
+	}`)
+
+	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "nothing to drill") {
+		t.Fatalf("status %d, body %s; want 400 saying there is nothing to drill", w.Code, w.Body.String())
 	}
 }
 
