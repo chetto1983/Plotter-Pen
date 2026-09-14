@@ -13,9 +13,13 @@ import (
 	plcgen "plotter-pen/pkg/plc"
 )
 
-// fitTolerance is the largest distance between an offset ring and the lines and arcs sent to the
-// PLC in its place.
-const fitTolerance = 0.01
+const (
+	// fitTolerance is the largest distance between an offset ring and the lines and arcs sent to
+	// the PLC in its place.
+	fitTolerance = 0.01
+	// rampResolution is the shortest ramp worth sending: the PLC coordinates have 0.001 mm steps.
+	rampResolution = 0.001
+)
 
 // Cut sides and directions of a profile.
 const (
@@ -37,6 +41,7 @@ type ProfileRequest struct {
 	Depth       float64 `json:"depth"`
 	StepDown    float64 `json:"stepDown"`
 	PlungeSpeed float64 `json:"plungeSpeed"`
+	RampAngle   float64 `json:"rampAngle"`
 }
 
 // ProfileResponse is the program in the /api/plc/extract response shape, with a warning for each
@@ -50,9 +55,10 @@ type ProfileResponse struct {
 // away on the chosen side, going down by the step-down from the work Z to work Z - depth.
 //
 // A ring is cut after the rings inside it, so every part stays attached to the stock until its
-// own outline is cut, and the tool moves to the nearest ring it may cut next. Each ring is
-// plunged at its start and cut at every level without leaving the slot, then the tool goes back
-// to safe Z; the program starts and ends at safe Z, ending at X 0 Y 0 like the plotter programs.
+// own outline is cut, and the tool moves to the nearest ring it may cut next. The tool enters
+// every level at the ring start along a ramp and cuts all the levels without leaving the slot,
+// then goes back to safe Z; the program starts and ends at safe Z, ending at X 0 Y 0 like the
+// plotter programs.
 // Contours the tool cannot reach are left uncut and listed as warnings.
 func Profile(req ProfileRequest) (ProfileResponse, error) {
 	if err := req.validate(); err != nil {
@@ -86,10 +92,15 @@ func Profile(req ProfileRequest) (ProfileResponse, error) {
 	levels := req.levels()
 	for _, ring := range rings {
 		start := ring[0]
-		segments := plc.FitArcsAndLines(append(ring, start), fitTolerance)
+		closed := append(slices.Clone(ring), start)
+		segments := plc.FitArcsAndLines(closed, fitTolerance)
+		// ramps may leave the ring by the fit tolerance too, so they skip the vertices they do not need
+		rampRing := clipper.SimplifyPath(closed, fitTolerance)
 		g.Jump(start.X, start.Y, req.SafeZ, req.RapidSpeed)
+		above := req.SafeZ
 		for _, z := range levels {
-			g.Line(start.X, start.Y, z, req.PlungeSpeed)
+			req.enter(g, rampRing, above, z)
+			above = z
 			g.Wait(req.WaitTime)
 			for _, s := range segments {
 				if s.Type == "arc" {
@@ -107,6 +118,63 @@ func Profile(req ProfileRequest) (ProfileResponse, error) {
 		ExtractResponse: response(g.Lines()),
 		Warnings:        unreachedContours(material, offset, req.Side, req.ToolDiameter),
 	}, nil
+}
+
+// enter takes the tool at the start of the closed ring (its last point repeats the first) from
+// zFrom down to zTo. Down to the stock surface at work Z it goes straight at the plunge speed. In
+// the material it ramps along the ring at the ramp angle, out for half the drop and back to the
+// start, so the lap at zTo still starts at the ring start. The ramp runs at the cutting speed,
+// slowed down so that the tool never sinks faster than the plunge speed.
+//
+// The tool plunges straight to zTo instead at 90°, where the ramp has no length, and in a ring
+// shorter than the tool diameter, where the ramp would go round it many times.
+func (req ProfileRequest) enter(g *plcgen.Generator, closed geom.Path, zFrom, zTo float64) {
+	start := closed[0]
+	surface := math.Min(zFrom, req.WorkZ)
+	angle := req.RampAngle * math.Pi / 180
+	leg := (surface - zTo) / math.Tan(angle) / 2
+	if leg < rampResolution || pathLength(closed) < req.ToolDiameter {
+		g.Line(start.X, start.Y, zTo, req.PlungeSpeed)
+		return
+	}
+	ring := closed[:len(closed)-1]
+	if zFrom > surface {
+		g.Line(start.X, start.Y, surface, req.PlungeSpeed)
+	}
+
+	out := alongRing(ring, leg)
+	path := append(slices.Clone(out), out[:len(out)-1]...)
+	slices.Reverse(path[len(out):])
+	path = append(path, start)
+
+	speed := math.Min(req.DefaultSpeed, req.PlungeSpeed/math.Sin(angle))
+	walked, pos := 0.0, start
+	for i, p := range path {
+		walked += pos.Distance(p)
+		z := surface - (surface-zTo)*walked/(2*leg)
+		if i == len(path)-1 {
+			z = zTo
+		}
+		g.Line(p.X, p.Y, z, speed)
+		pos = p
+	}
+}
+
+// alongRing walks the closed ring from its start for the given length, going round it as many
+// times as needed, and returns the vertices it passes and the point where it stops.
+func alongRing(ring geom.Path, length float64) geom.Path {
+	var out geom.Path
+	walked := 0.0
+	for i := 0; ; i++ {
+		a, b := ring[i%len(ring)], ring[(i+1)%len(ring)]
+		step := a.Distance(b)
+		if walked+step >= length {
+			t := (length - walked) / step
+			return append(out, geom.Point{X: a.X + (b.X-a.X)*t, Y: a.Y + (b.Y-a.Y)*t})
+		}
+		walked += step
+		out = append(out, b)
+	}
 }
 
 // unreachedContours warns about the contours that no ring cuts. Only a contour around a region the
@@ -157,6 +225,7 @@ func (req ProfileRequest) validate() error {
 	check(req.Depth > 0, "depth must be positive")
 	check(req.StepDown > 0, "step-down must be positive")
 	check(req.DefaultSpeed > 0 && req.RapidSpeed > 0 && req.PlungeSpeed > 0, "cutting, rapid and plunge speeds must be positive")
+	check(req.RampAngle > 0 && req.RampAngle <= 90, "ramp angle must be above 0° and at most 90°")
 	check(req.SafeZ > req.WorkZ, "safe Z must be above work Z")
 	check(req.WaitTime >= 0, "wait time must not be negative")
 	if len(problems) > 0 {

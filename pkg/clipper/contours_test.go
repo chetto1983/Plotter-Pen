@@ -160,6 +160,39 @@ func TestMergeContours_HoleDrawnLikeTheOutlineTurnsClockwise(t *testing.T) {
 	}
 }
 
+// segmentDistance is the distance from p to the segment a-b.
+func segmentDistance(p, a, b geom.Point) float64 {
+	dx, dy := b.X-a.X, b.Y-a.Y
+	t := math.Max(0, math.Min(1, ((p.X-a.X)*dx+(p.Y-a.Y)*dy)/(dx*dx+dy*dy)))
+	return p.Distance(geom.Point{X: a.X + t*dx, Y: a.Y + t*dy})
+}
+
+// A densely sampled arc keeps only the vertices it needs to stay within the tolerance, and both
+// ends stay where they are.
+func TestSimplifyPath_KeepsEndsAndStaysWithinTolerance(t *testing.T) {
+	arc := circleLoop(0, 0, 10, 4000)[:1001] // a quarter of a circle, a vertex every 16 µm
+
+	got := SimplifyPath(arc, 0.01)
+
+	// coordinates come back rounded to whole micrometres
+	if got[0].Distance(arc[0]) > 0.0005 || got[len(got)-1].Distance(arc[len(arc)-1]) > 0.0005 {
+		t.Fatalf("ends %v and %v, want %v and %v", got[0], got[len(got)-1], arc[0], arc[len(arc)-1])
+	}
+	// a chord that sags 0.01 mm on a 10 mm radius spans 0.028 rad, so a quarter needs about 56
+	if len(got) > 80 {
+		t.Fatalf("kept %d of %d vertices", len(got), len(arc))
+	}
+	for _, p := range arc {
+		nearest := math.Inf(1)
+		for i := 1; i < len(got); i++ {
+			nearest = math.Min(nearest, segmentDistance(p, got[i-1], got[i]))
+		}
+		if nearest > 0.0105 {
+			t.Fatalf("vertex %v is %.4f mm from the simplified path", p, nearest)
+		}
+	}
+}
+
 // Coordinates go to Clipper as whole micrometres: truncating instead of rounding would move
 // every point up to 1 µm towards the origin.
 func TestOffsetContours_RoundsToNearestMicrometre(t *testing.T) {

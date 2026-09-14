@@ -108,9 +108,9 @@ func TestChunkedTransfer_S7Sim(t *testing.T) {
 	}
 }
 
-// TestProfileProgram_S7Sim sends the profile of a plate with a round hole to the simulator and
-// waits for the program to run: the tool must reach the full depth and stop where the last
-// command ends.
+// TestProfileProgram_S7Sim sends the profile of a plate with a round hole, entered along 3° ramps,
+// to the simulator and waits for the program to run: the tool must reach the full depth and stop
+// where the last command ends.
 func TestProfileProgram_S7Sim(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -122,7 +122,7 @@ func TestProfileProgram_S7Sim(t *testing.T) {
 			{Type: plc.PrimitiveCircle, Cx: new(15.0), Cy: new(10.0), Radius: new(5.0)},
 		},
 		DefaultSpeed: 200, RapidSpeed: 1000, SafeZ: 5, WorkZ: 0,
-		ToolDiameter: 3, Side: cam.SideOutside, Depth: 1, StepDown: 0.5, PlungeSpeed: 20,
+		ToolDiameter: 3, Side: cam.SideOutside, Depth: 1, StepDown: 0.5, PlungeSpeed: 20, RampAngle: 3,
 	})
 	if err != nil {
 		t.Fatalf("Profile: %v", err)

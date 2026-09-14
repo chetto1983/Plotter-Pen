@@ -31,7 +31,7 @@ func TestCAMProfile_ReturnsProgramInExtractShape(t *testing.T) {
 		"primitives": [{"type": "rectangle", "id": "r1", "x": 0, "y": 0, "width": 20, "height": 10}],
 		"defaultSpeed": 50, "rapidSpeed": 1000, "safeZ": 5, "workZ": 0, "waitTime": 0,
 		"toolDiameter": 3, "side": "outside", "direction": "climb",
-		"depth": 1, "stepDown": 0.5, "plungeSpeed": 5
+		"depth": 1, "stepDown": 0.5, "plungeSpeed": 5, "rampAngle": 90
 	}`)
 
 	if w.Code != http.StatusOK {
@@ -63,7 +63,7 @@ func TestCAMProfile_ListsUnreachableContoursAsWarnings(t *testing.T) {
 			{"type": "circle", "cx": 30, "cy": 30, "radius": 2}
 		],
 		"defaultSpeed": 50, "rapidSpeed": 1000, "safeZ": 5, "workZ": 0,
-		"toolDiameter": 6, "side": "outside", "depth": 1, "stepDown": 1, "plungeSpeed": 5
+		"toolDiameter": 6, "side": "outside", "depth": 1, "stepDown": 1, "plungeSpeed": 5, "rampAngle": 3
 	}`)
 
 	var resp struct {
@@ -82,7 +82,7 @@ func TestCAMProfile_OpenContourIsBadRequest(t *testing.T) {
 	w := postCAMProfile(t, `{
 		"primitives": [{"type": "line", "x1": 0, "y1": 0, "x2": 10, "y2": 0}],
 		"defaultSpeed": 50, "rapidSpeed": 1000, "safeZ": 5, "workZ": 0,
-		"toolDiameter": 3, "side": "outside", "depth": 1, "stepDown": 1, "plungeSpeed": 5
+		"toolDiameter": 3, "side": "outside", "depth": 1, "stepDown": 1, "plungeSpeed": 5, "rampAngle": 3
 	}`)
 
 	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "open contour") {

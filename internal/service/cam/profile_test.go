@@ -34,10 +34,11 @@ func circleP(cx, cy, r float64) plc.Primitive {
 	return plc.Primitive{Type: plc.PrimitiveCircle, Cx: new(cx), Cy: new(cy), Radius: new(r)}
 }
 
+// request plunges straight down (ramp angle 90°) unless a test is about ramps.
 func request(side string, diameter float64, prims ...plc.Primitive) ProfileRequest {
 	return ProfileRequest{
 		Primitives: prims, DefaultSpeed: workSpeed, RapidSpeed: rapidSpeed, SafeZ: 5, WorkZ: 0,
-		ToolDiameter: diameter, Side: side, Depth: 1, StepDown: 1, PlungeSpeed: plungeSpeed,
+		ToolDiameter: diameter, Side: side, Depth: 1, StepDown: 1, PlungeSpeed: plungeSpeed, RampAngle: 90,
 	}
 }
 
@@ -235,6 +236,137 @@ func TestProfile_StepsDownFromWorkZ(t *testing.T) {
 	}
 }
 
+// The tool goes straight down to the stock surface, then enters each level along the ring and
+// back to its start, sinking at the ramp angle, so the lap at the new level starts where the ring
+// always starts. A ramp longer than the ring goes round it. The ramp runs at the cutting speed
+// unless the tool would then sink faster than the plunge speed.
+func TestProfile_RampsDownAlongTheRingAndBack(t *testing.T) {
+	insideSmallSquare := func(p geom.Point) float64 { return math.Min(math.Min(p.X, 4-p.X), math.Min(p.Y, 4-p.Y)) }
+	tests := []struct {
+		name     string
+		req      ProfileRequest
+		slope    float64 // tangent of the ramp angle
+		speed    float64
+		distance func(geom.Point) float64 // from the drawn contour: the tool radius on the ring
+	}{
+		{"shorter than the ring, sinking at the plunge speed", request("outside", 2, squareP(0, 0, 20, 20)),
+			0.1, 2 / math.Sin(math.Atan(0.1)), squareDistance},
+		{"round a ring shorter than the ramp, at the cutting speed", request("inside", 2, squareP(0, 0, 4, 4)),
+			0.02, workSpeed, insideSmallSquare},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := tt.req
+			req.StepDown, req.PlungeSpeed, req.RampAngle = 0.5, 2, math.Atan(tt.slope)*180/math.Pi
+
+			moves := mustProfile(t, req)
+
+			start := geom.Point{X: moves[0].x, Y: moves[0].y}
+			if m := moves[1]; m != (move{op: "L", x: start.X, y: start.Y, v: 2}) {
+				t.Fatalf("move 1 is %+v, want straight down to the stock surface at plunge speed", m)
+			}
+			var ramps []geom.Path
+			var tops, bottoms []float64
+			prev, inRamp := moves[1], false
+			for _, m := range moves[2:] {
+				sinks := m.op == "L" && m.z < prev.z && (m.x != prev.x || m.y != prev.y)
+				switch {
+				case sinks && !inRamp:
+					ramps, tops = append(ramps, geom.Path{{X: prev.x, Y: prev.y}}), append(tops, prev.z)
+				case !sinks && inRamp:
+					bottoms = append(bottoms, prev.z)
+				}
+				if sinks {
+					ramps[len(ramps)-1] = append(ramps[len(ramps)-1], geom.Point{X: m.x, Y: m.y})
+					if math.Abs(m.v-tt.speed) > 0.001 {
+						t.Fatalf("ramp move %+v, want V %.3f", m, tt.speed)
+					}
+				}
+				prev, inRamp = m, sinks
+			}
+			if !slices.Equal(tops, []float64{0, -0.5}) || !slices.Equal(bottoms, []float64{-0.5, -1}) {
+				t.Fatalf("ramps from Z %v down to %v, want from 0 and -0.5 down to -0.5 and -1", tops, bottoms)
+			}
+			for k, ramp := range ramps {
+				length := 0.0
+				for i, p := range ramp {
+					// the ramp may take chords 0.01 mm off the ring, besides Clipper's 5 µm arcs,
+					// its 1 µm rounding and the printed 0.5 µm
+					if d := tt.distance(p); math.Abs(d-1) > 0.017 {
+						t.Fatalf("ramp %d leaves the ring at %v (%.4f mm from the contour)", k, p, d)
+					}
+					if q := ramp[len(ramp)-1-i]; p.Distance(q) > 0.001 {
+						t.Fatalf("ramp %d does not come back the way it went: point %d %v, mirror %v", k, i, p, q)
+					}
+					if i > 0 {
+						length += ramp[i-1].Distance(p)
+					}
+				}
+				if ramp[0] != start || math.Abs(length-0.5/tt.slope) > 0.02 {
+					t.Fatalf("ramp %d starts at %v (ring start %v) and runs %.3f mm, want %.3f", k, ramp[0], start, length, 0.5/tt.slope)
+				}
+			}
+		})
+	}
+}
+
+// A densely sampled contour must not turn every ramp into hundreds of commands: the ramp leaves
+// out the vertices it does not need and stays within the fit tolerance of the ring.
+func TestProfile_RampLeavesOutVerticesItDoesNotNeed(t *testing.T) {
+	var circle []float64
+	for k := range 2000 { // a vertex every 31 µm on a 10 mm radius
+		a := 2 * math.Pi * float64(k) / 2000
+		circle = append(circle, 10*math.Cos(a), 10*math.Sin(a))
+	}
+	req := request("outside", 2, polygonP(circle...))
+	// one 5 mm ramp, whose moves run at 2 / sin(5.7°) = 20.1 mm/s
+	req.Depth, req.StepDown, req.RampAngle, req.PlungeSpeed = 0.5, 0.5, math.Atan(0.1)*180/math.Pi, 2
+
+	moves := mustProfile(t, req)
+
+	pos := geom.Point{X: moves[1].x, Y: moves[1].y}
+	var ramp geom.Path
+	for k := 2; k < len(moves) && math.Abs(moves[k].v-20.1) < 0.001; k++ {
+		ramp = append(ramp, geom.Point{X: moves[k].x, Y: moves[k].y})
+	}
+	// on the 11 mm ring a chord that sags 0.01 mm spans 0.94 mm: about 3 moves each way
+	if len(ramp) < 2 || len(ramp) > 10 {
+		t.Fatalf("ramp of %d moves, want a handful", len(ramp))
+	}
+	for _, p := range ramp {
+		mid := geom.Point{X: (pos.X + p.X) / 2, Y: (pos.Y + p.Y) / 2}
+		for _, q := range []geom.Point{p, mid} {
+			if r := q.Distance(geom.Point{}); r < 11-0.012 || r > 11+0.001 {
+				t.Fatalf("ramp passes %v at radius %.4f, want 11 within the fit tolerance", q, r)
+			}
+		}
+		pos = p
+	}
+}
+
+// A ring shorter than the tool diameter leaves no room to ramp: going round it would send
+// hundreds of moves, so the tool plunges straight down there.
+func TestProfile_PlungesStraightIntoRingsShorterThanTheTool(t *testing.T) {
+	req := request("inside", 2, squareP(0, 0, 2.4, 2.4)) // a ring 0.4 mm square
+	req.Depth, req.StepDown, req.RampAngle = 1, 0.5, 3
+
+	moves := mustProfile(t, req)
+
+	start := geom.Point{X: moves[0].x, Y: moves[0].y}
+	var plunges []float64
+	for _, m := range moves {
+		if m.v == plungeSpeed {
+			plunges = append(plunges, m.z)
+		}
+		if m.z < 5 && m.v != workSpeed && (m.x != start.X || m.y != start.Y) {
+			t.Fatalf("move %+v leaves the ring start %v below safe Z without cutting", m, start)
+		}
+	}
+	if !slices.Equal(plunges, []float64{-0.5, -1}) {
+		t.Fatalf("plunges to %v, want straight to -0.5 and -1", plunges)
+	}
+}
+
 // With the spindle turning clockwise seen from above, conventional cutting keeps the finished
 // wall on the left of the tool: outside an outline that is counterclockwise, inside it clockwise.
 func TestProfile_DirectionFollowsSideAndCutting(t *testing.T) {
@@ -385,6 +517,8 @@ func TestProfile_RejectsWhatCannotBeCut(t *testing.T) {
 		{"no depth", func(r *ProfileRequest) { r.Depth = 0 }},
 		{"no step-down", func(r *ProfileRequest) { r.StepDown = -1 }},
 		{"no plunge speed", func(r *ProfileRequest) { r.PlungeSpeed = 0 }},
+		{"no ramp angle", func(r *ProfileRequest) { r.RampAngle = 0 }},
+		{"ramp angle past vertical", func(r *ProfileRequest) { r.RampAngle = 91 }},
 		{"no cutting speed", func(r *ProfileRequest) { r.DefaultSpeed = 0 }},
 		{"no rapid speed", func(r *ProfileRequest) { r.RapidSpeed = 0 }},
 		{"safe Z not above work Z", func(r *ProfileRequest) { r.SafeZ = r.WorkZ }},

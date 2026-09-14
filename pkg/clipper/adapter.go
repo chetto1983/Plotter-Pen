@@ -69,6 +69,13 @@ func mergeContours(loops []geom.Path) clipper2.Paths64 {
 	return clipper2.UnionPaths64(toPaths64(loops), clipper2.EvenOdd)
 }
 
+// SimplifyPath drops the vertices of an open path that lie within tolerance of the line through
+// their neighbours, as Clipper's SimplifyPath does, and keeps both ends.
+func SimplifyPath(path geom.Path, tolerance float64) geom.Path {
+	simplified := clipper2.SimplifyPath64(toPaths64([]geom.Path{path})[0], tolerance*scale, false)
+	return fromPaths64(clipper2.Paths64{simplified})[0]
+}
+
 // Inside reports, for each ring of inner, which rings of outer enclose it: the result has a row
 // per inner ring and a column per outer ring. No two rings may cross, as within the result of
 // MergeContours or of OffsetContours, or between the two: then any vertex of the inner ring that
