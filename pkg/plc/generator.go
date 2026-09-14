@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"plotter-pen/pkg/geom"
+	"slices"
 	"strings"
 )
 
@@ -72,6 +73,17 @@ func (g *Generator) Arc(end geom.Point, center geom.Point, start geom.Point, isC
 	// A X ... Y ... Z ... I ... J ... V ...
 	cmd := fmt.Sprintf("A X %.3f, Y %.3f, Z %.3f, I %.3f, J %.3f, V %.3f", end.X, end.Y, z, midX, midY, speed)
 	g.commands = append(g.commands, cmd)
+}
+
+// ArcThrough adds an arc to end that passes through the given point, which the PLC reads as I/J.
+func (g *Generator) ArcThrough(end, through geom.Point, z, speed float64) {
+	cmd := fmt.Sprintf("A X %.3f, Y %.3f, Z %.3f, I %.3f, J %.3f, V %.3f", end.X, end.Y, z, through.X, through.Y, speed)
+	g.commands = append(g.commands, cmd)
+}
+
+// Lines returns the program one command per element.
+func (g *Generator) Lines() []string {
+	return slices.Clone(g.commands)
 }
 
 // String returns the full PLC program

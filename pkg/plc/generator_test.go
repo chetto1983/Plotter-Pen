@@ -115,13 +115,38 @@ func TestGeneratorArcCW3D(t *testing.T) {
 	}
 }
 
+// In the PLC arc format I/J is a point the arc passes through, not the centre offset of G-code.
+func TestGeneratorArcThrough(t *testing.T) {
+	g := NewGenerator()
+	g.ArcThrough(geom.Point{X: 0, Y: -10}, geom.Point{X: -7.0710678, Y: 7.0710678}, -1.5, 200)
+
+	if got, want := g.String(), "A X 0.000, Y -10.000, Z -1.500, I -7.071, J 7.071, V 200.000"; got != want {
+		t.Errorf("ArcThrough = %q, want %q", got, want)
+	}
+}
+
+func TestGeneratorLines(t *testing.T) {
+	g := NewGenerator()
+	if lines := g.Lines(); len(lines) != 0 {
+		t.Fatalf("empty program has lines %q", lines)
+	}
+	g.Jump(0, 0, 5, 1000)
+	g.Wait(200)
+	g.Line(10, 0, -2, 500)
+
+	want := []string{"J X 0.000, Y 0.000, Z 5.000, V 1000.000", "WAIT 200", "L X 10.000, Y 0.000, Z -2.000, V 500.000"}
+	if got := g.Lines(); strings.Join(got, "\n") != strings.Join(want, "\n") || len(got) != len(want) {
+		t.Errorf("Lines = %q, want %q", got, want)
+	}
+}
+
 func TestGeneratorString3D(t *testing.T) {
 	g := NewGenerator()
-	g.Jump(0, 0, 5, 1000)      // Rapid to start at safe Z
-	g.Line(0, 0, -2, 500)      // Plunge to work depth
-	g.Line(10, 0, -2, 500)     // Cut
-	g.Line(10, 10, -2, 500)    // Cut
-	g.Jump(10, 10, 5, 1000)    // Retract to safe Z
+	g.Jump(0, 0, 5, 1000)   // Rapid to start at safe Z
+	g.Line(0, 0, -2, 500)   // Plunge to work depth
+	g.Line(10, 0, -2, 500)  // Cut
+	g.Line(10, 10, -2, 500) // Cut
+	g.Jump(10, 10, 5, 1000) // Retract to safe Z
 
 	result := g.String()
 	lines := strings.Split(result, "\n")
@@ -137,13 +162,13 @@ func TestGeneratorFullSequence3D(t *testing.T) {
 	workZ := -2.0
 
 	// Simulate a simple profile cut with 3D interpolation
-	g.Jump(0, 0, safeZ, 2000)       // Rapid to start
-	g.Line(0, 0, workZ, 500)        // Plunge
-	g.Line(100, 0, workZ, 500)      // Cut
-	g.Line(100, 100, workZ, 500)    // Cut
-	g.Line(0, 100, workZ, 500)      // Cut
-	g.Line(0, 0, workZ, 500)        // Close path
-	g.Jump(0, 0, safeZ, 2000)       // Retract
+	g.Jump(0, 0, safeZ, 2000)    // Rapid to start
+	g.Line(0, 0, workZ, 500)     // Plunge
+	g.Line(100, 0, workZ, 500)   // Cut
+	g.Line(100, 100, workZ, 500) // Cut
+	g.Line(0, 100, workZ, 500)   // Cut
+	g.Line(0, 0, workZ, 500)     // Close path
+	g.Jump(0, 0, safeZ, 2000)    // Retract
 
 	result := g.String()
 
@@ -242,11 +267,11 @@ func TestMixedSequenceWithWait(t *testing.T) {
 	workZ := -5.0
 
 	g.Jump(0, 0, safeZ, 1000)
-	g.Wait(200)                    // Wait before plunge
-	g.Line(0, 0, workZ, 300)       // Plunge
-	g.Line(50, 0, workZ, 500)      // Cut
-	g.Jump(50, 0, safeZ, 1000)     // Retract
-	g.Wait(100)                    // Dwell
+	g.Wait(200)                // Wait before plunge
+	g.Line(0, 0, workZ, 300)   // Plunge
+	g.Line(50, 0, workZ, 500)  // Cut
+	g.Jump(50, 0, safeZ, 1000) // Retract
+	g.Wait(100)                // Dwell
 
 	result := g.String()
 
