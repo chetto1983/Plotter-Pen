@@ -77,6 +77,14 @@ Measured on `dxf/L28YO-tree-of-life-wall-spiritual-art.dxf`:
   - **Inside profiles:** the direction rule is reversed, since the finished wall is then outside the ring.
   - `FitSegment` gained `MidX`/`MidY` for the `A` through point; `pkg/plc.Generator` gained `ArcThrough` and `Lines`.
 - **Settings:** `depth` 1 mm, `stepDown` 0.5 mm, `plungeSpeed` 5 mm/s and `rampAngle` 3° are the column defaults, so existing databases get them. The dialog scrolls its rows when the screen is shorter than about 900 px.
+- **Settings source (the user chose "tutto su DB", 2026-09-14):** the table (`/api/plc/settings`) is the only source of the PLC settings in the frontend.
+  - **Before:** the saved app state (`/api/state`) also carried a `plcSettings` copy. At startup the table and the state loaded concurrently and the one that arrived last filled the inputs, so a stale copy could beat a value just saved from the dialog. Undo/redo never restored it; loading a session did.
+  - **Now:** the state no longer stores the settings, and a copy in an older state is ignored. When the table arrives after the drawing has been restored, the commands are extracted again. Only the latest extraction started may show its commands, so an older one answering late cannot put stale values back.
+  - **Checked in headless Chrome,** holding back the startup answers on purpose:
+    - the table arriving before or after the state, and the autosaved state: failed on the previous build;
+    - a stale extraction answering last: failed with the re-extraction alone, before the guard.
+
+    All passed three times in a row on this build. Saving from the dialog and reloading, and a 199 KB state loaded through the worker, also keep the table values.
 - **Measured:** on the tree-of-life DXF, 6 profiles (Ø2/Ø3/Ø6, outside and inside, 2 passes) took 85–164 ms per request, with 1014–2118 segments per pass. `/api/plc/extract` output is byte-identical to the previous build.
 - **Unreachable contours:** a contour that gets no ring (a hole narrower than the tool when cutting outside, an outline narrower than the tool when cutting inside, or a hole closed by a part standing too close inside it) is still left uncut. The response lists it under `warnings` with its bounds; only a job with no ring at all is refused. Details narrower than the tool on a contour that does get a ring are not reported.
 - **Measured after the ordering and warnings (2026-09-14, tree-of-life DXF):**
@@ -138,10 +146,6 @@ Hooks: pre-commit runs gofmt, vet, golangci-lint on changed lines and the 600-li
 - **Arc through point:** `arcAuxPoint` in `internal/service/plc/extractor.go` returns the arc centre when an arc has neither `throughPoint` nor `sweep`.
 - **Import cache:** `SmartImportCached` keys the cache on the content only and returns the cached object without copying it.
 - **Unused configuration:** `ServerConfig.OPCUAConfig` (`OPCUA_CONFIG`) is not used by anything.
-- **Two sources for the PLC settings:** at startup the frontend loads the settings table (`/api/plc/settings`) and the `plcSettings` copy in the saved app state (`/api/state`) concurrently, and the one that arrives last fills the inputs. Saving from the dialog writes only the table, so a stale state copy can win until the next autosave. Seen on 2026-09-14: the server log shows the two requests in either order, and a state copy won over the table. Since then a state without a field (saved before the profile fields) no longer resets that field to its default.
-  - **Reproduced the same day:** "Angolo Rampa" was saved as 7.5 (table 7.5) and the page reloaded right away. The dialog showed 3, the value the autosave had put in the state when the page first loaded. Pressing "Applica" there would write 3 back to the table.
-  - **Undo/redo:** the snapshots also restore `plcSettings` (`src/app/StateManager.js`).
-  - **Before fixing:** decide which source wins.
 
 ## Working rules to keep
 
