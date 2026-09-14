@@ -39,6 +39,13 @@ type ProfileRequest struct {
 	PlungeSpeed float64 `json:"plungeSpeed"`
 }
 
+// ProfileResponse is the program in the /api/plc/extract response shape, with a warning for each
+// contour the tool cannot reach.
+type ProfileResponse struct {
+	plc.ExtractResponse
+	Warnings []string `json:"warnings,omitempty"`
+}
+
 // Profile returns the PLC program that cuts around the closed contours of the drawing, one radius
 // away on the chosen side, going down by the step-down from the work Z to work Z - depth.
 //
@@ -46,31 +53,34 @@ type ProfileRequest struct {
 // own outline is cut, and the tool moves to the nearest ring it may cut next. Each ring is
 // plunged at its start and cut at every level without leaving the slot, then the tool goes back
 // to safe Z; the program starts and ends at safe Z, ending at X 0 Y 0 like the plotter programs.
-func Profile(req ProfileRequest) (plc.ExtractResponse, error) {
+// Contours the tool cannot reach are left uncut and listed as warnings.
+func Profile(req ProfileRequest) (ProfileResponse, error) {
 	if err := req.validate(); err != nil {
-		return plc.ExtractResponse{}, err
+		return ProfileResponse{}, err
 	}
 	contours, err := Chain(req.Primitives)
 	if err != nil {
-		return plc.ExtractResponse{}, err
+		return ProfileResponse{}, err
 	}
 	if len(contours.Open) > 0 {
 		p := contours.Open[0][0]
-		return plc.ExtractResponse{}, fmt.Errorf("%d open contours, the first starting at (%.3f, %.3f): a profile needs closed contours",
+		return ProfileResponse{}, fmt.Errorf("%d open contours, the first starting at (%.3f, %.3f): a profile needs closed contours",
 			len(contours.Open), p.X, p.Y)
 	}
 	if len(contours.Closed) == 0 {
-		return plc.ExtractResponse{}, errors.New("nothing to cut: the drawing has no closed contours")
+		return ProfileResponse{}, errors.New("nothing to cut: the drawing has no closed contours")
 	}
 
 	delta := req.ToolDiameter / 2
 	if req.Side == SideInside {
 		delta = -delta
 	}
-	rings := orderRings(clipper.OffsetContours(contours.Closed, delta), req.Side, req.Direction)
-	if len(rings) == 0 {
-		return plc.ExtractResponse{}, fmt.Errorf("a %.3f mm tool does not fit inside any contour", req.ToolDiameter)
+	material := clipper.MergeContours(contours.Closed)
+	offset := clipper.OffsetContours(material, delta)
+	if len(offset) == 0 {
+		return ProfileResponse{}, fmt.Errorf("a %.3f mm tool does not fit inside any contour", req.ToolDiameter)
 	}
+	rings := orderRings(offset, req.Side, req.Direction)
 
 	g := plcgen.NewGenerator()
 	levels := req.levels()
@@ -93,7 +103,44 @@ func Profile(req ProfileRequest) (plc.ExtractResponse, error) {
 	}
 	g.Jump(0, 0, req.SafeZ, req.RapidSpeed)
 
-	return response(g.Lines()), nil
+	return ProfileResponse{
+		ExtractResponse: response(g.Lines()),
+		Warnings:        unreachedContours(material, offset, req.Side, req.ToolDiameter),
+	}, nil
+}
+
+// unreachedContours warns about the contours that no ring cuts. Only a contour around a region the
+// offset shrinks can lose its ring: a hole when cutting outside, an outline when cutting inside.
+// Such a contour is cut when some ring lies inside it but not inside another contour within it,
+// since a ring inside an inner contour cuts that contour instead.
+func unreachedContours(material, rings []geom.Path, side string, diameter float64) []string {
+	nested := clipper.Inside(material, material)
+	ringInside := clipper.Inside(rings, material)
+	var warnings []string
+	for c, contour := range material {
+		depth := 0
+		for _, in := range nested[c] {
+			if in {
+				depth++
+			}
+		}
+		if (depth%2 == 1) != (side == SideOutside) {
+			continue
+		}
+		reached := false
+		for r := 0; r < len(rings) && !reached; r++ {
+			reached = ringInside[r][c]
+			for k := 0; k < len(material) && reached; k++ {
+				reached = !ringInside[r][k] || !nested[k][c]
+			}
+		}
+		if !reached {
+			minX, minY, maxX, maxY := contour.Bounds()
+			warnings = append(warnings, fmt.Sprintf("a %.3f mm tool cannot reach the contour from (%.3f, %.3f) to (%.3f, %.3f): it is not cut",
+				diameter, minX, minY, maxX, maxY))
+		}
+	}
+	return warnings
 }
 
 func (req ProfileRequest) validate() error {

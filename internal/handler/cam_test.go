@@ -55,6 +55,29 @@ func TestCAMProfile_ReturnsProgramInExtractShape(t *testing.T) {
 	}
 }
 
+// The program is returned with the contours the tool cannot reach listed under "warnings".
+func TestCAMProfile_ListsUnreachableContoursAsWarnings(t *testing.T) {
+	w := postCAMProfile(t, `{
+		"primitives": [
+			{"type": "rectangle", "x": 0, "y": 0, "width": 60, "height": 60},
+			{"type": "circle", "cx": 30, "cy": 30, "radius": 2}
+		],
+		"defaultSpeed": 50, "rapidSpeed": 1000, "safeZ": 5, "workZ": 0,
+		"toolDiameter": 6, "side": "outside", "depth": 1, "stepDown": 1, "plungeSpeed": 5
+	}`)
+
+	var resp struct {
+		Count    int      `json:"count"`
+		Warnings []string `json:"warnings"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil || w.Code != http.StatusOK {
+		t.Fatalf("status %d, body %s, err %v", w.Code, w.Body.String(), err)
+	}
+	if resp.Count == 0 || len(resp.Warnings) != 1 {
+		t.Fatalf("count %d, warnings %q; want the outline cut and one warning for the hole", resp.Count, resp.Warnings)
+	}
+}
+
 func TestCAMProfile_OpenContourIsBadRequest(t *testing.T) {
 	w := postCAMProfile(t, `{
 		"primitives": [{"type": "line", "x1": 0, "y1": 0, "x2": 10, "y2": 0}],

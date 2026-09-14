@@ -22,13 +22,18 @@ func circleLoop(cx, cy, r float64, n int) geom.Path { // counterclockwise
 	return p
 }
 
-func absArea(p geom.Path) float64 {
+// signedArea is the shoelace area of a closed path: positive when counterclockwise.
+func signedArea(p geom.Path) float64 {
 	a := 0.0
 	for i := range p {
 		q := p[(i+1)%len(p)]
 		a += p[i].X*q.Y - q.X*p[i].Y
 	}
-	return math.Abs(a / 2)
+	return a / 2
+}
+
+func absArea(p geom.Path) float64 {
+	return math.Abs(signedArea(p))
 }
 
 // outsideDistance is the distance from a point outside the rectangle to the rectangle.
@@ -137,6 +142,21 @@ func TestInside_TellsWhichRingsEncloseEachRing(t *testing.T) {
 	}
 	if !slices.EqualFunc(got, want, slices.Equal) {
 		t.Fatalf("inside %v, want %v", got, want)
+	}
+}
+
+// Merged contours are rings that do not cross, outlines counterclockwise and holes clockwise,
+// whatever the orientation they were drawn with.
+func TestMergeContours_HoleDrawnLikeTheOutlineTurnsClockwise(t *testing.T) {
+	merged := MergeContours([]geom.Path{rectLoop(0, 0, 100, 100), circleLoop(50, 50, 20, 200)})
+
+	if len(merged) != 2 {
+		t.Fatalf("got %d rings, want outline and hole", len(merged))
+	}
+	areas := []float64{signedArea(merged[0]), signedArea(merged[1])}
+	sort.Float64s(areas)
+	if math.Abs(areas[0]+400*math.Pi) > 2 || math.Abs(areas[1]-10000) > 0.01 {
+		t.Fatalf("signed areas %v, want about %.1f (hole) and 10000 (outline)", areas, -400*math.Pi)
 	}
 }
 

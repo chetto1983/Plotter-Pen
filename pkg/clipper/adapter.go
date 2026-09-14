@@ -54,16 +54,26 @@ func OffsetPolygon(path geom.Path, delta float64) []geom.Path {
 // rings that run through each other. delta > 0 grows the material (tool outside it), delta < 0
 // shrinks it (tool inside); corners that grow are rounded.
 func OffsetContours(loops []geom.Path, delta float64) []geom.Path {
-	material := clipper2.UnionPaths64(toPaths64(loops), clipper2.EvenOdd)
-	rings := clipper2.InflatePaths64(material, delta*scale, clipper2.Round, clipper2.Polygon,
+	rings := clipper2.InflatePaths64(mergeContours(loops), delta*scale, clipper2.Round, clipper2.Polygon,
 		clipper2.WithArcTolerance(contourArcTolerance))
 	return fromPaths64(rings)
 }
 
+// MergeContours returns the material that OffsetContours offsets: the closed contours merged with
+// the even-odd rule into rings that do not cross, outlines counterclockwise and holes clockwise.
+func MergeContours(loops []geom.Path) []geom.Path {
+	return fromPaths64(mergeContours(loops))
+}
+
+func mergeContours(loops []geom.Path) clipper2.Paths64 {
+	return clipper2.UnionPaths64(toPaths64(loops), clipper2.EvenOdd)
+}
+
 // Inside reports, for each ring of inner, which rings of outer enclose it: the result has a row
 // per inner ring and a column per outer ring. No two rings may cross, as within the result of
-// OffsetContours: then any vertex of the inner ring that is not on the outer ring's boundary
-// tells whether the whole ring is inside. A ring is not inside itself.
+// MergeContours or of OffsetContours, or between the two: then any vertex of the inner ring that
+// is not on the outer ring's boundary tells whether the whole ring is inside. A ring is not inside
+// itself.
 func Inside(inner, outer []geom.Path) [][]bool {
 	outerPaths := toPaths64(outer)
 	result := make([][]bool, len(inner))

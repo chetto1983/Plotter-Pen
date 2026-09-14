@@ -145,6 +145,9 @@ func mustProfile(t *testing.T, req ProfileRequest) []move {
 	if err != nil {
 		t.Fatalf("Profile: %v", err)
 	}
+	if len(res.Warnings) > 0 {
+		t.Fatalf("warnings %q", res.Warnings)
+	}
 	if res.Count != len(res.Output) || len(res.Commands) != len(res.Output) {
 		t.Fatalf("count %d, %d commands, %d output lines", res.Count, len(res.Commands), len(res.Output))
 	}
@@ -323,6 +326,47 @@ func TestProfile_CutsInnermostContoursFirst(t *testing.T) {
 	}
 	if len(widths) != 4 || widths[0] != 12 || widths[1] != 38 || !slices.Contains(widths[2:], 62) || !slices.Contains(widths[2:], 12) {
 		t.Fatalf("cut widths %v, want the inner part (12), the hole (38), then the two outlines (62, 12)", widths)
+	}
+}
+
+// A contour whose ring vanishes is left uncut: the job is still valid, but the response names the
+// contour by its bounds. The hole in the part standing in a closed hole is wide enough, so it is
+// cut and not reported.
+func TestProfile_WarnsAboutContoursTheToolCannotReach(t *testing.T) {
+	tests := []struct {
+		name  string
+		side  string
+		prims []plc.Primitive
+		want  []string
+	}{
+		{"hole narrower than the tool", "outside",
+			[]plc.Primitive{squareP(0, 0, 60, 60), squareP(14, 28, 18, 32), squareP(40, 25, 50, 35)},
+			[]string{"(14.000, 28.000) to (18.000, 32.000)"}},
+		{"hole closed by the part standing in it", "outside",
+			[]plc.Primitive{squareP(0, 0, 100, 100), squareP(20, 20, 80, 80), squareP(22, 22, 78, 78), squareP(40, 40, 60, 60)},
+			[]string{"(20.000, 20.000) to (80.000, 80.000)"}},
+		{"outline narrower than the tool", "inside",
+			[]plc.Primitive{squareP(0, 0, 4, 4), squareP(10, 0, 30, 20)},
+			[]string{"(0.000, 0.000) to (4.000, 4.000)"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res, err := Profile(request(tt.side, 6, tt.prims...))
+			if err != nil {
+				t.Fatalf("Profile: %v", err)
+			}
+			if len(res.Warnings) != len(tt.want) {
+				t.Fatalf("warnings %q, want %d", res.Warnings, len(tt.want))
+			}
+			for i, w := range tt.want {
+				if !strings.Contains(res.Warnings[i], w) {
+					t.Errorf("warning %q does not name the contour %s", res.Warnings[i], w)
+				}
+			}
+			if len(cuts(t, parse(t, res.Output))) == 0 {
+				t.Fatal("nothing is cut")
+			}
+		})
 	}
 }
 
