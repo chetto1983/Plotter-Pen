@@ -18,7 +18,7 @@ pre-commit:
     vet:
       glob: "*.go"
       run: bash scripts/vet-staged.sh {staged_files}
-    # Only issues on changed lines block the commit; see scripts/lint-staged.sh.
+    # Every issue in the packages the commit touches blocks it; see scripts/lint-staged.sh.
     lint:
       glob: "*.go"
       run: bash scripts/lint-staged.sh {staged_files}

@@ -67,7 +67,7 @@ tools/s7sim/                  # S7-1500 OPC UA simulator (Python, not part of Co
 
 | Component | File | Status | Description |
 |-----------|------|--------|-------------|
-| DXF Import | `internal/service/import/dxf.go` | Done | LINE, ARC, CIRCLE, (LW)POLYLINE, SPLINE; unit detection; arc fitting on closed splines; polyline bulges ignored |
+| DXF Import | `internal/service/import/dxf.go`, `reader.go`, `bulge.go` | Done | Read with `whutwxn/dxf-go`: LINE, ARC, CIRCLE, (LW)POLYLINE with bulges, SPLINE; other entities skipped and counted in `stats.skipped`; unit detection; arc fitting on closed splines |
 | DXF Export | – | Removed | Removed in commit `15f072e` |
 | SVG Import | `internal/service/import/svg.go` | Done | Parse SVG paths with arc fitting |
 | B-Spline | `internal/service/import/spline.go` | Done | De Boor algorithm, 800-point sampling |

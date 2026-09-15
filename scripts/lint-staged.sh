@@ -2,11 +2,11 @@
 # Lint the packages containing the given Go files. Called by lefthook pre-commit with
 # {staged_files}; safe to run standalone: scripts/lint-staged.sh file1.go file2.go ...
 #
-# Whole packages, because golangci-lint's cross-file analyses need them, but only the
-# packages this commit touches. --new-from-rev=HEAD reports only issues on lines changed
-# since HEAD: the existing code carried about 140 findings on 2026-09-11, and AGENTS.md asks
-# to report unrelated defects instead of widening a change to fix them. `make lint` is the
-# full sweep.
+# Only the packages this commit touches, and every issue in them, not only the changed lines:
+# a package is clean once a commit touches it, and stays clean. Chosen by the user on
+# 2026-09-15, when checking only the changed lines (--new-from-rev=HEAD) had let dupl, gofmt
+# and modernize findings sit in touched packages. A commit in a package that still carries
+# old findings has to fix them first. `make lint` is the full sweep.
 set -euo pipefail
 
 if [ "$#" -eq 0 ]; then
@@ -27,4 +27,4 @@ if [ "${#dirs[@]}" -eq 0 ]; then
   exit 0
 fi
 
-golangci-lint run --new-from-rev=HEAD "${dirs[@]}"
+golangci-lint run "${dirs[@]}"

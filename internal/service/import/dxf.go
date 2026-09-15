@@ -6,9 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/yofu/dxf"
-	"github.com/yofu/dxf/entity"
-	"github.com/yofu/dxf/table"
+	"github.com/whutwxn/dxf-go/entities"
 )
 
 // Precision constants for DXF import
@@ -73,6 +71,8 @@ type ParseStats struct {
 	EntityCount int            `json:"entityCount"`
 	ByType      map[string]int `json:"byType"`
 	LayerCount  int            `json:"layerCount"`
+	// Skipped counts the DXF entities, by type, that gave no primitive (text, blocks, hatches...).
+	Skipped map[string]int `json:"skipped,omitempty"`
 }
 
 // ImportOptions configures smart import behavior.
@@ -106,7 +106,7 @@ type dxfImporter struct {
 
 // ParseDXF parses DXF content and returns primitives.
 func ParseDXF(content string) (*ParseResult, error) {
-	d, err := dxf.FromStringData(content)
+	doc, entityTypes, err := readDXF(content)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse DXF: %w", err)
 	}
@@ -127,8 +127,11 @@ func ParseDXF(content string) (*ParseResult, error) {
 	layers := make(map[string]bool)
 	idx := 0
 
-	for _, e := range d.Entities() {
-		prims := importer.convertEntity(e, &idx)
+	for _, e := range doc.Entities.Entities {
+		entityType, prims := importer.convertEntity(e, &idx)
+		if len(prims) > 0 {
+			entityTypes[entityType]--
+		}
 		for i := range prims {
 			p := prims[i]
 			result.Primitives = append(result.Primitives, p)
@@ -137,6 +140,15 @@ func ParseDXF(content string) (*ParseResult, error) {
 				layers[p.Layer] = true
 			}
 			updateBounds(bounds, &p)
+		}
+	}
+
+	for entityType, n := range entityTypes {
+		if n > 0 {
+			if result.Stats.Skipped == nil {
+				result.Stats.Skipped = make(map[string]int)
+			}
+			result.Stats.Skipped[entityType] = n
 		}
 	}
 
@@ -189,29 +201,30 @@ func SmartImport(content string, opts ImportOptions) (*SmartImportResult, error)
 	return result, nil
 }
 
-func (i *dxfImporter) convertEntity(e entity.Entity, idx *int) []Primitive {
+// convertEntity gives the DXF type of an entity and its primitives, none for the types it does not import.
+func (i *dxfImporter) convertEntity(e entities.Entity, idx *int) (string, []Primitive) {
 	switch ent := e.(type) {
-	case *entity.Line:
-		start := i.toModelPoint(ent.Start[0], ent.Start[1])
-		end := i.toModelPoint(ent.End[0], ent.End[1])
-		return []Primitive{newLinePrimitive(start, end, layerName(ent), nextID(idx))}
+	case *entities.Line:
+		start := i.toModelPoint(ent.Start.X, ent.Start.Y)
+		end := i.toModelPoint(ent.End.X, ent.End.Y)
+		return "LINE", []Primitive{newLinePrimitive(start, end, layerName(ent.LayerName), nextID(idx))}
 
-	case *entity.Circle:
-		center := i.toModelPoint(ent.Center[0], ent.Center[1])
+	case *entities.Circle:
+		center := i.toModelPoint(ent.Center.X, ent.Center.Y)
 		prim := Primitive{
 			Type:    "circle",
 			ID:      nextID(idx),
-			Layer:   layerName(ent),
+			Layer:   layerName(ent.LayerName),
 			CenterX: center.X,
 			CenterY: center.Y,
 			Radius:  ent.Radius * i.scaleFactor,
 		}
-		return []Primitive{prim}
+		return "CIRCLE", []Primitive{prim}
 
-	case *entity.Arc:
-		cx, cy, r := ent.Center[0], ent.Center[1], ent.Radius
-		startRad := ent.Angle[0] * (math.Pi / 180)
-		endRad := ent.Angle[1] * (math.Pi / 180)
+	case *entities.Arc:
+		cx, cy, r := ent.Center.X, ent.Center.Y, ent.Radius
+		startRad := ent.StartAngle * (math.Pi / 180)
+		endRad := ent.EndAngle * (math.Pi / 180)
 		sweep := endRad - startRad
 		if sweep < 0 {
 			sweep += math.Pi * 2
@@ -228,70 +241,48 @@ func (i *dxfImporter) convertEntity(e entity.Entity, idx *int) []Primitive {
 			arc = newArcPrimitive(start, end, center, nil)
 		}
 		arc.ID = nextID(idx)
-		arc.Layer = layerName(ent)
-		return []Primitive{*arc}
+		arc.Layer = layerName(ent.LayerName)
+		return "ARC", []Primitive{*arc}
 
-	case *entity.LwPolyline:
-		if len(ent.Vertices) < 2 {
-			return nil
+	case *entities.LWPolyline:
+		vertices := make([]polylineVertex, len(ent.Points))
+		for k, v := range ent.Points {
+			vertices[k] = polylineVertex{Point: i.toModelPoint(v.Point.X, v.Point.Y), bulge: v.Bulge}
 		}
-		points := make([]Point, len(ent.Vertices))
-		for i2, v := range ent.Vertices {
-			points[i2] = i.toModelPoint(v[0], v[1])
-		}
-		closed := ent.Closed
-		primType := "polyline"
-		if closed {
-			primType = "polygon"
-		}
-		prim := Primitive{
-			Type:   primType,
-			ID:     nextID(idx),
-			Layer:  layerName(ent),
-			Points: points,
-			Closed: closed,
-		}
-		return []Primitive{prim}
+		return "LWPOLYLINE", polylinePrimitives(vertices, ent.Closed, layerName(ent.LayerName), idx)
 
-	case *entity.Polyline:
-		if len(ent.Vertices) < 2 {
-			return nil
+	case *entities.Polyline:
+		// meshes are surfaces, not paths
+		if ent.Is3dPolygonMesh || ent.IsPolyfaceMesh {
+			return "POLYLINE", nil
 		}
-		points := make([]Point, len(ent.Vertices))
-		for i2, v := range ent.Vertices {
-			points[i2] = i.toModelPoint(v.Coord[0], v.Coord[1])
+		vertices := make([]polylineVertex, 0, len(ent.Vertices))
+		for _, v := range ent.Vertices {
+			// a curve-fit or spline-fit polyline keeps its frame; the path runs through the fitted vertices
+			if v.SplineFrameCtrlPoint {
+				continue
+			}
+			vertices = append(vertices, polylineVertex{Point: i.toModelPoint(v.Location.X, v.Location.Y), bulge: v.Bulge})
 		}
-		closed := (ent.Flag & 1) != 0
-		primType := "polyline"
-		if closed {
-			primType = "polygon"
-		}
-		prim := Primitive{
-			Type:   primType,
-			ID:     nextID(idx),
-			Layer:  layerName(ent),
-			Points: points,
-			Closed: closed,
-		}
-		return []Primitive{prim}
+		return "POLYLINE", polylinePrimitives(vertices, ent.Closed, layerName(ent.LayerName), idx)
 
-	case *entity.Spline:
-		return i.convertSpline(ent, idx)
+	case *entities.Spline:
+		return "SPLINE", i.convertSpline(ent, idx)
 	}
 
-	return nil
+	return "", nil
 }
 
-func (i *dxfImporter) convertSpline(ent *entity.Spline, idx *int) []Primitive {
+func (i *dxfImporter) convertSpline(ent *entities.Spline, idx *int) []Primitive {
 	degree := ent.Degree
 	if degree <= 0 {
 		degree = 3
 	}
 
-	controls := ent.Controls
+	controls := ent.ControlPoints
 	if len(controls) < degree+1 {
-		if len(ent.Fits) >= degree+1 {
-			controls = ent.Fits
+		if len(ent.FitPoints) >= degree+1 {
+			controls = ent.FitPoints
 		} else {
 			return nil
 		}
@@ -299,10 +290,10 @@ func (i *dxfImporter) convertSpline(ent *entity.Spline, idx *int) []Primitive {
 
 	controlPoints := make([][]float64, len(controls))
 	for j, p := range controls {
-		controlPoints[j] = []float64{p[0], p[1]}
+		controlPoints[j] = []float64{p.X, p.Y}
 	}
 
-	knots := ent.Knots
+	knots := ent.KnotValues
 	minT, maxT := 0.0, 1.0
 	if len(knots) > 0 && degree < len(knots) {
 		minT = knots[degree]
@@ -325,11 +316,11 @@ func (i *dxfImporter) convertSpline(ent *entity.Spline, idx *int) []Primitive {
 		points = append(points, i.toModelPoint(pt.X, pt.Y))
 	}
 
-	layer := layerName(ent)
+	layer := layerName(ent.LayerName)
 	if failed {
 		fallback := make([]Point, len(controls))
 		for j, p := range controls {
-			fallback[j] = i.toModelPoint(p[0], p[1])
+			fallback[j] = i.toModelPoint(p.X, p.Y)
 		}
 		prim := Primitive{Type: "polyline", ID: nextID(idx), Layer: layer, Points: fallback}
 		return []Primitive{prim}
@@ -339,8 +330,7 @@ func (i *dxfImporter) convertSpline(ent *entity.Spline, idx *int) []Primitive {
 		return nil
 	}
 
-	closed := (ent.Flag & 1) != 0
-	if closed {
+	if ent.Closed {
 		if circle := detectCircle(points); circle != nil {
 			prim := Primitive{
 				Type:    "circle",
@@ -390,15 +380,12 @@ func nextID(idx *int) string {
 	return fmt.Sprintf("dxf_%d", *idx)
 }
 
-func layerName(ent interface{ Layer() *table.Layer }) string {
-	if ent == nil {
-		return ""
+// layerName gives the layer an entity names (group code 8), or layer 0 when it names none.
+func layerName(name string) string {
+	if name == "" {
+		return "0"
 	}
-	layer := ent.Layer()
-	if layer == nil {
-		return ""
-	}
-	return layer.Name()
+	return name
 }
 
 // updateBounds updates bounding box with primitive.

@@ -31,7 +31,7 @@ One piece at a time: a short design approved first, then TDD, then a check on th
 | 5 | Drilling of the circles in a diameter range (`internal/service/cam/drill.go`) | Done 2026-09-14 |
 | 6 | Operation selector in the PLC output panel: pen, profile or drilling (`src/app/CAMOperationManager.js`) | Done 2026-09-14 |
 | 7 | Piece thickness: work Z is the bed, cuts through or to a depth (`internal/service/cam/stock.go`) | Done 2026-09-14 |
-| — | LWPOLYLINE/POLYLINE bulges in the DXF import | In parallel, not started |
+| — | LWPOLYLINE/POLYLINE bulges in the DXF import, with a new DXF reader | Done 2026-09-15 |
 
 Measured on `dxf/L28YO-tree-of-life-wall-spiritual-art.dxf`:
 
@@ -137,7 +137,7 @@ Asked by the user after the Arduino pin circles came out as warnings ("guarda co
 - **Drill point:** with `tipThrough` the bottom goes down by (D/2)/tan(angle/2), 0.300·D at 118°, so the full diameter reaches the depth. The pecks cover that length too.
 - **Validation:** drill diameter > 0, 0 < min ≤ max, depth > 0, peck 0 or at least 0.001 mm, tip angle 0–180, rapid and plunge speeds > 0, safe Z above work Z, R above work Z and not above safe Z, wait ≥ 0.
 - **Setting:** `retract_clearance` in `PLCSimulationSettings` (default 1 mm, so existing databases get it), "Distanza Ritorno" in the dialog. The depth and plunge speed rows now say they serve the router and the drill.
-- **Not in this piece:** chip breaking (G73), a slower break-through feed, spindle speed and tool change (the PLC has neither: one program per drill), holes drawn as polylines or arcs. The profile still plunges from safe Z; the retract plane could serve it too.
+- **Not in this piece:** chip breaking (G73), a slower break-through feed, spindle speed and tool change (the PLC has neither: one program per drill), holes drawn as ARC entities or as polylines that are not one circle (a closed polyline of arcs of one circle is imported as a circle since the DXF bulges below). The profile still plunges from safe Z; the retract plane could serve it too.
 - **Measured on the Arduino UNO shield** (local server, settings depth 2.4, plunge 3.5, R 1; independent check of every program):
   - Pins, Ø1.0 drill for 0.4–1.2 mm: 32 holes, 129 commands; with pecks of 0.8 and the tip through, 417 commands down to −2.700.
   - Mounting holes, Ø3.2 drill for 3–3.3 mm with the tip through: 4 holes down to −3.361.
@@ -216,6 +216,50 @@ The user noticed the piece thickness was missing. They chose work Z on the bed a
 - **Scale buttons of the edit toolbar** (2026-09-15): "Riduci" showed the plus magnifier of "Ingrandisci"; it now has the minus one, and both have a title.
 - **Output PLC header below 1400 px** (2026-09-15): the right panel is 25vw wide, so between 1280 and 1399 px it is narrower than the header. At 1280 px the title (95 px at least) and the five 36 px buttons needed 299 px in 269, and "Scarica" went 5 px past the screen with the panel scrolling sideways. In that range the title icon is hidden and the buttons are 34 px with 2 px gaps (`src/styles/layout.css`). Checked in headless Chrome from 1280 to 1920 px: no sideways scroll, all buttons inside, at least 34 px, title shown.
 
+### DXF bulges and a new DXF reader (2026-09-15)
+
+First sub-piece of the missing CAM functions. The user chose lines and arcs for the bulge segments and one circle for a closed polyline that goes round one circle.
+
+- **Why the reader changed:** the tests showed that `yofu/dxf`, already at its latest version (2025-08-06), cannot be fixed from outside:
+  - it stores each LWPOLYLINE bulge one vertex late;
+  - it refuses the whole file when the last vertex has a bulge, the usual closing corner of a rounded outline;
+  - it does not parse POLYLINE at all;
+  - it refuses the whole file at any entity it does not know (MTEXT, INSERT, HATCH, ELLIPSE, DIMENSION, SOLID), and panics on a binary DXF.
+
+  Its forks (edanko, scantrust, duswie, flywave) carry the same code.
+- **Candidates tried** on ezdxf 1.4.4 samples (R12, R2000, R2018, CRLF, binary, malformed) and the two DXFs of `dxf/`:
+  - `ixmilia/dxf-go` does not compile as a module: its generated code is not committed.
+  - `daidai-ok/dxfconv` fails on every real file, reading hex handles as numbers.
+  - `rpaloschi/dxf-go` (2017) panics on the R2018 sample.
+  - The user chose `whutwxn/dxf-go` (fork, 2023-12, Apache-2.0). It reads bulges on the right vertex, POLYLINE/VERTEX, extrusion, `$INSUNITS`, layers, blocks, ELLIPSE and MTEXT, and skips what it does not know. Its 45 tree-of-life splines are identical to yofu's.
+- **`internal/service/import/reader.go`** (not `dxfread.go`: `*DXF*` in `.gitignore` ignores any file with "dxf" in its name on this case-insensitive checkout) wraps the reader where it is too lenient for an import:
+  - a binary DXF is refused;
+  - the reader's own tags must reach the ENDSEC of ENTITIES: it stops silently at a line that is not a group code, which would drop the rest of the drawing;
+  - every LWPOLYLINE must write the vertices it declares: it fills missing ones with (0, 0), and panics on extra ones;
+  - a panic becomes an error;
+  - its stderr log is silenced.
+- **`internal/service/import/bulge.go`:** a polyline without bulges stays one polyline or polygon, as before.
+  - With bulges, each segment becomes a line or an arc through the point the bulge gives, including the closing segment of a closed polyline.
+  - A bulge that lifts the arc less than 1e-6 mm gives a line, and coincident vertices are skipped.
+  - A closed polyline whose arcs share one centre and radius within 0.001 mm, turn the same way and go once round is one circle, so Foratura finds holes drawn that way.
+  - POLYLINE meshes are skipped, and spline-fit frame vertices are left out.
+- **Stats:** `stats.skipped` counts by type the entities that gave no primitive, e.g. `{"INSERT": 1, "TEXT": 1}`. The page does not show it yet.
+- **Layers:** an entity without group code 8 is on layer `0`, as before. A layer name missing from the TABLES section is now kept; yofu turned it into `0`.
+- **Checked:**
+  - Go tests: rounded rectangle, bulge sign and size, arcs over 180°, polylines of one circle, POLYLINE, degenerate segments, skipped entities, refused files. `go test ./...`, vet, lint on the changed lines, deadcode.
+  - Before and after on the two DXFs of `dxf/` and two ezdxf samples of lines, arcs, circles, polylines and splines in mm and inches: identical primitives. The only difference is `stats.skipped` (TEXT and POINT).
+  - Headless Chrome, local server, simulator as the active PLC, on a 60×40 mm board with 3 mm rounded corners, a slot and 9 holes of three kinds:
+    - smart-import gives 6 lines, 6 arcs and 9 circles, and skips TEXT and INSERT;
+    - Profilo with Ø2 writes 28 `A` commands and warns only the 9 holes narrower than the tool, with no open contour;
+    - Foratura drills all 9 holes;
+    - the zoomed drawing shows the rounded corners and the slot ends;
+    - no page errors.
+- **Limits:**
+  - An extrusion of (0, 0, −1) (mirrored OCS) is still ignored, as for the other entities.
+  - INSERT blocks are not expanded.
+  - The reader turns a malformed number into 0 without an error.
+  - The reader is no longer maintained.
+
 ## Environment
 
 - **Containers:** `plotter-pen` (Compose, host port 41880) and `plotter-pen-s7sim` (standalone simulator, host port 4840).
@@ -248,7 +292,6 @@ Hooks: pre-commit runs gofmt, vet, golangci-lint on changed lines and the 600-li
 
 - **Legacy lint:** `make lint` on the whole tree reports about 138 issues plus 17 files that gofmt would change. About 40 more files differ only in line endings (CRLF working copies, the index is LF). As a result `make quality` fails at lint.
 - **Import fitter:** `fitArcsToPoints` in `internal/service/import/dxf.go` still checks only the vertices. It was left alone on purpose, so the plotter flow does not change.
-- **Bulges:** they are ignored in `LWPOLYLINE`/`POLYLINE`, so arc segments arrive as straight chords. This is the parallel item of the plan.
 - **Arc through point:** `arcAuxPoint` in `internal/service/plc/extractor.go` returns the arc centre when an arc has neither `throughPoint` nor `sweep`.
 - **Import cache:** `SmartImportCached` keys the cache on the content only and returns the cached object without copying it.
 - **Unused configuration:** `ServerConfig.OPCUAConfig` (`OPCUA_CONFIG`) is not used by anything.

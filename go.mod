@@ -10,7 +10,7 @@ require (
 	github.com/gopcua/opcua v0.9.1
 	github.com/gorilla/websocket v1.5.3
 	github.com/hschendel/stl v1.0.4
-	github.com/yofu/dxf v0.0.0-20250806094206-f3988c7f0176
+	github.com/whutwxn/dxf-go v0.0.0-20231201081457-eba5461d9fbb
 	go.uber.org/goleak v1.3.0
 	gorm.io/gorm v1.31.2
 )

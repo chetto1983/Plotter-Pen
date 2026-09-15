@@ -101,8 +101,8 @@ github.com/twitchyliquid64/golang-asm v0.15.1 h1:SU5vSMR7hnwNxj24w34ZyCi/FmDZTkS
 github.com/twitchyliquid64/golang-asm v0.15.1/go.mod h1:a1lVb/DtPvCB8fslRZhAngC2+aY1QWCk3Cedj/Gdt08=
 github.com/ugorji/go/codec v1.3.2 h1:zkEASHHyEClGeURfgNT9PJZVfAbs9oEX9QXggwWNJbc=
 github.com/ugorji/go/codec v1.3.2/go.mod h1:pRBVtBSKl77K30Bv8R2P+cLSGaTtex6fsA2Wjqmfxj4=
-github.com/yofu/dxf v0.0.0-20250806094206-f3988c7f0176 h1:zezB3fvBd2MkuKhE9xSG963oeQt05yDTtW5n7isphbE=
-github.com/yofu/dxf v0.0.0-20250806094206-f3988c7f0176/go.mod h1:Kh+uei4xiKNxCp47COhkvo+BgYCj0umgV0WGH46CbsU=
+github.com/whutwxn/dxf-go v0.0.0-20231201081457-eba5461d9fbb h1:8C3BAdwUQbrFgW6AKAb0HArwbKbhQqG0E5yVx7geuAk=
+github.com/whutwxn/dxf-go v0.0.0-20231201081457-eba5461d9fbb/go.mod h1:3RSHQDDaMP2uHMrzZyhxxuyadcEiH2F/E1zq1vXjWlQ=
 go.mongodb.org/mongo-driver/v2 v2.9.1 h1:jewiFs2m1/VOQp8qhFshX6hWZ+EAXDhZHXExAUMcOgQ=
 go.mongodb.org/mongo-driver/v2 v2.9.1/go.mod h1:SHKN0IWkKmEVGHLjXnni6s4wPKX4v86FTgOeJJFuXcA=
 go.uber.org/goleak v1.3.0 h1:2K3zAYmnTNqV73imy9J1T3WC+gmCePx2hEGkimedGto=

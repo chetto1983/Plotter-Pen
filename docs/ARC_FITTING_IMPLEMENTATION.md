@@ -31,7 +31,7 @@ Closed DXF curves are first tested as full circles (`detectCircle`): at least 10
 | DXF `SPLINE`, closed | Sampled at 800 points (De Boor). Becomes a circle if `detectCircle` succeeds; otherwise `fitArcsToPoints` with `ArcFitTolerance` (0.05 mm), kept only when it yields fewer segments than half the samples (a closing line is added when the ends are more than 0.1 mm apart); otherwise a polygon simplified at 0.02 mm |
 | DXF `SPLINE`, open | Polyline simplified at 0.02 mm, no fitting |
 | DXF `LINE`, `ARC`, `CIRCLE` | Native primitives, no fitting |
-| DXF `LWPOLYLINE`, `POLYLINE` | Polyline or polygon from the vertices, no fitting; bulge values are ignored |
+| DXF `LWPOLYLINE`, `POLYLINE` | Without bulges, a polyline or polygon from the vertices. With bulges, one line or arc per segment, the arc through the point its bulge gives, and a closed polyline that goes once round one circle becomes that circle (`internal/service/import/bulge.go`). No fitting |
 | SVG curves | `fitArcsToPoints` when the `fitArcs` option is true (straight subsegments are split out at parse time) |
 | `/api/plc/extract` | No fitting: polylines and polygons become `L` commands |
 | `/api/cam/profile` | `FitArcsAndLines` at 0.01 mm on every offset ring (`internal/service/cam/profile.go`) |
@@ -54,8 +54,7 @@ Verified on 2026-09-11.
 
 1. **False arcs on sparse polylines in `fitArcsToPoints`.** Three points always define a circle and the import copy checks only the vertices, so any three non-collinear vertices are accepted as an arc, and so are four concyclic ones (every rectangle): the closed rectangle (3,3)–(97,3)–(97,47)–(3,47) at tolerance 0.01 becomes one arc of radius 51.894 (the circumcircle) and one line, up to 29.9 mm away from the rectangle. The import is not affected in practice because it only fits densely sampled curves. `FitArcsAndLines` checks the chord midpoints and returns the four sides as lines; on the Clipper2 tool paths of `L28YO-tree-of-life-wall-spiritual-art.dxf` (tools Ø2, Ø3 and Ø6, tolerance 0.01) its maximum deviation is 0.011 mm, where the vertex-only check reached 1.5 mm. Adding a turning-direction check left the deviation unchanged and only added segments, so it is not applied.
 2. **The direction of a `FitSegment` arc is in `MidX`/`MidY` only.** End points, centre and radius do not tell which way the arc turns; `MidX`/`MidY` is the input point in the middle of the span and lies on the arc. Deriving the direction from the cross product of the start and end radii instead is wrong for arcs larger than 180°: on the tree-of-life tool paths this happens to 1 arc in about 2000.
-3. **Bulges are ignored** in `LWPOLYLINE` and `POLYLINE`, so their arc segments arrive as straight chords.
-4. **Fixed import tolerance:** 0.05 mm, whatever the request options say.
+3. **Fixed import tolerance:** 0.05 mm, whatever the request options say.
 
 ---
 
