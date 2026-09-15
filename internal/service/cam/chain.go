@@ -22,7 +22,9 @@ const (
 // chains that could not be closed.
 type Contours struct {
 	Closed []geom.Path
-	Open   []geom.Path
+	// ClosedIDs names, for each closed contour, the primitives it is made of.
+	ClosedIDs [][]string
+	Open      []geom.Path
 }
 
 // Chain joins primitives end to end into contours, reversing pieces where needed. Two ends are
@@ -32,6 +34,7 @@ type Contours struct {
 func Chain(primitives []plc.Primitive) (Contours, error) {
 	var out Contours
 	var pieces []geom.Path
+	var pieceIDs []string
 	for _, p := range primitives {
 		path, closed, err := toPath(p)
 		if err != nil {
@@ -41,12 +44,21 @@ func Chain(primitives []plc.Primitive) (Contours, error) {
 		case pathLength(path) < joinTolerance:
 		case closed:
 			out.Closed = append(out.Closed, path)
+			out.ClosedIDs = append(out.ClosedIDs, []string{p.ID})
 		default:
 			pieces = append(pieces, path)
+			pieceIDs = append(pieceIDs, p.ID)
 		}
 	}
-	loops, open := chainPieces(pieces)
+	loops, loopPieces, open := chainPieces(pieces)
 	out.Closed = append(out.Closed, loops...)
+	for _, indices := range loopPieces {
+		ids := make([]string, len(indices))
+		for k, i := range indices {
+			ids[k] = pieceIDs[i]
+		}
+		out.ClosedIDs = append(out.ClosedIDs, ids)
+	}
 	out.Open = open
 	return out, nil
 }
@@ -118,7 +130,8 @@ func pathLength(path geom.Path) float64 {
 
 // chainPieces walks the joints between open pieces. End 2i is the start of piece i and end
 // 2i+1 its end; chains that begin at a free end are walked first, what is left forms cycles.
-func chainPieces(pieces []geom.Path) (loops, open []geom.Path) {
+// loopPieces lists, for each loop, the pieces it was walked through.
+func chainPieces(pieces []geom.Path) (loops []geom.Path, loopPieces [][]int, open []geom.Path) {
 	ends := make([]geom.Point, 0, 2*len(pieces))
 	for _, p := range pieces {
 		ends = append(ends, p[0], p[len(p)-1])
@@ -129,6 +142,7 @@ func chainPieces(pieces []geom.Path) (loops, open []geom.Path) {
 	walk := func(first int, reversed bool) {
 		used[first] = true
 		path := oriented(pieces[first], reversed)
+		walked := []int{first}
 		exit := 2*first + 1
 		if reversed {
 			exit = 2 * first
@@ -142,9 +156,11 @@ func chainPieces(pieces []geom.Path) (loops, open []geom.Path) {
 			q := next / 2
 			if q == first {
 				loops = append(loops, path[:len(path)-1])
+				loopPieces = append(loopPieces, walked)
 				return
 			}
 			used[q] = true
+			walked = append(walked, q)
 			path = append(path, oriented(pieces[q], next%2 == 1)[1:]...)
 			exit = next ^ 1
 		}
@@ -164,7 +180,7 @@ func chainPieces(pieces []geom.Path) (loops, open []geom.Path) {
 			walk(i, false)
 		}
 	}
-	return loops, open
+	return loops, loopPieces, open
 }
 
 // matchEnds pairs every end with its only neighbour within joinTolerance, when that neighbour

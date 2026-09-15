@@ -31,6 +31,13 @@ type DrillRequest struct {
 	TipThrough bool `json:"tipThrough,omitempty"`
 }
 
+// DrillResponse is the program in the /api/plc/extract response shape, with a warning for each
+// closed contour of hole size that is not round and so is not drilled.
+type DrillResponse struct {
+	plc.ExtractResponse
+	Warnings []string `json:"warnings,omitempty"`
+}
+
 const (
 	// peckClearance is how far above the bottom it reached the drill rapids back down after a
 	// peck, the 0.010 in of LinuxCNC's G83.
@@ -44,22 +51,34 @@ const (
 	sameCentre = 0.01
 )
 
-// Drill returns the PLC program that drills the circles of the drawing whose diameter is in the
-// requested range, one hole after the other: nearest hole first from X 0 Y 0, then the route
-// shortened with 2-opt.
+// Drill returns the PLC program that drills the round holes of the drawing whose diameter is in the
+// requested range, circles or closed contours that are round, one hole after the other: nearest hole
+// first from X 0 Y 0, then the route shortened with 2-opt. Closed contours of hole size that are not
+// round are listed as warnings.
 //
 // Each hole follows G83 with G98: rapid over the hole at safe Z and down to the retract plane,
 // then pecks fed at the plunge speed. Between pecks the drill rapids out to the retract plane and
 // back down to just above the bottom it reached. After a dwell of the wait time at the bottom it
 // rapids back to safe Z. The program ends at X 0 Y 0 at safe Z like the plotter programs.
-func Drill(req DrillRequest) (plc.ExtractResponse, error) {
+func Drill(req DrillRequest) (DrillResponse, error) {
 	if err := req.validate(); err != nil {
-		return plc.ExtractResponse{}, err
+		return DrillResponse{}, err
 	}
-	holes := req.holes()
+	holes, warnings, err := req.holes()
+	if err != nil {
+		return DrillResponse{}, err
+	}
 	if len(holes) == 0 {
-		return plc.ExtractResponse{}, fmt.Errorf("nothing to drill: the drawing has no circle from %.3f to %.3f mm across",
+		problem := fmt.Sprintf("nothing to drill: the drawing has no round hole from %.3f to %.3f mm across",
 			req.MinHoleDiameter, req.MaxHoleDiameter)
+		switch len(warnings) {
+		case 0:
+		case 1:
+			problem += "; 1 closed contour of that width is not round: cut it with a profile"
+		default:
+			problem += fmt.Sprintf("; %d closed contours of that width are not round: cut them with a profile", len(warnings))
+		}
+		return DrillResponse{}, errors.New(problem)
 	}
 
 	var lines, ids []string
@@ -79,7 +98,7 @@ func Drill(req DrillRequest) (plc.ExtractResponse, error) {
 	for i, id := range ids {
 		res.Commands[i].PrimitiveID = id
 	}
-	return res, nil
+	return DrillResponse{ExtractResponse: res, Warnings: warnings}, nil
 }
 
 func (req DrillRequest) validate() error {
@@ -105,28 +124,6 @@ func (req DrillRequest) validate() error {
 		return errors.New(strings.Join(problems, "; "))
 	}
 	return nil
-}
-
-// holes returns the circles to drill: those with a diameter in the range, the first of the
-// circles that share a centre. Each is shrunk to its centre, where a circle of radius 0 starts, so
-// plc.OptimizeOrder and shortenRoute measure from centre to centre.
-func (req DrillRequest) holes() []plc.Primitive {
-	var holes []plc.Primitive
-	for _, p := range req.Primitives {
-		if p.Type != plc.PrimitiveCircle {
-			continue
-		}
-		x, y, r := p.GetCircleParams()
-		if 2*r < req.MinHoleDiameter-sizeTolerance || 2*r > req.MaxHoleDiameter+sizeTolerance {
-			continue
-		}
-		centre := geom.Point{X: x, Y: y}
-		if slices.ContainsFunc(holes, func(h plc.Primitive) bool { return h.GetStartPoint().Distance(centre) <= sameCentre }) {
-			continue
-		}
-		holes = append(holes, plc.Primitive{Type: plc.PrimitiveCircle, ID: p.ID, Cx: new(x), Cy: new(y), Radius: new(0.0)})
-	}
-	return holes
 }
 
 // shortenRoute improves the route that leaves X 0 Y 0, visits the holes in order and comes back,

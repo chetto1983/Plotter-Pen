@@ -20,7 +20,7 @@ func drillRequest(prims ...plc.Primitive) DrillRequest {
 	}
 }
 
-func mustDrill(t *testing.T, req DrillRequest) plc.ExtractResponse {
+func mustDrill(t *testing.T, req DrillRequest) DrillResponse {
 	t.Helper()
 	res, err := Drill(req)
 	if err != nil {
@@ -158,8 +158,8 @@ func holes(t *testing.T, out []string) [][2]float64 {
 	return xy
 }
 
-// Only circles are drilled, those with a diameter in the range, both ends included. The range
-// allows 1 µm, so diameters that went through an inch to mm conversion still match.
+// Circles are drilled when their diameter is in the range, both ends included; an open arc is not a
+// hole. The range allows 1 µm, so diameters that went through an inch to mm conversion still match.
 func TestDrill_DrillsTheCirclesInTheDiameterRange(t *testing.T) {
 	req := drillRequest(
 		circleP(1, 0, 0.2),                     // 0.4, the smallest
@@ -168,7 +168,7 @@ func TestDrill_DrillsTheCirclesInTheDiameterRange(t *testing.T) {
 		circleP(4, 0, 0.65),                    // 1.3, too large
 		circleP(5, 0, 0.0099999999999999*25.4), // 0.508 from a DXF in inches
 		squareP(10, 10, 11, 11),
-		plc.Primitive{Type: plc.PrimitiveArc, X1: new(20.0), Y1: new(0.0), X2: new(21.0), Y2: new(1.0), Cx: new(20.0), Cy: new(1.0), Radius: new(0.5)},
+		arcP(20, 0, 21, 1, 20, 1, math.Pi/2),
 	)
 	req.MinHoleDiameter, req.MaxHoleDiameter = 0.4, 1.2
 	if got, want := holes(t, mustDrill(t, req).Output), [][2]float64{{1, 0}, {3, 0}, {5, 0}}; !slices.Equal(got, want) {
@@ -269,6 +269,9 @@ func TestDrill_RejectsWhatCannotBeDrilled(t *testing.T) {
 		{"no circle in the range", func(r *DrillRequest) { r.MinHoleDiameter, r.MaxHoleDiameter = 2, 3 }},
 		{"no primitives", func(r *DrillRequest) { r.Primitives = nil }},
 		{"malformed circle", func(r *DrillRequest) { r.Primitives = []plc.Primitive{{Type: plc.PrimitiveCircle}} }},
+		{"malformed arc next to a hole", func(r *DrillRequest) {
+			r.Primitives = append(r.Primitives, plc.Primitive{Type: plc.PrimitiveArc, X1: new(20.0), Y1: new(0.0), Cx: new(20.0), Cy: new(1.0)})
+		}},
 		{"no drill diameter", func(r *DrillRequest) { r.DrillDiameter = 0 }},
 		{"no smallest hole", func(r *DrillRequest) { r.MinHoleDiameter = 0 }},
 		{"smallest hole above the largest", func(r *DrillRequest) { r.MinHoleDiameter, r.MaxHoleDiameter = 1.2, 0.4 }},

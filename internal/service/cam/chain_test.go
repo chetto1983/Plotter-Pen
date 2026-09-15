@@ -2,6 +2,7 @@ package cam
 
 import (
 	"math"
+	"slices"
 	"testing"
 
 	"plotter-pen/internal/service/plc"
@@ -120,6 +121,29 @@ func TestChain_PolylinesJoinAndClosedShapesAreLoops(t *testing.T) {
 		{{X: 0, Y: 0}, {X: 10, Y: 0}, {X: 10, Y: 10}},
 	})
 	requirePaths(t, "open", c.Open, nil)
+}
+
+// Each closed contour names the primitives it is made of, closed shapes first in drawing order,
+// then the chained loops in the order they are walked, so a hole can point back at its drawing.
+func TestChain_ClosedContoursNameTheirPrimitives(t *testing.T) {
+	polygon := polygonP(20, 0, 24, 0, 20, 3)
+	polygon.ID = "p1"
+	circle := circleP(40, 0, 1)
+	circle.ID = "c1"
+	l1, l2, l3 := lineP(0, 0, 10, 0), lineP(0, 10, 10, 0), lineP(0, 10, 0, 0)
+	l1.ID, l2.ID, l3.ID = "l1", "l2", "l3"
+
+	c := mustChain(t, l1, polygon, l2, circle, l3)
+
+	want := [][]string{{"p1"}, {"c1"}, {"l1", "l2", "l3"}}
+	if len(c.ClosedIDs) != len(want) || len(c.Closed) != len(want) {
+		t.Fatalf("ids %v for %d closed contours, want %v", c.ClosedIDs, len(c.Closed), want)
+	}
+	for i := range want {
+		if !slices.Equal(c.ClosedIDs[i], want[i]) {
+			t.Fatalf("ids %v, want %v", c.ClosedIDs, want)
+		}
+	}
 }
 
 // The offset is computed on the tessellated circle, so its chords must stay within 5 µm of it.
