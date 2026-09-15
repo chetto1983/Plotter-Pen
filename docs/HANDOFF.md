@@ -32,6 +32,7 @@ One piece at a time: a short design approved first, then TDD, then a check on th
 | 6 | Operation selector in the PLC output panel: pen, profile or drilling (`src/app/CAMOperationManager.js`) | Done 2026-09-14 |
 | 7 | Piece thickness: work Z is the bed, cuts through or to a depth (`internal/service/cam/stock.go`) | Done 2026-09-14 |
 | — | LWPOLYLINE/POLYLINE bulges in the DXF import, with a new DXF reader | Done 2026-09-15 |
+| — | Drilling of round holes drawn as arcs, polygons or lines (`internal/service/cam/holes.go`) | Done 2026-09-15 |
 
 Measured on `dxf/L28YO-tree-of-life-wall-spiritual-art.dxf`:
 
@@ -126,7 +127,7 @@ Asked by the user after the Arduino pin circles came out as warnings ("guarda co
 
 - `cam.Drill` (`internal/service/cam/drill.go`), `POST /api/cam/drill` (`internal/handler/cam.go`), `TestDrillProgram_S7Sim`.
 - **Request:** the `/api/plc/extract` settings plus `depth`, `plungeSpeed` and `retractClearance` from the table, and the drill chosen at launch: `drillDiameter`, `minHoleDiameter`/`maxHoleDiameter`, `peckDepth` (0 = one feed to the bottom), `tipAngle` (118° when 0), `tipThrough`.
-- **Holes:** circle primitives only, with the diameter in the range, both ends included, widened by 1 µm so values converted from inches match. Circles whose centres are within 0.01 mm are one hole. No circle in the range is a 400.
+- **Holes:** circle primitives only (round contours too since 2026-09-15, see "Round holes" below), with the diameter in the range, both ends included, widened by 1 µm so values converted from inches match. Circles whose centres are within 0.01 mm are one hole. No circle in the range is a 400.
 - **Order:** nearest hole first from X 0 Y 0 (`plc.OptimizeOrder` on the centres), then 2-opt on the route back to X 0 Y 0: holes between two legs are reversed while that shortens the route. Only drilling uses it; the pen extract keeps nearest-first.
 - **Cycle, G83 with G98 written as `J`/`L`/`WAIT`** (the PLC has no canned cycles, like pcb2gcode `nog81`). Since piece 7, R and the pecks count from the top of the piece instead of work Z:
   1. `J` over the hole at safe Z, `J` down to the retract plane R = work Z + `retractClearance`.
@@ -137,7 +138,7 @@ Asked by the user after the Arduino pin circles came out as warnings ("guarda co
 - **Drill point:** with `tipThrough` the bottom goes down by (D/2)/tan(angle/2), 0.300·D at 118°, so the full diameter reaches the depth. The pecks cover that length too.
 - **Validation:** drill diameter > 0, 0 < min ≤ max, depth > 0, peck 0 or at least 0.001 mm, tip angle 0–180, rapid and plunge speeds > 0, safe Z above work Z, R above work Z and not above safe Z, wait ≥ 0.
 - **Setting:** `retract_clearance` in `PLCSimulationSettings` (default 1 mm, so existing databases get it), "Distanza Ritorno" in the dialog. The depth and plunge speed rows now say they serve the router and the drill.
-- **Not in this piece:** chip breaking (G73), a slower break-through feed, spindle speed and tool change (the PLC has neither: one program per drill), holes drawn as ARC entities or as polylines that are not one circle (a closed polyline of arcs of one circle is imported as a circle since the DXF bulges below). The profile still plunges from safe Z; the retract plane could serve it too.
+- **Not in this piece:** chip breaking (G73), a slower break-through feed, spindle speed and tool change (the PLC has neither: one program per drill), holes that are not circles (done on 2026-09-15, see "Round holes" below). The profile still plunges from safe Z; the retract plane could serve it too.
 - **Measured on the Arduino UNO shield** (local server, settings depth 2.4, plunge 3.5, R 1; independent check of every program):
   - Pins, Ø1.0 drill for 0.4–1.2 mm: 32 holes, 129 commands; with pecks of 0.8 and the tip through, 417 commands down to −2.700.
   - Mounting holes, Ø3.2 drill for 3–3.3 mm with the tip through: 4 holes down to −3.361.
@@ -259,6 +260,26 @@ First sub-piece of the missing CAM functions. The user chose lines and arcs for 
   - INSERT blocks are not expanded.
   - The reader turns a malformed number into 0 without an error.
   - The reader is no longer maintained.
+
+### Round holes drawn as arcs, polygons or lines (2026-09-15)
+
+Second sub-piece: drilling found circles only. The user chose to drill everything round, and to warn about closed shapes of hole size that are not round.
+
+- **Holes** (`internal/service/cam/holes.go`):
+  - circles as before;
+  - then the closed contours that `cam.Chain` makes of the other primitives, when they are round: a least-squares circle (Kåsa) fitted to the vertices, with every vertex and the middle of every side within 0.02 mm of it;
+  - the middles keep regular polygons out: a 24-gon of 3 mm sags 0.013 mm and passes, a 16-gon 0.029 mm and a hexagon do not;
+  - the diameter range and the one-hole-per-centre rule are those of the circles, circles first. A round contour commands name its first primitive, from the new `Contours.ClosedIDs`.
+- **Not round:** a closed contour whose bounding box has its shorter side in the range, such as a 3×1 slot or a 1 mm square, is not drilled and comes back in `warnings` ("the closed contour from … to … is not round: it is not drilled, cut it with a profile"). The panel sums them up as "N contorni non tondi non forati: usare Profilo". With no round hole at all the 400 also says how many were left out.
+- **API:** `cam.Drill` returns `DrillResponse` (`/api/plc/extract` shape plus `warnings`). A non-circle primitive with missing data is now a 400, as in the profile; before, drilling ignored it.
+- **Checked:**
+  - Go tests: two and four ARCs, a 24-gon, a closed 32-sided polyline, 24 separate lines, a 16-gon of 3 mm, a hexagon, a square, a slot, the board outline, a circle over a polygon, the error, the contour ids.
+  - Headless Chrome, local server, simulator as the active PLC, on a DXF with a 1 mm hole drawn as two ARCs, a 32-gon, 24 LINEs and a CIRCLE, a 3×1 slot and a 1 mm square:
+    - Foratura drills the 4 holes, and all 20 of their commands name a drawing primitive (arc, polygon, line, circle);
+    - the slot and the square are warned under "2 contorni non tondi non forati: usare Profilo";
+    - Profilo keeps its own summary;
+    - no page errors.
+- **Limits:** a shape made of pieces that `cam.Chain` cannot close (a gap over 0.01 mm, three ends at one point) is neither drilled nor warned. The warning list, when opened, pushes the command list down as the profile one does.
 
 ## Environment
 
