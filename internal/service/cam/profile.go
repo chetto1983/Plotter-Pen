@@ -23,6 +23,10 @@ const (
 	// maxPasses bounds the passes of a profile and the pecks of a hole, and with them the program
 	// a request can ask for: 1000 passes of 0.1 mm are 100 mm, beyond any job of a small router.
 	maxPasses = 1000
+	// maxRampLaps bounds how many times a ramp, out and back, may go round its ring. A ramp down a
+	// small hole takes tens of laps, like a helix; without a bound a shallow angle or a deep
+	// step-down fills the memory with ramp moves.
+	maxRampLaps = 1000
 )
 
 // Cut sides and directions of a profile.
@@ -105,7 +109,9 @@ func Profile(req ProfileRequest) (ProfileResponse, error) {
 		g.Jump(start.X, start.Y, req.SafeZ, req.RapidSpeed)
 		above := req.SafeZ
 		for _, z := range levels {
-			req.enter(g, rampRing, above, z)
+			if err := req.enter(g, rampRing, above, z); err != nil {
+				return ProfileResponse{}, err
+			}
 			above = z
 			g.Wait(req.WaitTime)
 			for _, s := range segments {
@@ -133,15 +139,22 @@ func Profile(req ProfileRequest) (ProfileResponse, error) {
 // so that the tool never sinks faster than the plunge speed.
 //
 // The tool plunges straight to zTo instead at 90°, where the ramp has no length, and in a ring
-// shorter than the tool diameter, where the ramp would go round it many times.
-func (req ProfileRequest) enter(g *plcgen.Generator, closed geom.Path, zFrom, zTo float64) {
+// shorter than the tool diameter, where the ramp would go round it many times. A ramp that would
+// go round the ring more than maxRampLaps times is an error naming the ring.
+func (req ProfileRequest) enter(g *plcgen.Generator, closed geom.Path, zFrom, zTo float64) error {
 	start := closed[0]
 	surface := math.Min(zFrom, req.top(req.WorkZ))
 	angle := req.RampAngle * math.Pi / 180
 	leg := (surface - zTo) / math.Tan(angle) / 2
-	if leg < plcResolution || pathLength(closed) < req.ToolDiameter {
+	length := pathLength(closed)
+	if leg < plcResolution || length < req.ToolDiameter {
 		g.Line(start.X, start.Y, zTo, req.PlungeSpeed)
-		return
+		return nil
+	}
+	if laps := 2 * leg / length; laps > maxRampLaps {
+		minX, minY, maxX, maxY := closed.Bounds()
+		return fmt.Errorf("a %g° ramp would go round the ring from (%.3f, %.3f) to (%.3f, %.3f) %.0f times to go down %.3f mm, "+
+			"at most %d: use a steeper ramp angle or a smaller step-down", req.RampAngle, minX, minY, maxX, maxY, laps, surface-zTo, maxRampLaps)
 	}
 	ring := closed[:len(closed)-1]
 	if zFrom > surface {
@@ -164,6 +177,7 @@ func (req ProfileRequest) enter(g *plcgen.Generator, closed geom.Path, zFrom, zT
 		g.Line(p.X, p.Y, z, speed)
 		pos = p
 	}
+	return nil
 }
 
 // alongRing walks the closed ring from its start for the given length, going round it as many

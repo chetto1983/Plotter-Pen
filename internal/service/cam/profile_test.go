@@ -376,6 +376,29 @@ func TestProfile_RampLeavesOutVerticesItDoesNotNeed(t *testing.T) {
 	}
 }
 
+// A ramp may go round a small ring many times, as a helix would, but not more than 1000 times: a
+// shallow angle or a deep step-down would otherwise fill the memory with ramp moves (1e-9° on
+// this ring is 11 GB of points). The profile is refused then, naming the ring; 900 laps are cut.
+func TestProfile_RampsRoundTheRingAtMost1000Times(t *testing.T) {
+	// the ring 1 mm outside the 20 mm square is 80 + 2π mm long; the ramp goes out and back
+	ring := 80 + 2*math.Pi
+	angle := func(laps float64) float64 { return math.Atan(0.5/(laps*ring)) * 180 / math.Pi }
+	req := request("outside", 2, squareP(0, 0, 20, 20))
+	req.StepDown = 0.5
+
+	req.RampAngle = angle(900)
+	if _, err := Profile(req); err != nil {
+		t.Fatalf("900 laps: %v", err)
+	}
+	for _, degrees := range []float64{angle(1100), 1e-9} {
+		req.RampAngle = degrees
+		_, err := Profile(req)
+		if err == nil || !strings.Contains(err.Error(), "1000") || !strings.Contains(err.Error(), "(-1.000, -1.000) to (21.000, 21.000)") {
+			t.Fatalf("ramp angle %g°: error %v, want one naming the ring and the 1000 laps", degrees, err)
+		}
+	}
+}
+
 // A ring shorter than the tool diameter leaves no room to ramp: going round it would send
 // hundreds of moves, so the tool plunges straight down there.
 func TestProfile_PlungesStraightIntoRingsShorterThanTheTool(t *testing.T) {
