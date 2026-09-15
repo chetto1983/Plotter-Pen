@@ -199,11 +199,20 @@ The user noticed the piece thickness was missing. They chose work Z on the bed a
     - each operation keeps its own Passante and depth, after a reload too;
     - "PLC" in the ribbon sent the 353-command drilling, which ran to its end on the simulator in 46.0 s;
     - no page errors.
-  - **Layout:** at 1280×720 the parameters take 228–231 px and the command list keeps about 133 px (190 px before). At 1600×1000 the list keeps 423–442 px. No field is cut off; "Compensa punta" wraps on two lines.
+  - **Layout:** at 1280×720 the parameters take 228–231 px and the command list keeps about 133 px (190 px before). At 1600×1000 the list keeps 423–442 px. No field is cut off; "Compensa punta" wraps on two lines. The parameters can be collapsed since the follow-ups below.
 - **Limits:**
   - A work Z calibrated on the top of a piece now means the bed: the cut goes shallower, not deeper, but work Z must be set on the bed before cutting on the machine.
   - The 3D view does not draw the piece.
   - Firefox 78 was not measured.
+
+### Follow-ups of piece 7
+
+- **3D view above pixel ratio 1** (`b4f0d2c`): `renderFrame` gave `setViewport` the drawing buffer size, which three.js scales by the pixel ratio again. At ratio 1.5 the scene was enlarged and off-centre and the ViewCube was drawn past the canvas. It now uses `renderer.getSize()`, in CSS pixels. Checked in headless Chrome at device scale factors 1 and 1.5: viewport, cube pixels, click on the cube, simulation.
+- **Ramp laps** (2026-09-15, bound chosen by the user): a ramp, out and back, may go round its ring at most 1000 times (`maxRampLaps`). Beyond that the profile is a 400 naming the ring, the angle and the laps. A 1e-9° ramp on a 20 mm square is refused in 83 ms; 900 laps are still cut. Real ramps stay far below: a smallest ring (the tool diameter) with a step of twice the diameter at 0.5° takes about 230 laps.
+- **Collapsible parameters** (2026-09-15, chosen by the user): a toggle next to the tabs of Profilo and Foratura hides the parameters and leaves one summary line, touched to open them again. The state is remembered in the browser (`camParamsCollapsed`); Penna has no toggle.
+  - Summaries: "Ø2 · Esterno · Discorde · 1,6 mm passante", "Ø1 · fori 0,4–1,2 · 1,6 mm prof. 1".
+  - At 1280×720 the command list goes from 136 to 212 px for the profile (two rows) and from 133 to 265 px for the drilling (three rows).
+  - Checked in headless Chrome: toggle, summaries, heights, reload, reopening, no page errors.
 
 ## Environment
 
@@ -241,7 +250,7 @@ Hooks: pre-commit runs gofmt, vet, golangci-lint on changed lines and the 600-li
 - **Arc through point:** `arcAuxPoint` in `internal/service/plc/extractor.go` returns the arc centre when an arc has neither `throughPoint` nor `sweep`.
 - **Import cache:** `SmartImportCached` keys the cache on the content only and returns the cached object without copying it.
 - **Unused configuration:** `ServerConfig.OPCUAConfig` (`OPCUA_CONFIG`) is not used by anything.
-- **Tiny ramp angle:** `cam.Profile` accepts any ramp angle above 0°. The ramp is (drop / tan angle) / 2 long, so an angle of 1e-9° would walk round the ring for kilometres and fill the memory. The dialog allows 0.5° at least, the API has no minimum. Found while bounding the step-down (below); not fixed.
+- **Output PLC header at 1280 px:** the five header buttons end at x 1285, past the screen, so the right panel scrolls sideways (324 px of content in 319) and "Scarica" is cut. Measured the same before and after the collapsible parameters.
 
 ## Working rules to keep
 
