@@ -281,6 +281,26 @@
     }
 }
 
+/* Below 1400px the right panel (25vw) is narrower than the Output PLC header: its title and five
+   36px buttons overflowed the screen by 5px at 1280px. Dropping the title icon and tightening the
+   buttons gives back 42px, where 30px were missing. */
+@media (min-width: 1280px) and (max-width: 1399px) {
+    #plcPanelHeader .cad-panel-header-title > svg {
+        display: none;
+    }
+
+    #plcPanelHeader .cad-panel-actions {
+        gap: 2px;
+    }
+
+    #plcPanelHeader .cad-icon-btn-sm {
+        width: 34px;
+        min-width: 34px;
+        height: 34px;
+        min-height: 34px;
+    }
+}
+
 /* ============================================
    COLLAPSIBLE PANELS (for tablet/HMI)
    ============================================ */
