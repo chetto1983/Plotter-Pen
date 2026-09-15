@@ -8,9 +8,9 @@ import (
 
 // WSMessage represents a WebSocket message
 type WSMessage struct {
-	Type string      `json:"type"` // position, status, alarm, ack, error
-	Data interface{} `json:"data"`
-	Time int64       `json:"time"` // Unix timestamp milliseconds
+	Type string `json:"type"` // position, status, alarm, ack, error
+	Data any    `json:"data"`
+	Time int64  `json:"time"` // Unix timestamp milliseconds
 }
 
 // SubscribeRequest represents a subscription request from client
@@ -88,7 +88,7 @@ func (s *PositionStream) Start(ctx context.Context, send func(WSMessage)) {
 			if changed {
 				send(WSMessage{
 					Type: "status",
-					Data: map[string]interface{}{"connected": connected, "reconnected": connected},
+					Data: map[string]any{"connected": connected, "reconnected": connected},
 					Time: time.Now().UnixMilli(),
 				})
 			}
@@ -134,7 +134,7 @@ func (s *PositionStream) setRunning(running bool) {
 }
 
 // NewWSMessage creates a new WebSocket message with current timestamp
-func NewWSMessage(msgType string, data interface{}) WSMessage {
+func NewWSMessage(msgType string, data any) WSMessage {
 	return WSMessage{
 		Type: msgType,
 		Data: data,
@@ -149,7 +149,7 @@ func PositionMessage(pos Position) WSMessage {
 
 // StatusMessage creates a status message
 func StatusMessage(connected bool, endpoint string) WSMessage {
-	return NewWSMessage("status", map[string]interface{}{
+	return NewWSMessage("status", map[string]any{
 		"connected": connected,
 		"endpoint":  endpoint,
 	})
@@ -165,7 +165,7 @@ func AlarmMessage(code, message string) WSMessage {
 
 // AckMessage creates an acknowledgment message
 func AckMessage(action string, success bool, message string) WSMessage {
-	return NewWSMessage("ack", map[string]interface{}{
+	return NewWSMessage("ack", map[string]any{
 		"action":  action,
 		"success": success,
 		"message": message,

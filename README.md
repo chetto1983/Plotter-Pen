@@ -55,6 +55,8 @@ OPC UA connections are stored in the SQLite database and managed from the web UI
 
 `opcua_config.json` in the repository root is not read by the server.
 
+`POST /api/opcua/certificates/generate` writes `client.pem`, `client.der` and `client.key` under `certs/`. Its optional `outputDir` must be a relative path within that directory (for example, `certs/machine`); paths and symlinks that escape it are rejected. New certificate directories use mode `0700`, and generated files use `0600` on Unix. Status and download endpoints still refer to `certs/client.*`. Local `OPCUA_CERT_PATH` and `OPCUA_KEY_PATH` settings can select other directories for automatic certificate loading and generation.
+
 ### Environment Variables
 
 | Variable | Description | Default |

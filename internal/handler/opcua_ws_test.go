@@ -11,8 +11,8 @@ import (
 	"plotter-pen/internal/persistence"
 	"plotter-pen/internal/service/opcua"
 
-	"github.com/glebarez/sqlite"
 	"github.com/gin-gonic/gin"
+	"github.com/glebarez/sqlite"
 	"github.com/gorilla/websocket"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -112,7 +112,7 @@ func TestWebSocket_Subscribe(t *testing.T) {
 	conn.ReadJSON(&statusMsg)
 
 	// Send subscribe message
-	subscribeMsg := map[string]interface{}{
+	subscribeMsg := map[string]any{
 		"type": "subscribe",
 		"data": map[string]int{"interval": 100},
 	}
@@ -150,14 +150,14 @@ func TestWebSocket_Unsubscribe(t *testing.T) {
 	conn.ReadJSON(&opcua.WSMessage{})
 
 	// Subscribe first
-	conn.WriteJSON(map[string]interface{}{
+	conn.WriteJSON(map[string]any{
 		"type": "subscribe",
 		"data": map[string]int{"interval": 100},
 	})
 	conn.ReadJSON(&opcua.WSMessage{})
 
 	// Unsubscribe
-	conn.WriteJSON(map[string]interface{}{"type": "unsubscribe"})
+	conn.WriteJSON(map[string]any{"type": "unsubscribe"})
 
 	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 	var msg opcua.WSMessage
@@ -219,7 +219,7 @@ func TestWebSocket_InvalidCommand(t *testing.T) {
 	conn.ReadJSON(&opcua.WSMessage{})
 
 	// Send invalid command
-	conn.WriteJSON(map[string]interface{}{
+	conn.WriteJSON(map[string]any{
 		"type": "command",
 		"data": map[string]string{"action": "invalid_action"},
 	})

@@ -5,9 +5,10 @@ import (
 	"plotter-pen/pkg/geom"
 )
 
-// Primitive types for PLC extraction
+// PrimitiveType identifies a drawable shape for PLC extraction.
 type PrimitiveType string
 
+// Supported primitive types.
 const (
 	PrimitiveLine      PrimitiveType = "line"
 	PrimitiveArc       PrimitiveType = "arc"
@@ -135,14 +136,14 @@ func (p *Primitive) UnmarshalJSON(data []byte) error {
 	// Use an alias type to avoid infinite recursion
 	type PrimitiveAlias Primitive
 	aux := &struct {
-		StartX  *float64 `json:"startX,omitempty"`
-		StartY  *float64 `json:"startY,omitempty"`
-		EndX    *float64 `json:"endX,omitempty"`
-		EndY    *float64 `json:"endY,omitempty"`
-		CenterX *float64 `json:"centerX,omitempty"`
-		CenterY *float64 `json:"centerY,omitempty"`
-		ThroughX *float64 `json:"throughX,omitempty"`
-		ThroughY *float64 `json:"throughY,omitempty"`
+		StartX       *float64    `json:"startX,omitempty"`
+		StartY       *float64    `json:"startY,omitempty"`
+		EndX         *float64    `json:"endX,omitempty"`
+		EndY         *float64    `json:"endY,omitempty"`
+		CenterX      *float64    `json:"centerX,omitempty"`
+		CenterY      *float64    `json:"centerY,omitempty"`
+		ThroughX     *float64    `json:"throughX,omitempty"`
+		ThroughY     *float64    `json:"throughY,omitempty"`
 		ThroughPoint *geom.Point `json:"throughPoint,omitempty"`
 		*PrimitiveAlias
 	}{

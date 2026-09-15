@@ -64,13 +64,13 @@ func TestValidateOPCUANodes(t *testing.T) {
 
 	// Expected NodeIDs from OPC Ua Interface.xml (ns=4)
 	expectedNodes := map[string]string{
-		"PointArr":      "ns=4;i=93",
-		"TriggerWrite":  "ns=4;i=12",
-		"ReadDone":      "ns=4;i=23",
-		"EndOfFile":     "ns=4;i=34",
-		"Pos.X":         "ns=4;i=80",
-		"Pos.Y":         "ns=4;i=81",
-		"Pos.Z":         "ns=4;i=82",
+		"PointArr":     "ns=4;i=93",
+		"TriggerWrite": "ns=4;i=12",
+		"ReadDone":     "ns=4;i=23",
+		"EndOfFile":    "ns=4;i=34",
+		"Pos.X":        "ns=4;i=80",
+		"Pos.Y":        "ns=4;i=81",
+		"Pos.Z":        "ns=4;i=82",
 	}
 
 	db := setupValidationTestDB(t)

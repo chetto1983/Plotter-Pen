@@ -44,7 +44,7 @@ func TestHealthz(t *testing.T) {
 		t.Errorf("Expected status 200, got %d", w.Code)
 	}
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	json.Unmarshal(w.Body.Bytes(), &resp)
 
 	if resp["status"] != "ok" {
@@ -80,14 +80,14 @@ func TestReadyz_Healthy(t *testing.T) {
 		t.Errorf("Expected status 200, got %d", w.Code)
 	}
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	json.Unmarshal(w.Body.Bytes(), &resp)
 
 	if resp["status"] != "ready" {
 		t.Errorf("Expected status 'ready', got '%v'", resp["status"])
 	}
 
-	checks := resp["checks"].(map[string]interface{})
+	checks := resp["checks"].(map[string]any)
 	if checks["database"] != "ok" {
 		t.Errorf("Expected database 'ok', got '%v'", checks["database"])
 	}
@@ -105,7 +105,7 @@ func TestHealth_DetailedInfo(t *testing.T) {
 		t.Errorf("Expected status 200, got %d", w.Code)
 	}
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	json.Unmarshal(w.Body.Bytes(), &resp)
 
 	// Check status
@@ -119,7 +119,7 @@ func TestHealth_DetailedInfo(t *testing.T) {
 	}
 
 	// Check system info
-	system := resp["system"].(map[string]interface{})
+	system := resp["system"].(map[string]any)
 	if _, exists := system["goroutines"]; !exists {
 		t.Error("Expected goroutines in system info")
 	}
@@ -128,7 +128,7 @@ func TestHealth_DetailedInfo(t *testing.T) {
 	}
 
 	// Check version info
-	version := resp["version"].(map[string]interface{})
+	version := resp["version"].(map[string]any)
 	if _, exists := version["go"]; !exists {
 		t.Error("Expected go version in version info")
 	}
@@ -158,7 +158,7 @@ func TestReadyz_DBClosed(t *testing.T) {
 		t.Errorf("Expected status 503 for closed DB, got %d", w.Code)
 	}
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	json.Unmarshal(w.Body.Bytes(), &resp)
 
 	if resp["status"] != "not ready" {

@@ -133,10 +133,10 @@ ENDSEC
 0
 EOF`
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"content":  dxfContent,
 		"fileName": "test.dxf",
-		"options": map[string]interface{}{
+		"options": map[string]any{
 			"normalize":    true,
 			"centerOrigin": true,
 			"scaleFactor":  1.0,
@@ -158,7 +158,7 @@ EOF`
 func TestSmartImport_InvalidContent(t *testing.T) {
 	r := setupDXFRouter()
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"content": "not a DXF",
 	}
 	jsonBody, _ := json.Marshal(body)
@@ -252,7 +252,7 @@ func TestParseSTL_ValidASCII(t *testing.T) {
   endfacet
 endsolid test`
 
-	body, _ := json.Marshal(map[string]interface{}{
+	body, _ := json.Marshal(map[string]any{
 		"content": []byte(stlContent),
 	})
 
@@ -279,7 +279,7 @@ func TestParseSTL_WithSlices(t *testing.T) {
   endfacet
 endsolid test`
 
-	body, _ := json.Marshal(map[string]interface{}{
+	body, _ := json.Marshal(map[string]any{
 		"content":    []byte(stlContent),
 		"sliceCount": 5,
 	})
@@ -297,7 +297,7 @@ endsolid test`
 func TestParseSTL_InvalidContent(t *testing.T) {
 	r := setupDXFRouter()
 
-	body, _ := json.Marshal(map[string]interface{}{
+	body, _ := json.Marshal(map[string]any{
 		"content": []byte("not an STL file"),
 	})
 
@@ -338,7 +338,7 @@ func TestParseSTL_Base64Content(t *testing.T) {
 endsolid test`
 
 	encoded := base64.StdEncoding.EncodeToString([]byte(stlContent))
-	body, _ := json.Marshal(map[string]interface{}{
+	body, _ := json.Marshal(map[string]any{
 		"content": encoded,
 	})
 

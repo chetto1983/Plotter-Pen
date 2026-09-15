@@ -49,6 +49,7 @@ func (h *PersistenceHandler) RegisterRoutes(r *gin.RouterGroup) {
 
 // === App State ===
 
+// GetState returns the autosaved drawing state.
 func (h *PersistenceHandler) GetState(c *gin.Context) {
 	var state persistence.AppState
 	if err := h.db.First(&state).Error; err != nil {
@@ -58,6 +59,7 @@ func (h *PersistenceHandler) GetState(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": state.Data})
 }
 
+// SaveState replaces the autosaved drawing state.
 func (h *PersistenceHandler) SaveState(c *gin.Context) {
 	var req struct {
 		Data string `json:"data" binding:"required"`
@@ -76,6 +78,7 @@ func (h *PersistenceHandler) SaveState(c *gin.Context) {
 
 // === Drawings ===
 
+// ListDrawings returns saved drawings, most recently updated first.
 func (h *PersistenceHandler) ListDrawings(c *gin.Context) {
 	var drawings []persistence.Drawing
 	if err := h.db.Order("updated_at DESC").Find(&drawings).Error; err != nil {
@@ -85,6 +88,7 @@ func (h *PersistenceHandler) ListDrawings(c *gin.Context) {
 	c.JSON(http.StatusOK, drawings)
 }
 
+// GetDrawing returns the drawing with the requested ID.
 func (h *PersistenceHandler) GetDrawing(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -100,6 +104,7 @@ func (h *PersistenceHandler) GetDrawing(c *gin.Context) {
 	c.JSON(http.StatusOK, drawing)
 }
 
+// CreateDrawing saves a new named drawing.
 func (h *PersistenceHandler) CreateDrawing(c *gin.Context) {
 	var req struct {
 		Name       string `json:"name" binding:"required"`
@@ -124,6 +129,7 @@ func (h *PersistenceHandler) CreateDrawing(c *gin.Context) {
 	c.JSON(http.StatusCreated, drawing)
 }
 
+// UpdateDrawing updates the nonempty fields of a saved drawing.
 func (h *PersistenceHandler) UpdateDrawing(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -141,7 +147,7 @@ func (h *PersistenceHandler) UpdateDrawing(c *gin.Context) {
 		return
 	}
 
-	updates := map[string]interface{}{}
+	updates := map[string]any{}
 	if req.Name != "" {
 		updates["name"] = req.Name
 	}
@@ -159,22 +165,14 @@ func (h *PersistenceHandler) UpdateDrawing(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
+// DeleteDrawing deletes the drawing with the requested ID.
 func (h *PersistenceHandler) DeleteDrawing(c *gin.Context) {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
-		return
-	}
-
-	if err := h.db.Delete(&persistence.Drawing{}, id).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	h.deleteRecord(c, &persistence.Drawing{})
 }
 
 // === Tools ===
 
+// ListTools returns the tool library.
 func (h *PersistenceHandler) ListTools(c *gin.Context) {
 	var tools []persistence.Tool
 	if err := h.db.Find(&tools).Error; err != nil {
@@ -184,6 +182,7 @@ func (h *PersistenceHandler) ListTools(c *gin.Context) {
 	c.JSON(http.StatusOK, tools)
 }
 
+// CreateTool adds a tool to the library.
 func (h *PersistenceHandler) CreateTool(c *gin.Context) {
 	var req struct {
 		Name        string  `json:"name" binding:"required"`
@@ -213,6 +212,7 @@ func (h *PersistenceHandler) CreateTool(c *gin.Context) {
 	c.JSON(http.StatusCreated, tool)
 }
 
+// UpdateTool updates the supplied nonempty fields and positive diameter of a tool.
 func (h *PersistenceHandler) UpdateTool(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -231,7 +231,7 @@ func (h *PersistenceHandler) UpdateTool(c *gin.Context) {
 		return
 	}
 
-	updates := map[string]interface{}{}
+	updates := map[string]any{}
 	if req.Name != "" {
 		updates["name"] = req.Name
 	}
@@ -252,14 +252,19 @@ func (h *PersistenceHandler) UpdateTool(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
+// DeleteTool deletes the tool with the requested ID.
 func (h *PersistenceHandler) DeleteTool(c *gin.Context) {
+	h.deleteRecord(c, &persistence.Tool{})
+}
+
+func (h *PersistenceHandler) deleteRecord(c *gin.Context, model any) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
 
-	if err := h.db.Delete(&persistence.Tool{}, id).Error; err != nil {
+	if err := h.db.Delete(model, id).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -268,6 +273,7 @@ func (h *PersistenceHandler) DeleteTool(c *gin.Context) {
 
 // === PLC Simulation Settings ===
 
+// GetPLCSimSettings returns the stored PLC simulation settings.
 func (h *PersistenceHandler) GetPLCSimSettings(c *gin.Context) {
 	var settings persistence.PLCSimulationSettings
 	if err := h.db.First(&settings).Error; err != nil {
@@ -277,6 +283,7 @@ func (h *PersistenceHandler) GetPLCSimSettings(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": settings})
 }
 
+// SavePLCSimSettings replaces the stored PLC simulation settings.
 func (h *PersistenceHandler) SavePLCSimSettings(c *gin.Context) {
 	var req struct {
 		WorkSpeed        float64 `json:"workSpeed"`
@@ -294,7 +301,7 @@ func (h *PersistenceHandler) SavePLCSimSettings(c *gin.Context) {
 		return
 	}
 
-	updates := map[string]interface{}{
+	updates := map[string]any{
 		"work_speed":        req.WorkSpeed,
 		"rapid_speed":       req.RapidSpeed,
 		"safe_z":            req.SafeZ,

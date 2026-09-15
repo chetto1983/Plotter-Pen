@@ -11,7 +11,7 @@ type OPCUAClient interface {
 	IsConnected() bool
 
 	// Data operations
-	SendWithTrigger(ctx context.Context, data interface{}, cfg Config) error
+	SendWithTrigger(ctx context.Context, data any, cfg Config) error
 
 	// Position and status
 	ReadPosition(ctx context.Context) (Position, error)

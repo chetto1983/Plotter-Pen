@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -101,7 +102,7 @@ func (h *OpcuaHandler) UpdateConfig(c *gin.Context) {
 
 // SendRequest represents data to send to PLC
 type SendRequest struct {
-	Data     interface{}   `json:"data" binding:"required"`
+	Data     any           `json:"data" binding:"required"`
 	Config   *opcua.Config `json:"config,omitempty"` // Per-request override
 	DataType string        `json:"dataType,omitempty"`
 }
@@ -312,6 +313,7 @@ func (h *OpcuaHandler) ActivatePLC(c *gin.Context) {
 
 // CertRequest represents certificate generation request
 type CertRequest struct {
+	// OutputDir defaults to certs and must remain within that directory.
 	OutputDir string `json:"outputDir"`
 }
 
@@ -324,9 +326,28 @@ func (h *OpcuaHandler) GenerateCertificate(c *gin.Context) {
 	if req.OutputDir == "" {
 		req.OutputDir = DefaultCertsDir
 	}
+	dir, err := filepath.Rel(DefaultCertsDir, req.OutputDir)
+	if err != nil || !filepath.IsLocal(dir) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "outputDir must be within certs"})
+		return
+	}
+	if err := os.MkdirAll(DefaultCertsDir, 0700); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	root, err := os.OpenRoot(DefaultCertsDir)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	defer func() {
+		if err := root.Close(); err != nil {
+			log.Printf("Failed to close certificate directory: %v", err)
+		}
+	}()
 	certPath := req.OutputDir + "/client.pem"
 	keyPath := req.OutputDir + "/client.key"
-	if err := opcua.GenerateAndSaveCert(certPath, keyPath); err != nil {
+	if err := opcua.GenerateAndSaveCertInDir(root, dir); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

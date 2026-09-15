@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -33,18 +34,18 @@ func DefaultLogConfig() LogConfig {
 
 // LogEntry represents a structured log entry
 type LogEntry struct {
-	Timestamp  string `json:"timestamp"`
-	Level      string `json:"level"`
-	Method     string `json:"method"`
-	Path       string `json:"path"`
-	Status     int    `json:"status"`
-	Latency    string `json:"latency"`
-	LatencyMS  int64  `json:"latency_ms"`
-	ClientIP   string `json:"client_ip,omitempty"`
-	UserAgent  string `json:"user_agent,omitempty"`
-	Error      string `json:"error,omitempty"`
-	RequestID  string `json:"request_id,omitempty"`
-	BodySize   int    `json:"body_size,omitempty"`
+	Timestamp string `json:"timestamp"`
+	Level     string `json:"level"`
+	Method    string `json:"method"`
+	Path      string `json:"path"`
+	Status    int    `json:"status"`
+	Latency   string `json:"latency"`
+	LatencyMS int64  `json:"latency_ms"`
+	ClientIP  string `json:"client_ip,omitempty"`
+	UserAgent string `json:"user_agent,omitempty"`
+	Error     string `json:"error,omitempty"`
+	RequestID string `json:"request_id,omitempty"`
+	BodySize  int    `json:"body_size,omitempty"`
 }
 
 // Logger returns a logging middleware with default configuration
@@ -59,11 +60,9 @@ func LoggerWithConfig(cfg LogConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Check if path should be skipped
 		path := c.Request.URL.Path
-		for _, skip := range cfg.SkipPaths {
-			if path == skip {
-				c.Next()
-				return
-			}
+		if slices.Contains(cfg.SkipPaths, path) {
+			c.Next()
+			return
 		}
 
 		// Start timer
@@ -135,7 +134,7 @@ func generateRequestID() string {
 	now := time.Now().UnixNano()
 	const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
 	result := make([]byte, 12)
-	for i := 0; i < 12; i++ {
+	for i := range 12 {
 		result[i] = chars[(now>>(i*5))&31]
 	}
 	return string(result)

@@ -1559,10 +1559,7 @@ func arcSample(start, end Point, rx, ry, angle float64, largeArc, sweep bool) []
 		delta += 2 * math.Pi
 	}
 
-	steps := int(math.Ceil(math.Abs(delta) / svgArcStepRadians))
-	if steps < svgArcMinSteps {
-		steps = svgArcMinSteps
-	}
+	steps := max(int(math.Ceil(math.Abs(delta)/svgArcStepRadians)), svgArcMinSteps)
 	points := make([]Point, 0, steps)
 	for i := 1; i <= steps; i++ {
 		t := float64(i) / float64(steps)

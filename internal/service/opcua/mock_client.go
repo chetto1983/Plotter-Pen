@@ -84,7 +84,7 @@ func (m *MockClient) IsConnected() bool {
 }
 
 // SendWithTrigger implements OPCUAClient
-func (m *MockClient) SendWithTrigger(ctx context.Context, data interface{}, cfg Config) error {
+func (m *MockClient) SendWithTrigger(ctx context.Context, data any, cfg Config) error {
 	if !m.connected {
 		return errors.New("not connected")
 	}

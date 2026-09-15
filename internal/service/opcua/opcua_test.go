@@ -356,8 +356,7 @@ func TestConfig_SubscriptionInterval(t *testing.T) {
 // === Certificate Tests ===
 
 func TestGenerateAndSaveCert(t *testing.T) {
-	tmpDir := filepath.Join(os.TempDir(), "plotter-pen-test-certs")
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	certPath := filepath.Join(tmpDir, "client.pem")
 	keyPath := filepath.Join(tmpDir, "client.key")

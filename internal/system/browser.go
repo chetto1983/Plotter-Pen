@@ -2,6 +2,8 @@ package system
 
 import (
 	"fmt"
+	"log"
+	"net/url"
 	"os/exec"
 	"runtime"
 	"time"
@@ -38,30 +40,43 @@ func OpenBrowserWithConfig(url string, cfg BrowserConfig) error {
 
 // openURL opens a URL in the browser
 func openURL(url, browser string) error {
-	var cmd *exec.Cmd
-
-	if browser != "" {
-		cmd = exec.Command(browser, url)
-	} else {
-		switch runtime.GOOS {
-		case "windows":
-			cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
-		case "darwin":
-			cmd = exec.Command("open", url)
-		case "linux":
-			cmd = exec.Command("xdg-open", url)
-		case "freebsd", "openbsd", "netbsd":
-			cmd = exec.Command("xdg-open", url)
-		default:
-			return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
-		}
+	cmd, err := browserCommand(url, browser)
+	if err != nil {
+		return err
 	}
-
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to open browser: %w", err)
 	}
-
+	// Reap the launcher without blocking server startup on the browser lifetime.
+	go func() {
+		if err := cmd.Wait(); err != nil {
+			log.Printf("Browser launcher failed: %v", err)
+		}
+	}()
 	return nil
+}
+
+func browserCommand(rawURL, browser string) (*exec.Cmd, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
+		return nil, fmt.Errorf("browser URL must be an absolute HTTP or HTTPS URL")
+	}
+	args := []string{rawURL}
+	if browser == "" {
+		switch runtime.GOOS {
+		case "windows":
+			browser = "rundll32"
+			args = append([]string{"url.dll,FileProtocolHandler"}, args...)
+		case "darwin":
+			browser = "open"
+		case "linux", "freebsd", "openbsd", "netbsd":
+			browser = "xdg-open"
+		default:
+			return nil, fmt.Errorf("unsupported platform: %s", runtime.GOOS)
+		}
+	}
+	// #nosec G204 -- Executable is trusted local BrowserConfig, never HTTP input; the validated URL is one argument, without a shell.
+	return exec.Command(browser, args...), nil
 }
 
 // GetDefaultBrowser returns the detected default browser name

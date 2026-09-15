@@ -7,9 +7,6 @@ import (
 	"plotter-pen/pkg/geom"
 )
 
-// Helper to create float64 pointers
-func pf(v float64) *float64 { return &v }
-
 func TestExtract_Arc(t *testing.T) {
 	req := ExtractRequest{
 		DefaultSpeed: 100,
@@ -23,13 +20,13 @@ func TestExtract_Arc(t *testing.T) {
 		{
 			Type:         PrimitiveArc,
 			ID:           "arc1",
-			X1:           pf(0),
-			Y1:           pf(0),
-			X2:           pf(100),
-			Y2:           pf(0),
-			Cx:           pf(50),
-			Cy:           pf(0),
-			Radius:       pf(50),
+			X1:           new(0.0),
+			Y1:           new(0.0),
+			X2:           new(100.0),
+			Y2:           new(0.0),
+			Cx:           new(50.0),
+			Cy:           new(0.0),
+			Radius:       new(50.0),
 			ThroughPoint: &geom.Point{X: 50, Y: 50},
 		},
 	}
@@ -71,10 +68,10 @@ func TestExtract_Line(t *testing.T) {
 		{
 			Type: PrimitiveLine,
 			ID:   "line1",
-			X1:   pf(0),
-			Y1:   pf(0),
-			X2:   pf(100),
-			Y2:   pf(100),
+			X1:   new(0.0),
+			Y1:   new(0.0),
+			X2:   new(100.0),
+			Y2:   new(100.0),
 		},
 	}
 
@@ -107,9 +104,9 @@ func TestExtract_Circle(t *testing.T) {
 		{
 			Type:   PrimitiveCircle,
 			ID:     "circle1",
-			Cx:     pf(50),
-			Cy:     pf(50),
-			Radius: pf(25),
+			Cx:     new(50.0),
+			Cy:     new(50.0),
+			Radius: new(25.0),
 		},
 	}
 
@@ -183,21 +180,21 @@ func TestExtract_MixedPrimitives(t *testing.T) {
 		{
 			Type: PrimitiveLine,
 			ID:   "line1",
-			X1:   pf(0),
-			Y1:   pf(0),
-			X2:   pf(50),
-			Y2:   pf(0),
+			X1:   new(0.0),
+			Y1:   new(0.0),
+			X2:   new(50.0),
+			Y2:   new(0.0),
 		},
 		{
 			Type:         PrimitiveArc,
 			ID:           "arc1",
-			X1:           pf(50),
-			Y1:           pf(0),
-			X2:           pf(100),
-			Y2:           pf(0),
-			Cx:           pf(75),
-			Cy:           pf(0),
-			Radius:       pf(25),
+			X1:           new(50.0),
+			Y1:           new(0.0),
+			X2:           new(100.0),
+			Y2:           new(0.0),
+			Cx:           new(75.0),
+			Cy:           new(0.0),
+			Radius:       new(25.0),
 			ThroughPoint: &geom.Point{X: 75, Y: 25},
 		},
 	}

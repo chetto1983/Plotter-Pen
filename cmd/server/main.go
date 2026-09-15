@@ -78,7 +78,11 @@ func main() {
 			Enabled: true,
 			Delay:   cfg.BrowserDelay,
 		}
-		go system.OpenBrowserWithConfig(url, browserCfg)
+		go func() {
+			if err := system.OpenBrowserWithConfig(url, browserCfg); err != nil {
+				log.Printf("Failed to open browser: %v", err)
+			}
+		}()
 	}
 
 	// Start server

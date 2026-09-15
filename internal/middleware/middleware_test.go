@@ -240,7 +240,7 @@ func TestRateLimit_AllowsNormalTraffic(t *testing.T) {
 	})
 
 	// Should allow first few requests
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		w := httptest.NewRecorder()
 		req, _ := http.NewRequest("GET", "/test", nil)
 		r.ServeHTTP(w, req)
@@ -266,7 +266,7 @@ func TestRateLimit_BlocksExcessiveTraffic(t *testing.T) {
 	})
 
 	// Exhaust the burst
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		w := httptest.NewRecorder()
 		req, _ := http.NewRequest("GET", "/test", nil)
 		r.ServeHTTP(w, req)
@@ -282,7 +282,7 @@ func TestRateLimit_BlocksExcessiveTraffic(t *testing.T) {
 	}
 
 	// Check response body
-	var resp map[string]interface{}
+	var resp map[string]any
 	json.Unmarshal(w.Body.Bytes(), &resp)
 	if resp["error"] != "rate limit exceeded" {
 		t.Errorf("Expected error 'rate limit exceeded', got '%v'", resp["error"])
@@ -308,7 +308,7 @@ func TestRateLimit_DifferentKeys(t *testing.T) {
 	})
 
 	// Different keys should each get their own bucket
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		w := httptest.NewRecorder()
 		req, _ := http.NewRequest("GET", "/test", nil)
 		r.ServeHTTP(w, req)
@@ -348,7 +348,7 @@ func TestRecovery_HandlesPanic(t *testing.T) {
 		t.Errorf("Expected status 500 after panic, got %d", w.Code)
 	}
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	json.Unmarshal(w.Body.Bytes(), &resp)
 	if resp["error"] != "internal server error" {
 		t.Errorf("Expected error 'internal server error', got '%v'", resp["error"])
@@ -416,7 +416,7 @@ func TestIntToString(t *testing.T) {
 
 func TestGenerateRequestID(t *testing.T) {
 	seen := make(map[string]bool)
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		id := generateRequestID()
 		if len(id) != 12 {
 			t.Errorf("Expected ID length 12, got %d", len(id))
@@ -449,10 +449,8 @@ func TestRateLimit_Concurrent(t *testing.T) {
 	successCount := 0
 	var mu sync.Mutex
 
-	for i := 0; i < 50; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 50 {
+		wg.Go(func() {
 			w := httptest.NewRecorder()
 			req, _ := http.NewRequest("GET", "/test", nil)
 			req.RemoteAddr = "127.0.0.1:12345"
@@ -463,7 +461,7 @@ func TestRateLimit_Concurrent(t *testing.T) {
 				successCount++
 			}
 			mu.Unlock()
-		}()
+		})
 	}
 
 	wg.Wait()

@@ -125,10 +125,10 @@ func TestPathEnsureClosed(t *testing.T) {
 
 func TestPathBounds(t *testing.T) {
 	tests := []struct {
-		name                       string
-		path                       Path
-		wantMinX, wantMinY         float64
-		wantMaxX, wantMaxY         float64
+		name               string
+		path               Path
+		wantMinX, wantMinY float64
+		wantMaxX, wantMaxY float64
 	}{
 		{"square", Path{{0, 0}, {10, 0}, {10, 10}, {0, 10}}, 0, 0, 10, 10},
 		{"negative", Path{{-5, -5}, {5, 5}}, -5, -5, 5, 5},

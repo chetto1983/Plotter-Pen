@@ -25,7 +25,6 @@ type Client struct {
 	config         *ConfigManager
 	connected      atomic.Bool
 	mu             sync.RWMutex
-	subscription   *opcua.Subscription
 	posCallback    PositionCallback
 	stopCh         chan struct{}
 	stopOnce       sync.Once // protects stopCh close
@@ -261,7 +260,6 @@ func (c *Client) notifyStatus(connected bool) {
 	}
 }
 
-
 // valueOnly wraps v in a DataValue that carries only the value.
 // gopcua encodes exactly the fields flagged in EncodingMask, and S7-1500 rejects
 // writes that include status or timestamps with Bad_WriteNotSupported.
@@ -270,7 +268,7 @@ func valueOnly(v *ua.Variant) *ua.DataValue {
 }
 
 // WriteData writes data to the configured data node
-func (c *Client) WriteData(ctx context.Context, data interface{}, cfg Config) error {
+func (c *Client) WriteData(ctx context.Context, data any, cfg Config) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -357,7 +355,7 @@ func (c *Client) writeBoolNode(ctx context.Context, nodeStr string, value bool, 
 }
 
 // buildVariant creates ua.Variant based on data type
-func (c *Client) buildVariant(data interface{}, dataType string) (*ua.Variant, error) {
+func (c *Client) buildVariant(data any, dataType string) (*ua.Variant, error) {
 	switch dataType {
 	case "string":
 		s, ok := data.(string)
@@ -386,14 +384,14 @@ func (c *Client) buildVariant(data interface{}, dataType string) (*ua.Variant, e
 	}
 }
 
-func (c *Client) buildStringArrayVariant(data interface{}) (*ua.Variant, error) {
+func (c *Client) buildStringArrayVariant(data any) (*ua.Variant, error) {
 	switch v := data.(type) {
 	case []string:
 		return ua.NewVariant(v)
 	case string:
 		lines := strings.Split(v, "\n")
 		return ua.NewVariant(lines)
-	case []interface{}:
+	case []any:
 		arr := make([]string, len(v))
 		for i, item := range v {
 			arr[i] = fmt.Sprintf("%v", item)
@@ -404,7 +402,7 @@ func (c *Client) buildStringArrayVariant(data interface{}) (*ua.Variant, error) 
 	}
 }
 
-func (c *Client) buildInt32Variant(data interface{}) (*ua.Variant, error) {
+func (c *Client) buildInt32Variant(data any) (*ua.Variant, error) {
 	switch v := data.(type) {
 	case int:
 		return ua.NewVariant(int32(v))
@@ -419,7 +417,7 @@ func (c *Client) buildInt32Variant(data interface{}) (*ua.Variant, error) {
 	}
 }
 
-func (c *Client) buildFloatVariant(data interface{}) (*ua.Variant, error) {
+func (c *Client) buildFloatVariant(data any) (*ua.Variant, error) {
 	switch v := data.(type) {
 	case float64:
 		return ua.NewVariant(float32(v))
@@ -433,7 +431,7 @@ func (c *Client) buildFloatVariant(data interface{}) (*ua.Variant, error) {
 }
 
 // SendWithTrigger sends data and triggers PLC execution
-func (c *Client) SendWithTrigger(ctx context.Context, data interface{}, cfg Config) error {
+func (c *Client) SendWithTrigger(ctx context.Context, data any, cfg Config) error {
 	if err := c.WriteData(ctx, data, cfg); err != nil {
 		return fmt.Errorf("failed to write data: %w", err)
 	}
@@ -448,7 +446,7 @@ func (c *Client) SendWithTrigger(ctx context.Context, data interface{}, cfg Conf
 }
 
 // ReadNode reads a value from a node
-func (c *Client) ReadNode(ctx context.Context, nodeIDStr string) (interface{}, error) {
+func (c *Client) ReadNode(ctx context.Context, nodeIDStr string) (any, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -479,8 +477,18 @@ func (c *Client) ReadNode(ctx context.Context, nodeIDStr string) (interface{}, e
 	return resp.Results[0].Value.Value(), nil
 }
 
-// WriteString writes a single string to a node
+// WriteString writes a single string to a node.
 func (c *Client) WriteString(ctx context.Context, nodeIDStr string, value string) error {
+	return c.writeStringValue(ctx, nodeIDStr, value)
+}
+
+// WriteStringArray writes a string array to a node.
+func (c *Client) WriteStringArray(ctx context.Context, nodeIDStr string, data []string) error {
+	return c.writeStringValue(ctx, nodeIDStr, data)
+}
+
+// writeStringValue preserves the scalar/array variant type and value-only encoding.
+func (c *Client) writeStringValue(ctx context.Context, nodeIDStr string, value any) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -494,47 +502,6 @@ func (c *Client) WriteString(ctx context.Context, nodeIDStr string, value string
 	}
 
 	variant, err := ua.NewVariant(value)
-	if err != nil {
-		return fmt.Errorf("failed to create variant: %w", err)
-	}
-
-	req := &ua.WriteRequest{
-		NodesToWrite: []*ua.WriteValue{
-			{
-				NodeID:      nodeID,
-				AttributeID: ua.AttributeIDValue,
-				Value:       valueOnly(variant),
-			},
-		},
-	}
-
-	resp, err := c.client.Write(ctx, req)
-	if err != nil {
-		return fmt.Errorf("write failed: %w", err)
-	}
-
-	if resp.Results[0] != ua.StatusOK {
-		return fmt.Errorf("write status: %v", resp.Results[0])
-	}
-
-	return nil
-}
-
-// WriteStringArray writes a string array to a node
-func (c *Client) WriteStringArray(ctx context.Context, nodeIDStr string, data []string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if !c.connected.Load() || c.client == nil {
-		return fmt.Errorf("not connected to OPC UA server")
-	}
-
-	nodeID, err := ua.ParseNodeID(nodeIDStr)
-	if err != nil {
-		return fmt.Errorf("invalid node ID: %w", err)
-	}
-
-	variant, err := ua.NewVariant(data)
 	if err != nil {
 		return fmt.Errorf("failed to create variant: %w", err)
 	}
@@ -677,45 +644,18 @@ func (c *Client) ReadNodeDataType(ctx context.Context, nodeIDStr string) (*ua.No
 	return dataType, nil
 }
 
-// ReadNodeAccessLevel reads the AccessLevel attribute of a node
+// ReadNodeAccessLevel reads the AccessLevel attribute of a node.
 func (c *Client) ReadNodeAccessLevel(ctx context.Context, nodeIDStr string) (uint8, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	if !c.connected.Load() || c.client == nil {
-		return 0, fmt.Errorf("not connected to OPC UA server")
-	}
-
-	nodeID, err := ua.ParseNodeID(nodeIDStr)
-	if err != nil {
-		return 0, fmt.Errorf("invalid node ID: %w", err)
-	}
-
-	req := &ua.ReadRequest{
-		NodesToRead: []*ua.ReadValueID{
-			{NodeID: nodeID, AttributeID: ua.AttributeIDAccessLevel},
-		},
-	}
-
-	resp, err := c.client.Read(ctx, req)
-	if err != nil {
-		return 0, fmt.Errorf("read failed: %w", err)
-	}
-
-	if resp.Results[0].Status != ua.StatusOK {
-		return 0, fmt.Errorf("read status: %v", resp.Results[0].Status)
-	}
-
-	level, ok := resp.Results[0].Value.Value().(uint8)
-	if !ok {
-		return 0, fmt.Errorf("expected uint8, got %T", resp.Results[0].Value.Value())
-	}
-
-	return level, nil
+	return c.readAccessLevel(ctx, nodeIDStr, ua.AttributeIDAccessLevel)
 }
 
-// ReadNodeUserAccessLevel reads the UserAccessLevel attribute (actual user permissions)
+// ReadNodeUserAccessLevel reads the UserAccessLevel attribute of a node.
 func (c *Client) ReadNodeUserAccessLevel(ctx context.Context, nodeIDStr string) (uint8, error) {
+	return c.readAccessLevel(ctx, nodeIDStr, ua.AttributeIDUserAccessLevel)
+}
+
+// Retain checked uint8 decoding: gopcua Node.AccessLevel uses an unchecked assertion.
+func (c *Client) readAccessLevel(ctx context.Context, nodeIDStr string, attribute ua.AttributeID) (uint8, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -730,7 +670,7 @@ func (c *Client) ReadNodeUserAccessLevel(ctx context.Context, nodeIDStr string) 
 
 	req := &ua.ReadRequest{
 		NodesToRead: []*ua.ReadValueID{
-			{NodeID: nodeID, AttributeID: ua.AttributeIDUserAccessLevel},
+			{NodeID: nodeID, AttributeID: attribute},
 		},
 	}
 
@@ -772,7 +712,7 @@ func (c *Client) BrowseNode(ctx context.Context, nodeIDStr string) ([]BrowseResu
 				BrowseDirection: ua.BrowseDirectionForward,
 				ReferenceTypeID: ua.NewNumericNodeID(0, 33), // HierarchicalReferences
 				IncludeSubtypes: true,
-				NodeClassMask:   0xFF,                       // All node classes
+				NodeClassMask:   0xFF, // All node classes
 				ResultMask:      uint32(ua.BrowseResultMaskAll),
 			},
 		},

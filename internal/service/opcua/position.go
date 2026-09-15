@@ -147,7 +147,7 @@ func (c *Client) StopPositionPolling() {
 }
 
 // toFloat64 converts interface to float64
-func toFloat64(v interface{}) float64 {
+func toFloat64(v any) float64 {
 	switch val := v.(type) {
 	case float64:
 		return val

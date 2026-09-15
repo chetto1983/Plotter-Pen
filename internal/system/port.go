@@ -41,8 +41,7 @@ func IsPortAvailable(port int) bool {
 	if err != nil {
 		return false
 	}
-	ln.Close()
-	return true
+	return ln.Close() == nil
 }
 
 // IsPortInUse checks if a TCP port is currently in use

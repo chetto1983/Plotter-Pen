@@ -54,7 +54,7 @@ func TestGetState(t *testing.T) {
 		t.Errorf("Status = %d, want 200", w.Code)
 	}
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	json.Unmarshal(w.Body.Bytes(), &resp)
 
 	if _, ok := resp["data"]; !ok {
@@ -81,7 +81,7 @@ func TestSaveState(t *testing.T) {
 	req2, _ := http.NewRequest("GET", "/api/state", nil)
 	r.ServeHTTP(w2, req2)
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	json.Unmarshal(w2.Body.Bytes(), &resp)
 
 	if resp["data"] != `{"test": 123}` {
@@ -118,7 +118,7 @@ func TestListDrawings(t *testing.T) {
 		t.Errorf("Status = %d, want 200", w.Code)
 	}
 
-	var drawings []interface{}
+	var drawings []any
 	json.Unmarshal(w.Body.Bytes(), &drawings)
 
 	// Initially empty
@@ -143,7 +143,7 @@ func TestCreateDrawing(t *testing.T) {
 		t.Errorf("Status = %d, want 201, body: %s", w.Code, w.Body.String())
 	}
 
-	var drawing map[string]interface{}
+	var drawing map[string]any
 	json.Unmarshal(w.Body.Bytes(), &drawing)
 
 	if drawing["name"] != name {
@@ -170,7 +170,7 @@ func TestGetDrawing(t *testing.T) {
 		t.Fatalf("Failed to create drawing: %s", w1.Body.String())
 	}
 
-	var created map[string]interface{}
+	var created map[string]any
 	json.Unmarshal(w1.Body.Bytes(), &created)
 
 	idVal, ok := created["id"]
@@ -231,7 +231,7 @@ func TestDeleteDrawing(t *testing.T) {
 		t.Fatalf("Failed to create drawing: %s", w1.Body.String())
 	}
 
-	var created map[string]interface{}
+	var created map[string]any
 	json.Unmarshal(w1.Body.Bytes(), &created)
 	id := int(created["id"].(float64))
 
@@ -259,7 +259,7 @@ func TestListTools(t *testing.T) {
 		t.Errorf("Status = %d, want 200", w.Code)
 	}
 
-	var tools []interface{}
+	var tools []any
 	json.Unmarshal(w.Body.Bytes(), &tools)
 
 	// Should have default tools
@@ -298,7 +298,7 @@ func TestCreateTool_DefaultType(t *testing.T) {
 		t.Errorf("Status = %d, want 201", w.Code)
 	}
 
-	var tool map[string]interface{}
+	var tool map[string]any
 	json.Unmarshal(w.Body.Bytes(), &tool)
 
 	if tool["type"] != "endmill" {
@@ -323,7 +323,7 @@ func TestUpdateDrawing(t *testing.T) {
 		t.Fatalf("Failed to create drawing: %s", w1.Body.String())
 	}
 
-	var created map[string]interface{}
+	var created map[string]any
 	json.Unmarshal(w1.Body.Bytes(), &created)
 	id := int(created["id"].(float64))
 
@@ -365,7 +365,7 @@ func TestUpdateDrawing_InvalidJSON(t *testing.T) {
 	req1.Header.Set("Content-Type", "application/json")
 	r.ServeHTTP(w1, req1)
 
-	var created map[string]interface{}
+	var created map[string]any
 	json.Unmarshal(w1.Body.Bytes(), &created)
 	id := int(created["id"].(float64))
 
@@ -410,7 +410,7 @@ func TestUpdateTool(t *testing.T) {
 		t.Fatalf("Failed to create tool: %s", w1.Body.String())
 	}
 
-	var created map[string]interface{}
+	var created map[string]any
 	json.Unmarshal(w1.Body.Bytes(), &created)
 	id := int(created["id"].(float64))
 
@@ -472,7 +472,7 @@ func TestDeleteTool(t *testing.T) {
 		t.Fatalf("Failed to create tool: %s", w1.Body.String())
 	}
 
-	var created map[string]interface{}
+	var created map[string]any
 	json.Unmarshal(w1.Body.Bytes(), &created)
 	id := int(created["id"].(float64))
 

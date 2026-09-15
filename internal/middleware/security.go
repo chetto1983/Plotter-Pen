@@ -6,16 +6,16 @@ import (
 
 // SecurityConfig holds security headers configuration
 type SecurityConfig struct {
-	ContentTypeNosniff     bool
-	XFrameOptions          string // DENY, SAMEORIGIN, or ALLOW-FROM uri
-	XSSProtection          string
-	ContentSecurityPolicy  string
-	ReferrerPolicy         string
-	PermissionsPolicy      string
-	StrictTransportSec     string
-	CacheControl           string
-	XContentTypeOptions    string
-	XPermittedCrossDomain  string
+	ContentTypeNosniff    bool
+	XFrameOptions         string // DENY, SAMEORIGIN, or ALLOW-FROM uri
+	XSSProtection         string
+	ContentSecurityPolicy string
+	ReferrerPolicy        string
+	PermissionsPolicy     string
+	StrictTransportSec    string
+	CacheControl          string
+	XContentTypeOptions   string
+	XPermittedCrossDomain string
 }
 
 // DefaultSecurityConfig returns default security configuration

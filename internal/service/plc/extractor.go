@@ -32,10 +32,7 @@ func NewExtractor(req ExtractRequest) *Extractor {
 	}
 	workZ := req.WorkZ
 	// workZ can be 0 or positive for pen plotters (pen touching/pressing surface)
-	waitTime := req.WaitTime
-	if waitTime < 0 {
-		waitTime = 0
-	}
+	waitTime := max(req.WaitTime, 0)
 
 	return &Extractor{
 		defaultSpeed: defaultSpeed,
@@ -188,7 +185,7 @@ func (g *outputGenerator) primitiveToCommands(prim Primitive) []Command {
 			{X: x, Y: y},
 		}
 		cmds := make([]Command, 0, 4)
-		for i := 0; i < 4; i++ {
+		for i := range 4 {
 			cmds = append(cmds, Command{
 				Type:        "L",
 				CommandStr:  fmt.Sprintf("L X %s, Y %s, Z %s, V %s", g.format(pts[i+1].X), g.format(pts[i+1].Y), g.format(g.workZ), g.format(g.defaultSpeed)),

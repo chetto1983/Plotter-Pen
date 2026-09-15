@@ -40,27 +40,7 @@ func (h *DXFHandler) ParseDXF(c *gin.Context) {
 		return
 	}
 
-	// Validate content
-	if !importservice.ValidateContent(req.Content) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid DXF content"})
-		return
-	}
-
-	result, err := importservice.ParseDXF(req.Content)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "failed to parse DXF",
-			"details": err.Error(),
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"success":    true,
-		"primitives": result.Primitives,
-		"bounds":     result.Bounds,
-		"stats":      result.Stats,
-	})
+	parseDrawing(c, req.Content, "DXF", importservice.ValidateContent, importservice.ParseDXF)
 }
 
 // ParseSVGRequest represents SVG parse input
@@ -76,15 +56,20 @@ func (h *DXFHandler) ParseSVG(c *gin.Context) {
 		return
 	}
 
-	if !importservice.ValidateSVGContent(req.Content) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid SVG content"})
+	parseDrawing(c, req.Content, "SVG", importservice.ValidateSVGContent, importservice.ParseSVG)
+}
+
+// Keep format-specific binding errors in the handlers and share the parse response.
+func parseDrawing(c *gin.Context, content, format string, validate func(string) bool, parse func(string) (*importservice.ParseResult, error)) {
+	if !validate(content) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid " + format + " content"})
 		return
 	}
 
-	result, err := importservice.ParseSVG(req.Content)
+	result, err := parse(content)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "failed to parse SVG",
+			"error":   "failed to parse " + format,
 			"details": err.Error(),
 		})
 		return

@@ -9,10 +9,10 @@ import (
 
 // Cache for parsed DXF results
 var (
-	parseCache     = make(map[string]*cachedResult)
-	parseCacheMu   sync.RWMutex
-	maxCacheSize   = 20
-	cacheExpiry    = 30 * time.Minute
+	parseCache   = make(map[string]*cachedResult)
+	parseCacheMu sync.RWMutex
+	maxCacheSize = 20
+	cacheExpiry  = 30 * time.Minute
 )
 
 type cachedResult struct {

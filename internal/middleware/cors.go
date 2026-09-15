@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"strings"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -76,14 +78,7 @@ func CORSWithConfig(cfg CORSConfig) gin.HandlerFunc {
 
 // joinStrings joins strings with comma separator
 func joinStrings(s []string) string {
-	if len(s) == 0 {
-		return ""
-	}
-	result := s[0]
-	for i := 1; i < len(s); i++ {
-		result += ", " + s[i]
-	}
-	return result
+	return strings.Join(s, ", ")
 }
 
 // intToString converts int to string without importing strconv

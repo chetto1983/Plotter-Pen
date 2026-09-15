@@ -21,6 +21,7 @@ type TransferProgress struct {
 // TransferState represents current transfer state
 type TransferState int
 
+// Transfer states from idle through completion, failure or cancellation.
 const (
 	TransferIdle TransferState = iota
 	TransferRunning
@@ -151,10 +152,7 @@ func (t *ChunkedTransfer) runTransfer(ctx context.Context, data []string) {
 // sendChunk sends a single chunk and waits for PLC acknowledgment
 func (t *ChunkedTransfer) sendChunk(ctx context.Context, data []string, chunkIdx, totalChunks int) error {
 	start := chunkIdx * t.config.ChunkSize
-	end := start + t.config.ChunkSize
-	if end > len(data) {
-		end = len(data)
-	}
+	end := min(start+t.config.ChunkSize, len(data))
 
 	chunk := data[start:end]
 	paddedChunk := padToSize(chunk, t.config.ChunkSize)

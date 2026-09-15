@@ -46,6 +46,20 @@ func ParseSTL(content []byte) (*STLResult, error) {
 		return nil, fmt.Errorf("failed to parse STL: %w", err)
 	}
 
+	return stlResult(solid), nil
+}
+
+// ParseSTLFile parses STL from file path.
+func ParseSTLFile(filepath string) (*STLResult, error) {
+	solid, err := stl.ReadFile(filepath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read STL file: %w", err)
+	}
+	return stlResult(solid), nil
+}
+
+// stlResult converts either input format without changing vertex order or precision.
+func stlResult(solid *stl.Solid) *STLResult {
 	result := &STLResult{
 		Name:      solid.Name,
 		Triangles: make([]STLTriangle, len(solid.Triangles)),
@@ -82,51 +96,7 @@ func ParseSTL(content []byte) (*STLResult, error) {
 		Len: [3]float64{float64(measure.Len[0]), float64(measure.Len[1]), float64(measure.Len[2])},
 	}
 
-	return result, nil
-}
-
-// ParseSTLFile parses STL from file path
-func ParseSTLFile(filepath string) (*STLResult, error) {
-	solid, err := stl.ReadFile(filepath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read STL file: %w", err)
-	}
-
-	result := &STLResult{
-		Name:      solid.Name,
-		Triangles: make([]STLTriangle, len(solid.Triangles)),
-		IsASCII:   solid.IsAscii,
-		Stats: STLStats{
-			TriangleCount: len(solid.Triangles),
-		},
-	}
-
-	var totalArea float64
-	for i, tri := range solid.Triangles {
-		result.Triangles[i] = STLTriangle{
-			Normal: [3]float64{
-				float64(tri.Normal[0]),
-				float64(tri.Normal[1]),
-				float64(tri.Normal[2]),
-			},
-			Vertices: [3][3]float64{
-				{float64(tri.Vertices[0][0]), float64(tri.Vertices[0][1]), float64(tri.Vertices[0][2])},
-				{float64(tri.Vertices[1][0]), float64(tri.Vertices[1][1]), float64(tri.Vertices[1][2])},
-				{float64(tri.Vertices[2][0]), float64(tri.Vertices[2][1]), float64(tri.Vertices[2][2])},
-			},
-		}
-		totalArea += triangleArea(result.Triangles[i])
-	}
-	result.Stats.SurfaceArea = totalArea
-
-	measure := solid.Measure()
-	result.Bounds = STLMeasure{
-		Min: [3]float64{float64(measure.Min[0]), float64(measure.Min[1]), float64(measure.Min[2])},
-		Max: [3]float64{float64(measure.Max[0]), float64(measure.Max[1]), float64(measure.Max[2])},
-		Len: [3]float64{float64(measure.Len[0]), float64(measure.Len[1]), float64(measure.Len[2])},
-	}
-
-	return result, nil
+	return result
 }
 
 // STLSliceZ extracts a 2D slice at a given Z height

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 )
@@ -109,13 +111,7 @@ func TestGetLocalIPAddresses(t *testing.T) {
 	}
 
 	// Should have at least loopback
-	hasLoopback := false
-	for _, ip := range ips {
-		if ip == "127.0.0.1" {
-			hasLoopback = true
-			break
-		}
-	}
+	hasLoopback := slices.Contains(ips, "127.0.0.1")
 
 	if !hasLoopback {
 		t.Log("No 127.0.0.1 found, but this may be platform-specific")
@@ -566,7 +562,7 @@ func TestFindAvailablePort_AllOccupied(t *testing.T) {
 	listeners := make([]net.Listener, 0)
 	basePort := 59950
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		ln, err := net.Listen("tcp", fmt.Sprintf(":%d", basePort+i))
 		if err == nil {
 			listeners = append(listeners, ln)
@@ -600,13 +596,15 @@ func TestOpenBrowserWithConfig_WithDelay(t *testing.T) {
 	cfg := BrowserConfig{
 		Enabled: true,
 		Delay:   10 * time.Millisecond,
-		Browser: "", // Don't actually open a browser
+		Browser: filepath.Join(t.TempDir(), "missing-browser"),
 	}
 
-	// This will try to open a browser on Windows
-	// Just verify it doesn't panic with delay
+	// Exercise the delay and launch error without opening a real browser.
 	start := time.Now()
-	OpenBrowserWithConfig("http://localhost:9999", cfg)
+	err := OpenBrowserWithConfig("http://localhost:9999", cfg)
+	if err == nil {
+		t.Fatal("expected an error for the missing browser")
+	}
 	elapsed := time.Since(start)
 
 	if elapsed < cfg.Delay {
@@ -621,7 +619,7 @@ func TestFindMultipleAvailablePorts_NotEnough(t *testing.T) {
 	listeners := make([]net.Listener, 0)
 	basePort := 59900
 
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		ln, err := net.Listen("tcp", fmt.Sprintf(":%d", basePort+i))
 		if err == nil {
 			listeners = append(listeners, ln)

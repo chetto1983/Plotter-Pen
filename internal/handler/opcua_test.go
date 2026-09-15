@@ -11,8 +11,8 @@ import (
 	"plotter-pen/internal/persistence"
 	"plotter-pen/internal/service/opcua"
 
-	"github.com/glebarez/sqlite"
 	"github.com/gin-gonic/gin"
+	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -136,7 +136,7 @@ func TestOpcuaHandler_Status(t *testing.T) {
 		t.Errorf("Expected status %d, got %d", http.StatusOK, w.Code)
 	}
 
-	var status map[string]interface{}
+	var status map[string]any
 	if err := json.Unmarshal(w.Body.Bytes(), &status); err != nil {
 		t.Fatalf("Failed to parse response: %v", err)
 	}
@@ -266,7 +266,7 @@ func TestOpcuaHandler_Disconnect_NotConnected(t *testing.T) {
 		t.Errorf("Expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
 	}
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("Failed to parse response: %v", err)
 	}
@@ -293,7 +293,7 @@ func TestOpcuaHandler_Connect_Success_Mock(t *testing.T) {
 		t.Errorf("Expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
 	}
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("Failed to parse response: %v", err)
 	}
@@ -318,7 +318,7 @@ func TestOpcuaHandler_Disconnect_Mock(t *testing.T) {
 		t.Errorf("Expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
 	}
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("Failed to parse response: %v", err)
 	}

@@ -3,6 +3,9 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"log"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -38,7 +41,7 @@ var upgrader = websocket.Upgrader{
 		// Allow configured origins via ALLOWED_ORIGINS env var
 		allowed := os.Getenv("ALLOWED_ORIGINS")
 		if allowed != "" {
-			for _, a := range strings.Split(allowed, ",") {
+			for a := range strings.SplitSeq(allowed, ",") {
 				if strings.TrimSpace(a) == origin {
 					return true
 				}
@@ -137,7 +140,7 @@ func (wc *WSClient) writePump() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer func() {
 		ticker.Stop()
-		wc.conn.Close()
+		wc.closeConnection()
 	}()
 
 	for {
@@ -150,31 +153,50 @@ func (wc *WSClient) writePump() {
 				select {
 				case msg, ok := <-wc.send:
 					if !ok {
-						_ = wc.conn.WriteMessage(websocket.CloseMessage, []byte{})
+						wc.writeClose()
 						return
 					}
-					wc.conn.SetWriteDeadline(time.Now().Add(1 * time.Second))
-					_ = wc.conn.WriteJSON(msg)
+					if err := wc.conn.SetWriteDeadline(time.Now().Add(time.Second)); err != nil {
+						return
+					}
+					if err := wc.conn.WriteJSON(msg); err != nil {
+						return
+					}
 				default:
-					wc.conn.WriteMessage(websocket.CloseMessage, []byte{})
+					wc.writeClose()
 					return
 				}
 			}
 		case msg, ok := <-wc.send:
-			wc.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if !ok {
-				wc.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				wc.writeClose()
+				return
+			}
+			if err := wc.conn.SetWriteDeadline(time.Now().Add(10 * time.Second)); err != nil {
 				return
 			}
 			if err := wc.conn.WriteJSON(msg); err != nil {
 				return
 			}
 		case <-ticker.C:
-			wc.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-			if err := wc.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+			if err := wc.conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(10*time.Second)); err != nil {
 				return
 			}
 		}
+	}
+}
+
+func (wc *WSClient) closeConnection() {
+	// Both pumps close the connection to wake the other on I/O failure.
+	if err := wc.conn.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+		log.Printf("WebSocket close failed: %v", err)
+	}
+}
+
+func (wc *WSClient) writeClose() {
+	// A control-frame deadline also bounds shutdown before any data has been written.
+	if err := wc.conn.WriteControl(websocket.CloseMessage, nil, time.Now().Add(time.Second)); err != nil {
+		wc.closeConnection()
 	}
 }
 
@@ -188,13 +210,14 @@ func (wc *WSClient) readPump(h *OpcuaHandler) {
 			close(wc.done)
 			close(wc.send)
 		})
-		wc.conn.Close()
+		wc.closeConnection()
 	}()
 
-	wc.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	if err := wc.conn.SetReadDeadline(time.Now().Add(60 * time.Second)); err != nil {
+		return
+	}
 	wc.conn.SetPongHandler(func(string) error {
-		wc.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-		return nil
+		return wc.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 	})
 
 	// Send initial status
@@ -203,9 +226,6 @@ func (wc *WSClient) readPump(h *OpcuaHandler) {
 	for {
 		var msg InboundMessage
 		if err := wc.conn.ReadJSON(&msg); err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				// Log error if needed
-			}
 			return
 		}
 
@@ -235,7 +255,10 @@ func (wc *WSClient) handleMessage(h *OpcuaHandler, msg InboundMessage) {
 func (wc *WSClient) handleSubscribe(h *OpcuaHandler, data json.RawMessage) {
 	var req opcua.SubscribeRequest
 	if data != nil {
-		json.Unmarshal(data, &req)
+		if err := json.Unmarshal(data, &req); err != nil {
+			wc.safeSend(opcua.ErrorMessage("invalid subscribe request"))
+			return
+		}
 	}
 	if req.Interval == 0 {
 		req.Interval = 100 // Default 100ms
