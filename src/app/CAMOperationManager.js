@@ -252,7 +252,8 @@ export class CAMOperationManager {
   }
 
   /**
-   * Show what the generation reported above the commands: nothing, an error or the profile warnings
+   * Show what the generation reported above the commands: nothing, an error, or the warnings of the
+   * profile (contours the tool cannot reach) or of the drilling (hole-sized contours that are not round)
    * @param {{error?: string, warnings?: string[]}} report
    */
   showReport({ error, warnings } = {}) {
@@ -267,7 +268,9 @@ export class CAMOperationManager {
       box.classList.add('warning');
       const details = document.createElement('details');
       const summary = document.createElement('summary');
-      summary.textContent = `${warnings.length} contorni non raggiungibili con Ø${this.operation.toolDiameter} mm: non vengono tagliati`;
+      summary.textContent = this.operation.operation === 'drill'
+        ? `${warnings.length} contorni non tondi non forati: usare Profilo`
+        : `${warnings.length} contorni non raggiungibili con Ø${this.operation.toolDiameter} mm: non vengono tagliati`;
       const list = document.createElement('ul');
       for (const w of warnings) {
         const item = document.createElement('li');
