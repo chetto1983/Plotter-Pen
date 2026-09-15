@@ -213,6 +213,8 @@ The user noticed the piece thickness was missing. They chose work Z on the bed a
   - Summaries: "Ø2 · Esterno · Discorde · 1,6 mm passante", "Ø1 · fori 0,4–1,2 · 1,6 mm prof. 1".
   - At 1280×720 the command list goes from 136 to 212 px for the profile (two rows) and from 133 to 265 px for the drilling (three rows).
   - Checked in headless Chrome: toggle, summaries, heights, reload, reopening, no page errors.
+- **Scale buttons of the edit toolbar** (2026-09-15): "Riduci" showed the plus magnifier of "Ingrandisci"; it now has the minus one, and both have a title.
+- **Output PLC header below 1400 px** (2026-09-15): the right panel is 25vw wide, so between 1280 and 1399 px it is narrower than the header. At 1280 px the title (95 px at least) and the five 36 px buttons needed 299 px in 269, and "Scarica" went 5 px past the screen with the panel scrolling sideways. In that range the title icon is hidden and the buttons are 34 px with 2 px gaps (`src/styles/layout.css`). Checked in headless Chrome from 1280 to 1920 px: no sideways scroll, all buttons inside, at least 34 px, title shown.
 
 ## Environment
 
@@ -250,8 +252,6 @@ Hooks: pre-commit runs gofmt, vet, golangci-lint on changed lines and the 600-li
 - **Arc through point:** `arcAuxPoint` in `internal/service/plc/extractor.go` returns the arc centre when an arc has neither `throughPoint` nor `sweep`.
 - **Import cache:** `SmartImportCached` keys the cache on the content only and returns the cached object without copying it.
 - **Unused configuration:** `ServerConfig.OPCUAConfig` (`OPCUA_CONFIG`) is not used by anything.
-- **Output PLC header at 1280 px:** the five header buttons end at x 1285, past the screen, so the right panel scrolls sideways (324 px of content in 319) and "Scarica" is cut. Measured the same before and after the collapsible parameters.
-
 ## Working rules to keep
 
 - Never send to the real PLC, and never run real-PLC/integration tests, without explicit authorisation. Use the simulator.
