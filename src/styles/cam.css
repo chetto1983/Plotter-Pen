@@ -12,6 +12,68 @@
     background: rgba(15, 21, 33, 0.7);
 }
 
+/* the tabs, and the toggle that collapses the parameters */
+.cam-op-bar {
+    display: flex;
+    gap: 4px;
+}
+
+.cam-op-bar .cam-op-tabs {
+    flex: 1;
+    min-width: 0;
+}
+
+.cam-op-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 40px;
+    padding: 0;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--muted);
+    cursor: pointer;
+}
+
+.cam-op-toggle:hover {
+    background: var(--bg-hover);
+    color: var(--fg);
+}
+
+.cam-op-toggle svg {
+    width: 16px;
+    height: 16px;
+    transition: transform var(--transition-fast, 150ms);
+}
+
+/* pointing right while collapsed, like the panel collapse button */
+.cam-op-toggle[aria-expanded="false"] svg {
+    transform: rotate(-90deg);
+}
+
+.cam-op-summary {
+    display: block;
+    width: 100%;
+    min-height: 32px;
+    padding: 6px 8px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--fg);
+    font-size: 11px;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+}
+
+.cam-op-summary:hover {
+    border-color: var(--accent);
+}
+
 .cam-op-tabs {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -54,7 +116,9 @@
 }
 
 .cam-op-params[hidden],
-.cam-op-field[hidden] {
+.cam-op-field[hidden],
+.cam-op-toggle[hidden],
+.cam-op-summary[hidden] {
     display: none;
 }
 

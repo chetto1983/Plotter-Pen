@@ -32,11 +32,18 @@ export class SidebarRight {
         <div class="cad-panel-body-collapsible" id="plcPanelBody">
           <!-- Operation whose program the output shows (CAMOperationManager) -->
           <div class="cam-op" id="camOperation">
-            <div class="cam-op-tabs" role="radiogroup" aria-label="Operazione">
-              <button type="button" class="cam-op-tab" role="radio" data-operation="pen">Penna</button>
-              <button type="button" class="cam-op-tab" role="radio" data-operation="profile">Profilo</button>
-              <button type="button" class="cam-op-tab" role="radio" data-operation="drill">Foratura</button>
+            <div class="cam-op-bar">
+              <div class="cam-op-tabs" role="radiogroup" aria-label="Operazione">
+                <button type="button" class="cam-op-tab" role="radio" data-operation="pen">Penna</button>
+                <button type="button" class="cam-op-tab" role="radio" data-operation="profile">Profilo</button>
+                <button type="button" class="cam-op-tab" role="radio" data-operation="drill">Foratura</button>
+              </div>
+              <button type="button" class="cam-op-toggle" id="camParamsToggle" aria-expanded="true" title="Mostra/Nascondi parametri" hidden>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
             </div>
+            <!-- While the parameters are collapsed: one line with their values, touched to open them -->
+            <button type="button" class="cam-op-summary" id="camParamsSummary" title="Mostra parametri" hidden></button>
             <!-- The piece on the bed; Passante and Profondità belong to the active operation -->
             <div class="cam-op-params" data-operation="profile drill" hidden>
               <label class="cam-op-field">Spessore

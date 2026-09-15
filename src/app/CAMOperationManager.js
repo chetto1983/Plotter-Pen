@@ -38,10 +38,14 @@ const NUMBER_INPUTS = {
 
 const LABELS = { pen: 'Penna', profile: 'Profilo', drill: 'Foratura' };
 
+// Remembered in the browser, like plcPanelCollapsed
+const PARAMS_COLLAPSED_KEY = 'camParamsCollapsed';
+
 export class CAMOperationManager {
   constructor(app) {
     this.app = app;
     this.operation = { ...OPERATION_DEFAULTS };
+    this.paramsCollapsed = localStorage.getItem(PARAMS_COLLAPSED_KEY) === 'true';
     this._saveTimeout = null;
   }
 
@@ -68,9 +72,21 @@ export class CAMOperationManager {
     document.getElementById('camSide')?.addEventListener('change', (e) => this.change({ side: e.target.value }));
     document.getElementById('camDirection')?.addEventListener('change', (e) => this.change({ direction: e.target.value }));
     document.getElementById('camTipThrough')?.addEventListener('change', (e) => this.change({ tipThrough: e.target.checked }));
+    document.getElementById('camParamsToggle')?.addEventListener('click', () => this.setParamsCollapsed(!this.paramsCollapsed));
+    document.getElementById('camParamsSummary')?.addEventListener('click', () => this.setParamsCollapsed(false));
 
     this.render();
     await this.load();
+  }
+
+  /**
+   * Hide or show the parameters of the profile and of the drilling. A summary line stays in their
+   * place, and the command list below gets the height back
+   */
+  setParamsCollapsed(collapsed) {
+    this.paramsCollapsed = collapsed;
+    localStorage.setItem(PARAMS_COLLAPSED_KEY, collapsed);
+    this.render();
   }
 
   async load() {
@@ -124,8 +140,10 @@ export class CAMOperationManager {
       tab.classList.toggle('active', active);
       tab.setAttribute('aria-checked', String(active));
     });
+    // The pen has no parameters to collapse
+    const collapsed = op.operation !== 'pen' && this.paramsCollapsed;
     document.querySelectorAll('.cam-op-params').forEach((params) => {
-      params.hidden = !params.dataset.operation.split(' ').includes(op.operation);
+      params.hidden = collapsed || !params.dataset.operation.split(' ').includes(op.operation);
     });
     for (const [key, id] of Object.entries(NUMBER_INPUTS)) {
       const input = document.getElementById(id);
@@ -147,10 +165,38 @@ export class CAMOperationManager {
     if (direction) direction.value = op.direction;
     const tipThrough = document.getElementById('camTipThrough');
     if (tipThrough) tipThrough.checked = op.tipThrough;
+
+    const toggle = document.getElementById('camParamsToggle');
+    if (toggle) {
+      toggle.hidden = op.operation === 'pen';
+      toggle.setAttribute('aria-expanded', String(!collapsed));
+    }
+    const summary = document.getElementById('camParamsSummary');
+    if (summary) {
+      summary.hidden = !collapsed;
+      summary.textContent = collapsed ? this.summary() : '';
+    }
   }
 
   get label() {
     return LABELS[this.operation.operation] || LABELS.pen;
+  }
+
+  /**
+   * The parameters of the active operation on one line, as the collapsed panel shows them, e.g.
+   * "Ø2 · Esterno · Discorde · 1,6 mm passante"
+   */
+  summary() {
+    const op = this.operation;
+    const mm = (value) => String(value).replace('.', ',');
+    const cut = this.cutKeys();
+    const piece = `${mm(op.thickness)} mm ${op[cut.through] ? 'passante' : `prof. ${mm(op[cut.depth])}`}`;
+    if (op.operation === 'drill') {
+      return `Ø${mm(op.drillDiameter)} · fori ${mm(op.minHoleDiameter)}–${mm(op.maxHoleDiameter)} · ${piece}`;
+    }
+    // the side and the direction as their selects name them, set above
+    const chosen = (id) => document.getElementById(id)?.selectedOptions[0]?.textContent ?? '';
+    return `Ø${mm(op.toolDiameter)} · ${chosen('camSide')} · ${chosen('camDirection')} · ${piece}`;
   }
 
   /**
