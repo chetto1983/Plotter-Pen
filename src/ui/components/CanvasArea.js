@@ -59,9 +59,9 @@ export class CanvasArea {
         <div class="cad-float-divider"></div>
         <!-- Scale -->
         <div class="cad-float-group">
-          <button type="button" class="cad-float-btn" id="ftScaleDown"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg></button>
+          <button type="button" class="cad-float-btn" id="ftScaleDown" title="Riduci"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg></button>
           <div class="cad-float-input-wrap"><input type="number" id="ftScaleFactor" class="cad-float-input" value="1.5" min="0.1" max="10" step="0.1"><span class="cad-float-unit">x</span></div>
-          <button type="button" class="cad-float-btn" id="ftScaleUp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg></button>
+          <button type="button" class="cad-float-btn" id="ftScaleUp" title="Ingrandisci"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg></button>
         </div>
         <div class="cad-float-divider"></div>
         <!-- Move -->
