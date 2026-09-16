@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"plotter-pen/internal/i18n"
 	"plotter-pen/internal/service/cam"
 )
 
@@ -37,8 +36,7 @@ func (h *CAMHandler) Profile(c *gin.Context) {
 
 	result, err := cam.Profile(req)
 	if open, ok := errors.AsType[*cam.OpenContoursError](err); ok {
-		_ = c.Error(err)
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": i18n.Italian(err), "open": open.Open})
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": explain(c, err), "open": open.Open})
 		return
 	}
 	if err != nil {

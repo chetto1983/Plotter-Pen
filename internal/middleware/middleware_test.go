@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -281,11 +280,9 @@ func TestRateLimit_BlocksExcessiveTraffic(t *testing.T) {
 		t.Errorf("Expected 429 Too Many Requests, got %d", w.Code)
 	}
 
-	// Check response body
-	var resp map[string]any
-	json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp["error"] != "rate limit exceeded" {
-		t.Errorf("Expected error 'rate limit exceeded', got '%v'", resp["error"])
+	// The page shows the error, in Italian
+	if body := w.Body.String(); body != `{"error":"troppe richieste, riprova fra poco"}` {
+		t.Errorf("Expected the Italian error, got %s", body)
 	}
 }
 
@@ -348,10 +345,8 @@ func TestRecovery_HandlesPanic(t *testing.T) {
 		t.Errorf("Expected status 500 after panic, got %d", w.Code)
 	}
 
-	var resp map[string]any
-	json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp["error"] != "internal server error" {
-		t.Errorf("Expected error 'internal server error', got '%v'", resp["error"])
+	if body := w.Body.String(); body != `{"error":"errore interno del server"}` {
+		t.Errorf("Expected the Italian error, got %s", body)
 	}
 }
 

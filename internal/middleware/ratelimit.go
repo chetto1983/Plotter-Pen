@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"plotter-pen/internal/i18n"
 )
 
 // RateLimitConfig holds rate limiting configuration
@@ -142,10 +143,9 @@ func RateLimitWithConfig(cfg RateLimitConfig) gin.HandlerFunc {
 
 		if !limiter.allow(key) {
 			c.Header("Retry-After", "1")
-			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-				"error":   "rate limit exceeded",
-				"message": "Too many requests, please try again later",
-			})
+			err := i18n.Errorf("too many requests, try again shortly")
+			_ = c.Error(err)
+			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": i18n.Italian(err)})
 			return
 		}
 

@@ -8,6 +8,7 @@ import (
 	"runtime/debug"
 
 	"github.com/gin-gonic/gin"
+	"plotter-pen/internal/i18n"
 )
 
 // RecoveryConfig holds recovery middleware configuration
@@ -39,11 +40,10 @@ func RecoveryWithConfig(cfg RecoveryConfig) gin.HandlerFunc {
 				// Log the panic
 				logPanic(cfg, c, err)
 
-				// Return error response
+				// Return error response: the panic itself is in the log above
 				if cfg.JSONError {
 					c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
-						"error":   "internal server error",
-						"message": "An unexpected error occurred",
+						"error": i18n.Notef("internal server error").Italian(),
 					})
 				} else {
 					c.AbortWithStatus(http.StatusInternalServerError)

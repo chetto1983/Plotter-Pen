@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -209,4 +210,32 @@ func TestCAMJob_RefusesABadStepAndKeepsTheJob(t *testing.T) {
 		t.Errorf("a body without steps: status %d, want 400", w.Code)
 	}
 	sameSteps(t, loadJob(t, r), saved)
+}
+
+// A job the database cannot keep is said in Italian, with the reason of the database behind it.
+func TestCAMJob_DatabaseFailureIsItalian(t *testing.T) {
+	db, err := persistence.InitDB(filepath.Join(t.TempDir(), "job.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
+	if err := db.Migrator().DropTable(&persistence.JobStep{}); err != nil {
+		t.Fatal(err)
+	}
+	r := gin.New()
+	NewPersistenceHandler(db).RegisterRoutes(r.Group("/api"))
+
+	for what, w := range map[string]*httptest.ResponseRecorder{
+		"salvataggio del lavoro non riuscito: ": saveJob(t, r, []persistence.JobStep{step("pen", "")}),
+		"lettura del lavoro non riuscita: ":     jobRequest(r, http.MethodGet, ""),
+	} {
+		body := w.Body.String()
+		if w.Code != http.StatusInternalServerError || !strings.HasPrefix(body, `{"error":"`+what) || !strings.Contains(body, "no such table") {
+			t.Errorf("status %d, body %s; want 500 and %q", w.Code, body, what)
+		}
+	}
 }

@@ -54,7 +54,7 @@ func (h *PersistenceHandler) SaveCAMJob(c *gin.Context) {
 		return nil
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondError(c, http.StatusInternalServerError, i18n.Errorf("failed to save the job: %w", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
