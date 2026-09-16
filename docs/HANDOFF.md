@@ -36,6 +36,7 @@ One piece at a time: a short design approved first, then TDD, then a check on th
 | — | OPC UA nodes addressed by the names of the PLC variables (`internal/service/opcua/nodes.go`) | Done 2026-09-16 |
 | — | Variables read from the PLC, chosen from a combo box, with a connection test | Done 2026-09-16 |
 | — | Tool library opened from the CAM panel, its diameter into the operation | Done 2026-09-16 |
+| — | Work area: the selection, or what the visible layers hold | Done 2026-09-16 |
 
 Measured on `dxf/L28YO-tree-of-life-wall-spiritual-art.dxf`:
 
@@ -422,6 +423,41 @@ were typed by hand every time. This wires what was there.
   and `GET /api/cam/operation` comes back with it; from the drilling, `Nuovo` saves a 2 mm
   drill that `GET /api/tools` then holds, `Usa` writes it into `Punta Ø` only (the profile
   keeps its 6), a rename is saved, `Elimina` takes it away, and there are no page errors.
+
+### The work area of the CAM (2026-09-16)
+
+Every operation sent the whole drawing, `app.primitives`, so a layer put aside was cut like the
+rest and there was no way to work on one piece of a drawing. The user chose the selection as the
+work area, falling back on the visible layers, for all three operations.
+
+- **The rule** (`src/app/camArea.js`, 38 lines): a selection is the work area; with nothing
+  selected the area is everything on a visible layer. What is hidden is never in the area, even
+  when it is selected: `SelectionManager.handleSelection` skips hidden layers but `boxSelect`
+  does not, so a window selection can hold geometry nobody can see, and a machine must not run
+  over it. Only the six types the extraction understands enter the area, as before.
+- **What the panel says** (`CAMOperationManager.showArea`): a line under the tabs reading
+  `Area: tutto il disegno — 512 primitive`, `Area: livelli visibili — 340 di 512 primitive`, or
+  `Area: selezione — 12 di 512 primitive` in the accent colour. It is the only way to tell why a
+  program came out shorter than the drawing.
+- **When it regenerates** (`PLCOutputManager`): on the `selectionChanged` event that
+  `SelectionManager` already dispatched, and on `layersChanged` — but only when the set of
+  visible layers really changed, because that event also fires for a rename or a colour.
+- **When the area is empty** (every layer hidden, or a selection of annotations only): the
+  output is emptied, so no stale program can be simulated, copied or sent, and the panel reads
+  `Nessun comando: niente da lavorare nell'area`.
+- **Fixed on the way:** `.cam-op-params[hidden]` lost its `display: none` in an earlier edit of
+  this session, so the profile and drilling parameters were showing while the pen was the active
+  operation. `display: grid` beats the browser's own `[hidden]` rule, hence the explicit one.
+- **Checked:** `npm run lint`, `npm run build`, and headless Chrome on a local server with a
+  temporary database and the simulator as the active PLC: six circles on two layers, the whole
+  drawing at rest, a selection of two that shortens the program to those two, a third one
+  selected on a hidden layer that stays out, the visible layers alone once the selection is
+  gone, a rename that regenerates nothing (`extractPLC` call counter unchanged), every layer
+  hidden emptying the output, and everything back when the layers are shown again. No page
+  errors.
+- **Open, not touched:** `SelectionManager.boxSelect` selects primitives on hidden layers, so a
+  window selection can delete or move what is not on the screen. The CAM no longer cuts them,
+  but the selection itself still reaches them.
 
 ## Environment
 
