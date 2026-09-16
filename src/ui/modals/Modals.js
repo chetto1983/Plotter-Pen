@@ -66,7 +66,9 @@ export class Modals {
             <div class="tool-input-group">
               <label for="toolType">Tipo</label>
               <select id="toolType" class="tool-input tool-select">
+                <option value="pen">Penna</option>
                 <option value="endmill">Fresa Piana (Endmill)</option>
+                <option value="drill">Punta (Drill)</option>
                 <option value="ballnose">Fresa Sferica (Ballnose)</option>
                 <option value="vbit">Bulino (V-Bit)</option>
               </select>
@@ -78,6 +80,7 @@ export class Modals {
           </div>
         </div>
         <div class="tool-actions">
+          <button type="button" class="btn-tool-new" id="btnNewTool">Nuovo</button>
           <button type="button" class="btn-tool-delete" id="btnDeleteTool" disabled>Elimina</button>
           <button type="button" class="btn-tool-save" id="btnSaveTool">Salva Modifiche</button>
         </div>

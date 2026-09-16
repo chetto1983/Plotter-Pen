@@ -59,7 +59,7 @@ export class SidebarRight {
             </div>
             <div class="cam-op-params" data-operation="profile" hidden>
               <label class="cam-op-field">Fresa Ø
-                <span class="cam-op-input"><input type="number" id="camToolDiameter" min="0.1" max="50" step="0.1"><span>mm</span></span>
+                <span class="cam-op-input"><input type="number" id="camToolDiameter" min="0.1" max="50" step="0.1"><span>mm</span><button type="button" class="cam-op-tools" data-diameter="toolDiameter" title="Libreria utensili">&#9881;</button></span>
               </label>
               <label class="cam-op-field">Lato
                 <select id="camSide"><option value="outside">Esterno</option><option value="inside">Interno</option></select>
@@ -70,7 +70,7 @@ export class SidebarRight {
             </div>
             <div class="cam-op-params" data-operation="drill" hidden>
               <label class="cam-op-field">Punta Ø
-                <span class="cam-op-input"><input type="number" id="camDrillDiameter" min="0.1" max="50" step="0.1"><span>mm</span></span>
+                <span class="cam-op-input"><input type="number" id="camDrillDiameter" min="0.1" max="50" step="0.1"><span>mm</span><button type="button" class="cam-op-tools" data-diameter="drillDiameter" title="Libreria utensili">&#9881;</button></span>
               </label>
               <label class="cam-op-field" title="0 = un solo affondo">Scarico
                 <span class="cam-op-input"><input type="number" id="camPeckDepth" min="0" max="50" step="0.1"><span>mm</span></span>

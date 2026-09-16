@@ -137,6 +137,24 @@
     gap: 4px;
 }
 
+/* Opens the tool library for the diameter beside it */
+.cam-op-tools {
+    flex-shrink: 0;
+    min-height: 32px;
+    padding: 0 5px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-light);
+    border-radius: 6px;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.cam-op-tools:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
 .cam-op-input span {
     flex-shrink: 0;
     font-size: 10px;
