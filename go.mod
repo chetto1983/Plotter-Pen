@@ -12,6 +12,7 @@ require (
 	github.com/hschendel/stl v1.0.4
 	github.com/whutwxn/dxf-go v0.0.0-20231201081457-eba5461d9fbb
 	go.uber.org/goleak v1.3.0
+	golang.org/x/text v0.42.0
 	gorm.io/gorm v1.31.2
 )
 
@@ -52,7 +53,6 @@ require (
 	golang.org/x/exp v0.0.0-20260908205506-85c1c2202aba // indirect
 	golang.org/x/net v0.59.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
-	golang.org/x/text v0.42.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 	modernc.org/libc v1.75.7 // indirect
 	modernc.org/mathutil v1.7.1 // indirect

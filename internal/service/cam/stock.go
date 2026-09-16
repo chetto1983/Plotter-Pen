@@ -1,5 +1,7 @@
 package cam
 
+import "plotter-pen/internal/i18n"
+
 // Stock is the piece on the machine bed. Work Z is the bed, as the paper is for the pen, so the top
 // of the piece, where cuts and holes start, is at work Z + Thickness.
 type Stock struct {
@@ -25,9 +27,9 @@ func (s Stock) cutDepth() float64 {
 }
 
 // validate reports to check what is wrong with the piece, and a safe Z that does not clear it.
-func (s Stock) validate(check func(ok bool, problem string), workZ, safeZ float64) {
-	check(s.Thickness > 0, "thickness must be positive")
-	check(s.Overcut >= 0, "overcut must not be negative")
-	check(s.Through || (s.Depth > 0 && s.Depth <= s.Thickness), "a cut that does not go through needs a depth above 0 and at most the thickness")
-	check(safeZ > s.top(workZ), "safe Z must be above the top of the piece, work Z + thickness")
+func (s Stock) validate(check func(ok bool, problem error), workZ, safeZ float64) {
+	check(s.Thickness > 0, i18n.Errorf("thickness must be positive"))
+	check(s.Overcut >= 0, i18n.Errorf("overcut must not be negative"))
+	check(s.Through || (s.Depth > 0 && s.Depth <= s.Thickness), i18n.Errorf("a cut that does not go through needs a depth above 0 and at most the thickness"))
+	check(safeZ > s.top(workZ), i18n.Errorf("safe Z must be above the top of the piece, work Z + thickness"))
 }

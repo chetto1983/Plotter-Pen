@@ -1,12 +1,11 @@
 package handler
 
 import (
-	"errors"
-	"fmt"
 	"net/http"
 	"slices"
 
 	"github.com/gin-gonic/gin"
+	"plotter-pen/internal/i18n"
 	"plotter-pen/internal/persistence"
 	"plotter-pen/internal/service/cam"
 )
@@ -22,7 +21,7 @@ var toolKinds = []string{"pen", "endmill", "ballnose", "vbit", "drill"}
 func (h *PersistenceHandler) GetCAMOperation(c *gin.Context) {
 	var op persistence.CAMOperation
 	if err := h.db.First(&op).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondError(c, http.StatusInternalServerError, i18n.Errorf("failed to load the operation: %w", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": op})
@@ -33,15 +32,15 @@ func (h *PersistenceHandler) GetCAMOperation(c *gin.Context) {
 func (h *PersistenceHandler) SaveCAMOperation(c *gin.Context) {
 	var req persistence.CAMOperation
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		badRequest(c, err)
 		return
 	}
 	if err := checkCAMParams(&req.CAMParams); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondError(c, http.StatusBadRequest, err)
 		return
 	}
 	if err := h.db.Model(&persistence.CAMOperation{}).Where("id = 1").Updates(camParamsColumns(req.CAMParams)).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondError(c, http.StatusInternalServerError, i18n.Errorf("failed to save the operation: %w", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
@@ -52,10 +51,10 @@ func (h *PersistenceHandler) SaveCAMOperation(c *gin.Context) {
 // default rather than being refused, which is why the parameters are taken by pointer.
 func checkCAMParams(p *persistence.CAMParams) error {
 	if !slices.Contains(camOperations, p.Operation) {
-		return fmt.Errorf("operation must be one of %q", camOperations)
+		return i18n.Errorf("operation must be one of %q", camOperations)
 	}
 	if p.Side != cam.SideOutside && p.Side != cam.SideInside && p.Side != cam.SideOn {
-		return fmt.Errorf("side must be %q, %q or %q", cam.SideOutside, cam.SideInside, cam.SideOn)
+		return i18n.Errorf("side must be %q, %q or %q", cam.SideOutside, cam.SideInside, cam.SideOn)
 	}
 	if p.ToolType == "" {
 		p.ToolType = "endmill"
@@ -65,17 +64,17 @@ func checkCAMParams(p *persistence.CAMParams) error {
 	}
 	for name, kind := range map[string]string{"toolType": p.ToolType, "drillType": p.DrillType} {
 		if !slices.Contains(toolKinds, kind) {
-			return fmt.Errorf("%s must be one of %q", name, toolKinds)
+			return i18n.Errorf("%s must be one of %q", name, toolKinds)
 		}
 	}
 	if p.ToolID < 0 || p.DrillID < 0 {
-		return errors.New("toolId and drillId must not be negative, 0 is no tool")
+		return i18n.Errorf("toolId and drillId must not be negative, 0 is no tool")
 	}
 	if p.Direction != cam.CuttingConventional && p.Direction != cam.CuttingClimb {
-		return fmt.Errorf("direction must be %q or %q", cam.CuttingConventional, cam.CuttingClimb)
+		return i18n.Errorf("direction must be %q or %q", cam.CuttingConventional, cam.CuttingClimb)
 	}
 	if p.CloseGap < 0 || p.CloseGap > cam.MaxCloseGap {
-		return fmt.Errorf("closeGap must be between 0 and %g mm", float64(cam.MaxCloseGap))
+		return i18n.Errorf("closeGap must be between 0 and %g mm", float64(cam.MaxCloseGap))
 	}
 	return nil
 }

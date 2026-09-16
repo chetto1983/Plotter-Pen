@@ -1,6 +1,6 @@
 package cam
 
-import "fmt"
+import "plotter-pen/internal/i18n"
 
 // OpenContour is a chain of the drawing that is not closed, so no profile cuts it: where it starts
 // and ends, the primitives it is drawn with, so the drawing can mark it, and a closing gap that
@@ -20,7 +20,12 @@ type OpenContoursError struct {
 	Open []OpenContour
 }
 
-func (e *OpenContoursError) Error() string {
+func (e *OpenContoursError) Error() string { return e.message().Error() }
+
+// Unwrap gives the message, which says the error in Italian too.
+func (e *OpenContoursError) Unwrap() error { return e.message() }
+
+func (e *OpenContoursError) message() error {
 	widest, closable := 0.0, 0
 	for _, c := range e.Open {
 		if c.Gap > 0 {
@@ -28,26 +33,27 @@ func (e *OpenContoursError) Error() string {
 			widest = max(widest, c.Gap)
 		}
 	}
-	msg := fmt.Sprintf("nothing to cut: the drawing has no closed contour, only %d open contour(s)", len(e.Open))
 	if closable == 0 {
-		return fmt.Sprintf("%s; no closing gap up to %g mm closes them", msg, MaxCloseGap)
+		return i18n.Errorf("nothing to cut: the drawing has no closed contour, only %d open contour(s); no closing gap up to %g mm closes them",
+			len(e.Open), float64(MaxCloseGap))
 	}
-	return fmt.Sprintf("%s; a closing gap of %.3f mm closes %d of them", msg, widest, closable)
+	return i18n.Errorf("nothing to cut: the drawing has no closed contour, only %d open contour(s); a closing gap of %.3f mm closes %d of them",
+		len(e.Open), widest, closable)
 }
 
 // openContours describes the open chains of the drawing, with a warning for each.
-func openContours(c Contours) ([]OpenContour, []string) {
+func openContours(c Contours) ([]OpenContour, []i18n.Note) {
 	var open []OpenContour
-	var warnings []string
+	var warnings []i18n.Note
 	for i, path := range c.Open {
 		start, end := path[0], path[len(path)-1]
 		contour := OpenContour{PrimitiveIDs: c.OpenIDs[i],
 			StartX: start.X, StartY: start.Y, EndX: end.X, EndY: end.Y, Gap: c.OpenGaps[i]}
-		fix := "it is an open line"
+		fix := i18n.Errorf("it is an open line")
 		if contour.Gap > 0 {
-			fix = fmt.Sprintf("a closing gap of %.3f mm closes it", contour.Gap)
+			fix = i18n.Errorf("a closing gap of %.3f mm closes it", contour.Gap)
 		}
-		warnings = append(warnings, fmt.Sprintf("the open contour from (%.3f, %.3f) to (%.3f, %.3f) is not cut: %s",
+		warnings = append(warnings, i18n.Notef("the open contour from (%.3f, %.3f) to (%.3f, %.3f) is not cut: %v",
 			start.X, start.Y, end.X, end.Y, fix))
 		open = append(open, contour)
 	}

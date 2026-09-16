@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"plotter-pen/internal/i18n"
 	"plotter-pen/internal/service/cam"
 )
 
@@ -30,17 +31,18 @@ func (h *CAMHandler) RegisterRoutes(rg *gin.RouterGroup) {
 func (h *CAMHandler) Profile(c *gin.Context) {
 	var req cam.ProfileRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		badRequest(c, err)
 		return
 	}
 
 	result, err := cam.Profile(req)
 	if open, ok := errors.AsType[*cam.OpenContoursError](err); ok {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error(), "open": open.Open})
+		_ = c.Error(err)
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": i18n.Italian(err), "open": open.Open})
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondError(c, http.StatusBadRequest, err)
 		return
 	}
 	c.JSON(http.StatusOK, result)
@@ -52,13 +54,13 @@ func (h *CAMHandler) Profile(c *gin.Context) {
 func (h *CAMHandler) Drill(c *gin.Context) {
 	var req cam.DrillRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		badRequest(c, err)
 		return
 	}
 
 	result, err := cam.Drill(req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondError(c, http.StatusBadRequest, err)
 		return
 	}
 	c.JSON(http.StatusOK, result)

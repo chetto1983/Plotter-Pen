@@ -2,9 +2,9 @@
 package cam
 
 import (
-	"fmt"
 	"math"
 
+	"plotter-pen/internal/i18n"
 	"plotter-pen/internal/service/plc"
 	"plotter-pen/pkg/geom"
 )
@@ -168,13 +168,13 @@ func toPath(p plc.Primitive) (path geom.Path, closed bool, err error) {
 	switch p.Type {
 	case plc.PrimitiveLine:
 		if p.X1 == nil || p.Y1 == nil || p.X2 == nil || p.Y2 == nil {
-			return nil, false, fmt.Errorf("line %q: missing end points", p.ID)
+			return nil, false, i18n.Errorf("line %q: missing end points", p.ID)
 		}
 		return geom.Path{{X: *p.X1, Y: *p.Y1}, {X: *p.X2, Y: *p.Y2}}, false, nil
 
 	case plc.PrimitiveArc:
 		if p.X1 == nil || p.Y1 == nil || p.X2 == nil || p.Y2 == nil || p.Cx == nil || p.Cy == nil || p.Sweep == nil {
-			return nil, false, fmt.Errorf("arc %q: needs start, end, centre and sweep", p.ID)
+			return nil, false, i18n.Errorf("arc %q: needs start, end, centre and sweep", p.ID)
 		}
 		start, centre := geom.Point{X: *p.X1, Y: *p.Y1}, geom.Point{X: *p.Cx, Y: *p.Cy}
 		path = arcPath(centre, start.Distance(centre), math.Atan2(start.Y-centre.Y, start.X-centre.X), *p.Sweep)
@@ -184,14 +184,14 @@ func toPath(p plc.Primitive) (path geom.Path, closed bool, err error) {
 	case plc.PrimitiveCircle:
 		cx, cy, r := p.GetCircleParams()
 		if p.Radius == nil || (p.Center == nil && (p.Cx == nil || p.Cy == nil)) {
-			return nil, true, fmt.Errorf("circle %q: needs centre and radius", p.ID)
+			return nil, true, i18n.Errorf("circle %q: needs centre and radius", p.ID)
 		}
 		path = arcPath(geom.Point{X: cx, Y: cy}, r, 0, 2*math.Pi)
 		return path[:len(path)-1], true, nil
 
 	case plc.PrimitiveRectangle:
 		if p.X == nil || p.Y == nil || p.Width == nil || p.Height == nil {
-			return nil, true, fmt.Errorf("rectangle %q: needs corner, width and height", p.ID)
+			return nil, true, i18n.Errorf("rectangle %q: needs corner, width and height", p.ID)
 		}
 		x, y, w, h := *p.X, *p.Y, *p.Width, *p.Height
 		return geom.Path{{X: x, Y: y}, {X: x + w, Y: y}, {X: x + w, Y: y + h}, {X: x, Y: y + h}}, true, nil
@@ -204,7 +204,7 @@ func toPath(p plc.Primitive) (path geom.Path, closed bool, err error) {
 		}
 		return path, closed, nil
 	}
-	return nil, false, fmt.Errorf("primitive %q: unsupported type %q", p.ID, p.Type)
+	return nil, false, i18n.Errorf("primitive %q: unsupported type %q", p.ID, p.Type)
 }
 
 // arcPath samples an arc from angle a0 by sweep with chords at most arcChordTolerance inside it.

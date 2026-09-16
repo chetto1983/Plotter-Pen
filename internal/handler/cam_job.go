@@ -1,11 +1,11 @@
 package handler
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"plotter-pen/internal/i18n"
 	"plotter-pen/internal/persistence"
 )
 
@@ -14,7 +14,7 @@ import (
 func (h *PersistenceHandler) GetCAMJob(c *gin.Context) {
 	steps := []persistence.JobStep{}
 	if err := h.db.Order("position").Find(&steps).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondError(c, http.StatusInternalServerError, i18n.Errorf("failed to load the job: %w", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": gin.H{"steps": steps}})
@@ -29,12 +29,12 @@ func (h *PersistenceHandler) SaveCAMJob(c *gin.Context) {
 		Steps []persistence.JobStep `json:"steps" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		badRequest(c, err)
 		return
 	}
 	for i := range req.Steps {
 		if err := checkCAMParams(&req.Steps[i].CAMParams); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("step %d: %v", i+1, err)})
+			respondError(c, http.StatusBadRequest, i18n.Errorf("step %d: %w", i+1, err))
 			return
 		}
 	}

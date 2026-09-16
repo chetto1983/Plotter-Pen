@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"plotter-pen/internal/i18n"
 	"plotter-pen/internal/service/plc"
 	"plotter-pen/pkg/geom"
 )
@@ -112,7 +113,9 @@ func TestDrill_WarnsAboutClosedContoursThatAreNotRound(t *testing.T) {
 		t.Fatalf("warnings %v, want %d", res.Warnings, len(wantWarned))
 	}
 	for _, want := range wantWarned {
-		if !slices.ContainsFunc(res.Warnings, func(w string) bool { return strings.Contains(w, want) && strings.Contains(w, "not round") }) {
+		if !slices.ContainsFunc(res.Warnings, func(w i18n.Note) bool {
+			return strings.Contains(w.String(), want) && strings.Contains(w.String(), "not round")
+		}) {
 			t.Fatalf("no not-round warning for %s in %v", want, res.Warnings)
 		}
 	}

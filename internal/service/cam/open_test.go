@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"plotter-pen/internal/i18n"
 	"plotter-pen/internal/service/plc"
 	"plotter-pen/pkg/geom"
 )
@@ -172,7 +173,7 @@ func TestProfile_CutsTheClosedAndReportsTheOpen(t *testing.T) {
 				!sameFloat(line.StartX, 30) || !sameFloat(line.EndX, 40) {
 				t.Fatalf("open contour %+v, want the stray line from 30 to 40 with no gap", line)
 			}
-			if !slices.ContainsFunc(res.Warnings, func(w string) bool { return strings.Contains(w, "open line") }) {
+			if !slices.ContainsFunc(res.Warnings, func(w i18n.Note) bool { return strings.Contains(w.String(), "open line") }) {
 				t.Fatalf("warnings %q do not name the open line", res.Warnings)
 			}
 		})

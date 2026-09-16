@@ -1,12 +1,11 @@
 package cam
 
 import (
-	"errors"
-	"fmt"
 	"math"
 	"slices"
 	"strings"
 
+	"plotter-pen/internal/i18n"
 	"plotter-pen/internal/service/plc"
 	"plotter-pen/pkg/clipper"
 	"plotter-pen/pkg/geom"
@@ -63,7 +62,7 @@ type ProfileRequest struct {
 // drawing can mark.
 type ProfileResponse struct {
 	plc.ExtractResponse
-	Warnings  []string          `json:"warnings,omitempty"`
+	Warnings  []i18n.Note       `json:"warnings,omitempty"`
 	Unreached []UnreachedDetail `json:"unreached,omitempty"`
 	Open      []OpenContour     `json:"open,omitempty"`
 }
@@ -105,11 +104,11 @@ func Profile(req ProfileRequest) (ProfileResponse, error) {
 		if len(open) > 0 {
 			return ProfileResponse{}, &OpenContoursError{Open: open}
 		}
-		return ProfileResponse{}, errors.New("nothing to cut: the drawing has no closed contours")
+		return ProfileResponse{}, i18n.Errorf("nothing to cut: the drawing has no closed contours")
 	}
 
 	var rings []geom.Path
-	var warnings []string
+	var warnings []i18n.Note
 	var unreached []UnreachedDetail
 	if req.Side == SideOn {
 		// The centre of the tool follows the drawing: there is no offset to take, so no contour
@@ -124,7 +123,7 @@ func Profile(req ProfileRequest) (ProfileResponse, error) {
 		material := clipper.MergeContours(contours.Closed)
 		offset := clipper.OffsetContours(material, delta)
 		if len(offset) == 0 {
-			return ProfileResponse{}, fmt.Errorf("a %.3f mm tool does not fit inside any contour", req.ToolDiameter)
+			return ProfileResponse{}, i18n.Errorf("a %.3f mm tool does not fit inside any contour", req.ToolDiameter)
 		}
 		rings = orderRings(offset, req.Side, req.Direction)
 		warnings, unreached = unreachedDetails(contours, material, offset, req.Side, req.ToolDiameter)
@@ -187,8 +186,8 @@ func (req ProfileRequest) enter(g *plcgen.Generator, closed geom.Path, zFrom, zT
 	}
 	if laps := 2 * leg / length; laps > maxRampLaps {
 		minX, minY, maxX, maxY := closed.Bounds()
-		return fmt.Errorf("a %g° ramp would go round the ring from (%.3f, %.3f) to (%.3f, %.3f) %.0f times to go down %.3f mm, "+
-			"at most %d: use a steeper ramp angle or a smaller step-down", req.RampAngle, minX, minY, maxX, maxY, laps, surface-zTo, maxRampLaps)
+		return i18n.Errorf("a %g° ramp would go round the ring from (%.3f, %.3f) to (%.3f, %.3f) %.0f times to go down %.3f mm, at most %d: use a steeper ramp angle or a smaller step-down",
+			req.RampAngle, minX, minY, maxX, maxY, laps, surface-zTo, maxRampLaps)
 	}
 	ring := closed[:len(closed)-1]
 	if zFrom > surface {
@@ -261,11 +260,11 @@ func widestTool(contour geom.Path, limit float64) float64 {
 //
 // The contours here are the merged material, so the primitives of a detail are those of every
 // drawn contour that lies within it: where two drawn contours overlap into one, both are named.
-func unreachedDetails(contours Contours, material, rings []geom.Path, side string, diameter float64) ([]string, []UnreachedDetail) {
+func unreachedDetails(contours Contours, material, rings []geom.Path, side string, diameter float64) ([]i18n.Note, []UnreachedDetail) {
 	nested := clipper.Inside(material, material)
 	ringInside := clipper.Inside(rings, material)
 	drawnWithin := clipper.Within(contours.Closed, material)
-	var warnings []string
+	var warnings []i18n.Note
 	var details []UnreachedDetail
 	for c, contour := range material {
 		depth := 0
@@ -292,11 +291,11 @@ func unreachedDetails(contours Contours, material, rings []geom.Path, side strin
 					detail.PrimitiveIDs = append(detail.PrimitiveIDs, contours.ClosedIDs[d]...)
 				}
 			}
-			fits := fmt.Sprintf("the widest tool that fits it is %.3f mm", detail.Width)
+			fits := i18n.Errorf("the widest tool that fits it is %.3f mm", detail.Width)
 			if detail.Width == 0 {
-				fits = "no tool fits it"
+				fits = i18n.Errorf("no tool fits it")
 			}
-			warnings = append(warnings, fmt.Sprintf("a %.3f mm tool cannot reach the contour from (%.3f, %.3f) to (%.3f, %.3f): it is not cut, %s",
+			warnings = append(warnings, i18n.Notef("a %.3f mm tool cannot reach the contour from (%.3f, %.3f) to (%.3f, %.3f): it is not cut, %v",
 				diameter, minX, minY, maxX, maxY, fits))
 			details = append(details, detail)
 		}
@@ -305,28 +304,25 @@ func unreachedDetails(contours Contours, material, rings []geom.Path, side strin
 }
 
 func (req ProfileRequest) validate() error {
-	var problems []string
-	check := func(ok bool, problem string) {
+	var problems []error
+	check := func(ok bool, problem error) {
 		if !ok {
 			problems = append(problems, problem)
 		}
 	}
-	check(req.ToolDiameter > 0, "tool diameter must be positive")
+	check(req.ToolDiameter > 0, i18n.Errorf("tool diameter must be positive"))
 	check(req.Side == SideOutside || req.Side == SideInside || req.Side == SideOn,
-		fmt.Sprintf("side must be %q, %q or %q", SideOutside, SideInside, SideOn))
+		i18n.Errorf("side must be %q, %q or %q", SideOutside, SideInside, SideOn))
 	check(req.Direction == "" || req.Direction == CuttingConventional || req.Direction == CuttingClimb,
-		fmt.Sprintf("direction must be %q or %q", CuttingConventional, CuttingClimb))
+		i18n.Errorf("direction must be %q or %q", CuttingConventional, CuttingClimb))
 	req.Stock.validate(check, req.WorkZ, req.SafeZ)
-	check(req.StepDown >= plcResolution, "step-down must be at least 0.001 mm")
-	check(req.StepDown <= 0 || passCount(req.cutDepth(), req.StepDown) <= maxPasses, "depth and step-down must make at most 1000 passes")
-	check(req.DefaultSpeed > 0 && req.RapidSpeed > 0 && req.PlungeSpeed > 0, "cutting, rapid and plunge speeds must be positive")
-	check(req.RampAngle > 0 && req.RampAngle <= 90, "ramp angle must be above 0° and at most 90°")
-	check(req.WaitTime >= 0, "wait time must not be negative")
-	check(req.CloseGap >= 0 && req.CloseGap <= MaxCloseGap, fmt.Sprintf("closing gap must be between 0 and %g mm", float64(MaxCloseGap)))
-	if len(problems) > 0 {
-		return errors.New(strings.Join(problems, "; "))
-	}
-	return nil
+	check(req.StepDown >= plcResolution, i18n.Errorf("step-down must be at least 0.001 mm"))
+	check(req.StepDown <= 0 || passCount(req.cutDepth(), req.StepDown) <= maxPasses, i18n.Errorf("depth and step-down must make at most 1000 passes"))
+	check(req.DefaultSpeed > 0 && req.RapidSpeed > 0 && req.PlungeSpeed > 0, i18n.Errorf("cutting, rapid and plunge speeds must be positive"))
+	check(req.RampAngle > 0 && req.RampAngle <= 90, i18n.Errorf("ramp angle must be above 0° and at most 90°"))
+	check(req.WaitTime >= 0, i18n.Errorf("wait time must not be negative"))
+	check(req.CloseGap >= 0 && req.CloseGap <= MaxCloseGap, i18n.Errorf("closing gap must be between 0 and %g mm", float64(MaxCloseGap)))
+	return i18n.Join(problems)
 }
 
 // levels returns the Z of every pass down from the top of the piece, the last one exactly at the

@@ -126,8 +126,23 @@ func TestCAMDrill_NoHoleInTheRangeIsBadRequest(t *testing.T) {
 		"drillDiameter": 1, "minHoleDiameter": 0.4, "maxHoleDiameter": 1.2
 	}`)
 
-	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "nothing to drill") {
-		t.Fatalf("status %d, body %s; want 400 saying there is nothing to drill", w.Code, w.Body.String())
+	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "niente da forare") {
+		t.Fatalf("status %d, body %s; want 400 saying in Italian there is nothing to drill", w.Code, w.Body.String())
+	}
+}
+
+// Settings the profile refuses come back in Italian, every problem named, with the decimal comma.
+func TestCAMProfile_RefusalIsInItalian(t *testing.T) {
+	w := postCAMProfile(t, `{
+		"primitives": [{"type": "rectangle", "x": 0, "y": 0, "width": 20, "height": 20}],
+		"defaultSpeed": 50, "rapidSpeed": 1000, "safeZ": 5, "workZ": 0,
+		"thickness": 1, "through": true,
+		"toolDiameter": 0, "side": "outside", "stepDown": 1, "plungeSpeed": 5, "rampAngle": 3, "closeGap": 2
+	}`)
+
+	want := `{"error":"il diametro della fresa deve essere maggiore di zero; l'apertura da chiudere deve essere fra 0 e 1 mm"}`
+	if w.Code != http.StatusBadRequest || w.Body.String() != want {
+		t.Fatalf("status %d, body %s; want 400 with %s", w.Code, w.Body.String(), want)
 	}
 }
 
@@ -152,7 +167,7 @@ func TestCAMProfile_OnlyOpenContoursAreUnprocessable(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 		t.Fatalf("body %s: %v", w.Body.String(), err)
 	}
-	if w.Code != http.StatusUnprocessableEntity || !strings.Contains(body.Error, "open contour") ||
+	if w.Code != http.StatusUnprocessableEntity || !strings.Contains(body.Error, "contorni aperti (1)") || !strings.Contains(body.Error, "0,040 mm") ||
 		len(body.Open) != 1 || math.Abs(body.Open[0].Gap-0.04) > 1e-9 {
 		t.Fatalf("status %d, body %s; want 422 with the contour and its gap", w.Code, w.Body.String())
 	}

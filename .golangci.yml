@@ -49,6 +49,10 @@ linters:
           - gosec
           - errcheck
           - dupl # table-driven test cases are intentionally repetitive
+      - path: internal/i18n/it_.*\.go
+        # the message catalogs are Italian text, which the English spell check cannot read
+        linters:
+          - misspell
       - path: _test\.go
         # SA5011 (possible nil deref) fires after `if x == nil { t.Fatal(...) }`
         # because staticcheck does not model testing.T.Fatal as no-return.

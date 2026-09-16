@@ -201,8 +201,8 @@ func TestCAMJob_RefusesABadStepAndKeepsTheJob(t *testing.T) {
 			t.Errorf("%s: status %d, want 400", name, w.Code)
 			continue
 		}
-		if !strings.Contains(w.Body.String(), "step 2") {
-			t.Errorf("%s: body %s does not name step 2", name, w.Body.String())
+		if !strings.Contains(w.Body.String(), `"passo 2: `) {
+			t.Errorf("%s: body %s does not name step 2 in Italian", name, w.Body.String())
 		}
 	}
 	if w := jobRequest(r, http.MethodPost, `{}`); w.Code != http.StatusBadRequest {

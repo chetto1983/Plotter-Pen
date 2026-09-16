@@ -1,10 +1,10 @@
 package cam
 
 import (
-	"fmt"
 	"math"
 	"slices"
 
+	"plotter-pen/internal/i18n"
 	"plotter-pen/internal/service/plc"
 	"plotter-pen/pkg/geom"
 )
@@ -22,7 +22,7 @@ const roundTolerance = 0.02
 //
 // A closed contour that is not round is not drilled. When the shorter side of its bounding box is in
 // the range it looks like a hole, such as a slot, so a warning names it.
-func (req DrillRequest) holes() (holes []plc.Primitive, warnings []string, err error) {
+func (req DrillRequest) holes() (holes []plc.Primitive, warnings []i18n.Note, err error) {
 	add := func(id string, centre geom.Point, diameter float64) {
 		if !req.inRange(diameter) || slices.ContainsFunc(holes, func(h plc.Primitive) bool { return h.GetStartPoint().Distance(centre) <= sameCentre }) {
 			return
@@ -51,7 +51,7 @@ func (req DrillRequest) holes() (holes []plc.Primitive, warnings []string, err e
 		}
 		minX, minY, maxX, maxY := loop.Bounds()
 		if req.inRange(math.Min(maxX-minX, maxY-minY)) {
-			warnings = append(warnings, fmt.Sprintf("the closed contour from (%.3f, %.3f) to (%.3f, %.3f) is not round: it is not drilled, cut it with a profile",
+			warnings = append(warnings, i18n.Notef("the closed contour from (%.3f, %.3f) to (%.3f, %.3f) is not round: it is not drilled, cut it with a profile",
 				minX, minY, maxX, maxY))
 		}
 	}

@@ -591,7 +591,7 @@ func TestProfile_WarnsAboutContoursTheToolCannotReach(t *testing.T) {
 				t.Fatalf("warnings %q, want %d", res.Warnings, len(tt.want))
 			}
 			for i, w := range tt.want {
-				if !strings.Contains(res.Warnings[i], w) {
+				if !strings.Contains(res.Warnings[i].String(), w) {
 					t.Errorf("warning %q does not name the contour %s", res.Warnings[i], w)
 				}
 			}
@@ -628,7 +628,7 @@ func TestProfile_MeasuresTheDetailsTheToolCannotReach(t *testing.T) {
 		t.Errorf("bounds (%.3f, %.3f) to (%.3f, %.3f)", got.MinX, got.MinY, got.MaxX, got.MaxY)
 	}
 	// the measurement is rounded down, so the tool it names really does fit
-	if !strings.Contains(res.Warnings[0], fmt.Sprintf("%.3f mm", got.Width)) || !strings.Contains(res.Warnings[0], "6.000 mm") {
+	if !strings.Contains(res.Warnings[0].String(), fmt.Sprintf("%.3f mm", got.Width)) || !strings.Contains(res.Warnings[0].String(), "6.000 mm") {
 		t.Errorf("warning %q says neither how wide the detail is nor the tool it was cut with", res.Warnings[0])
 	}
 }
@@ -653,7 +653,7 @@ func TestProfile_SaysWhenNoToolFitsTheDetail(t *testing.T) {
 	if len(res.Unreached) != 1 || res.Unreached[0].Width != 0 {
 		t.Fatalf("details out of reach %+v, want one no tool fits", res.Unreached)
 	}
-	if !strings.Contains(res.Warnings[0], "no tool") {
+	if !strings.Contains(res.Warnings[0].String(), "no tool") {
 		t.Errorf("warning %q does not say that no tool fits", res.Warnings[0])
 	}
 }

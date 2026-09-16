@@ -1,12 +1,10 @@
 package cam
 
 import (
-	"errors"
-	"fmt"
 	"math"
 	"slices"
-	"strings"
 
+	"plotter-pen/internal/i18n"
 	"plotter-pen/internal/service/plc"
 	"plotter-pen/pkg/geom"
 	plcgen "plotter-pen/pkg/plc"
@@ -35,7 +33,7 @@ type DrillRequest struct {
 // closed contour of hole size that is not round and so is not drilled.
 type DrillResponse struct {
 	plc.ExtractResponse
-	Warnings []string `json:"warnings,omitempty"`
+	Warnings []i18n.Note `json:"warnings,omitempty"`
 }
 
 const (
@@ -69,16 +67,16 @@ func Drill(req DrillRequest) (DrillResponse, error) {
 		return DrillResponse{}, err
 	}
 	if len(holes) == 0 {
-		problem := fmt.Sprintf("nothing to drill: the drawing has no round hole from %.3f to %.3f mm across",
-			req.MinHoleDiameter, req.MaxHoleDiameter)
+		lo, hi := req.MinHoleDiameter, req.MaxHoleDiameter
 		switch len(warnings) {
 		case 0:
+			return DrillResponse{}, i18n.Errorf("nothing to drill: the drawing has no round hole from %.3f to %.3f mm across", lo, hi)
 		case 1:
-			problem += "; 1 closed contour of that width is not round: cut it with a profile"
+			return DrillResponse{}, i18n.Errorf("nothing to drill: the drawing has no round hole from %.3f to %.3f mm across; 1 closed contour of that width is not round: cut it with a profile", lo, hi)
 		default:
-			problem += fmt.Sprintf("; %d closed contours of that width are not round: cut them with a profile", len(warnings))
+			return DrillResponse{}, i18n.Errorf("nothing to drill: the drawing has no round hole from %.3f to %.3f mm across; %d closed contours of that width are not round: cut them with a profile",
+				lo, hi, len(warnings))
 		}
-		return DrillResponse{}, errors.New(problem)
 	}
 
 	var lines, ids []string
@@ -102,28 +100,25 @@ func Drill(req DrillRequest) (DrillResponse, error) {
 }
 
 func (req DrillRequest) validate() error {
-	var problems []string
-	check := func(ok bool, problem string) {
+	var problems []error
+	check := func(ok bool, problem error) {
 		if !ok {
 			problems = append(problems, problem)
 		}
 	}
-	check(req.DrillDiameter > 0, "drill diameter must be positive")
+	check(req.DrillDiameter > 0, i18n.Errorf("drill diameter must be positive"))
 	check(req.MinHoleDiameter > 0 && req.MinHoleDiameter <= req.MaxHoleDiameter,
-		"the smallest hole diameter must be positive and not above the largest")
+		i18n.Errorf("the smallest hole diameter must be positive and not above the largest"))
 	req.Stock.validate(check, req.WorkZ, req.SafeZ)
-	check(req.PeckDepth == 0 || req.PeckDepth >= plcResolution, "peck depth must be 0 or at least 0.001 mm")
+	check(req.PeckDepth == 0 || req.PeckDepth >= plcResolution, i18n.Errorf("peck depth must be 0 or at least 0.001 mm"))
 	check(req.PeckDepth <= 0 || passCount(req.drilledLength(), req.PeckDepth) <= maxPasses,
-		"depth and peck depth must make at most 1000 pecks")
-	check(req.TipAngle >= 0 && req.TipAngle <= 180, "tip angle must be above 0° and at most 180°, or 0 for 118°")
-	check(req.RapidSpeed > 0 && req.PlungeSpeed > 0, "rapid and plunge speeds must be positive")
+		i18n.Errorf("depth and peck depth must make at most 1000 pecks"))
+	check(req.TipAngle >= 0 && req.TipAngle <= 180, i18n.Errorf("tip angle must be above 0° and at most 180°, or 0 for 118°"))
+	check(req.RapidSpeed > 0 && req.PlungeSpeed > 0, i18n.Errorf("rapid and plunge speeds must be positive"))
 	check(req.RetractClearance > 0 && req.top(req.WorkZ)+req.RetractClearance <= req.SafeZ,
-		"the retract plane must be above the top of the piece and not above safe Z")
-	check(req.WaitTime >= 0, "wait time must not be negative")
-	if len(problems) > 0 {
-		return errors.New(strings.Join(problems, "; "))
-	}
-	return nil
+		i18n.Errorf("the retract plane must be above the top of the piece and not above safe Z"))
+	check(req.WaitTime >= 0, i18n.Errorf("wait time must not be negative"))
+	return i18n.Join(problems)
 }
 
 // shortenRoute improves the route that leaves X 0 Y 0, visits the holes in order and comes back,
