@@ -37,6 +37,7 @@ One piece at a time: a short design approved first, then TDD, then a check on th
 | — | Variables read from the PLC, chosen from a combo box, with a connection test | Done 2026-09-16 |
 | — | Tool library opened from the CAM panel, its diameter into the operation | Done 2026-09-16 |
 | — | Work area: the selection, or what the visible layers hold | Done 2026-09-16 |
+| — | Profile cut on the line, beside outside and inside | Done 2026-09-16 |
 
 Measured on `dxf/L28YO-tree-of-life-wall-spiritual-art.dxf`:
 
@@ -464,6 +465,36 @@ work area, falling back on the visible layers, for all three operations.
   Checked in headless Chrome: a window over everything with one layer hidden selects three of
   six and the program follows without another gesture, Escape hands the area back to the visible
   layers, and with the layer shown again the same window takes all six. No page errors.
+
+### The profile on the line (2026-09-16)
+
+`Lato` offered Esterno and Interno, so the tool always stood beside the contour by a radius. The
+third choice, `Sulla linea` (`SideOn`, `"on"`), runs the centre of the tool along the drawing: it
+is what an engraving or a traced path needs, where the drawing already is the toolpath.
+
+- **What it does** (`internal/service/cam/profile.go`): with no offset to take, the contours as
+  chained are the rings — `clipper.OffsetContours` is not called at all, and neither is
+  `MergeContours`: every contour is cut whole, even where another crosses it, which is what a
+  line to follow means. Nothing can be lost in an offset, so there are no unreachable-contour
+  warnings, and the error "a tool does not fit inside any contour" cannot arise. Ordering,
+  ramps, levels and the nearest-ring travel are the same as the other two sides, and the
+  direction turns the rings as it does when cutting outside, since there is no wall on either
+  side to keep on the left.
+- **The tool diameter is still required** and still positive: it is the tool on the machine, it
+  just no longer moves the path.
+- **Where it is chosen:** a third option in `camSide` (`src/ui/components/SidebarRight.js`). The
+  collapsed summary names it because it reads the option text. `POST /api/cam/operation` accepts
+  the new value (`internal/handler/cam_operation.go`), so the choice is saved like the others.
+- **Checked:** TDD on the Go side — the cut of a 20 mm square with a Ø4 tool measures 20 mm wide
+  on the line against 24 outside and 16 inside; a 2 mm square, which a Ø6 tool cannot enter at
+  all, is cut on the line with no warnings while the inside cut is refused; the direction table
+  gained the two new rows, with the hole ring staying on the drawn radius. Then `go vet`,
+  `go test ./...`, `go test -tags=s7sim -run S7Sim`, `make quality` (exit 0), and headless
+  Chrome on a local server with the simulator: the panel offers the third side, the generated
+  program measures 22, 20 and 18 mm for the three sides of the same drawing, the choice is
+  saved, the collapsed summary reads `Ø2 · Sulla linea · Discorde · 1,6 mm passante`, and there
+  are no page errors.
+- **Not measured:** the race detector, since nothing concurrent changed.
 
 ## Environment
 
