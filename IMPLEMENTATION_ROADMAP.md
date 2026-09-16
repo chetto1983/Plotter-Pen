@@ -115,6 +115,23 @@ tools/s7sim/                  # S7-1500 OPC UA simulator (Python, not part of Co
 
 ---
 
+## Next milestone: the whole job
+
+One program at a time is what the app makes today. The milestone is a job: an ordered list of
+steps, each with its tool and the layer it works on, sent one at a time with the tool change in
+between. The machine has no status node — `statusNode`, `alarmNode` and `progressNode` are empty —
+so nothing there says when a cut is over: the operator confirms every step. The plan, with the
+decisions behind it, is in `docs/HANDOFF.md` ("Next milestone: the whole job").
+
+| # | Piece | Where |
+| --- | --- | --- |
+| 1 | Speeds in the tool | `internal/persistence/db.go`, `src/app/ToolLibraryManager.js` |
+| 2 | The job: model and API | `internal/persistence/db.go`, `internal/handler/cam_job.go` |
+| 3 | The job in the panel | `src/app/CAMOperationManager.js`, `src/ui/components/SidebarRight.js` |
+| 4 | Sending in sequence | `src/app/PLCOutputManager.js`, `internal/handler/opcua.go` |
+| 5 | Open contours, closed with help | `internal/service/cam/chain.go` |
+| 6 | Errors in Italian | `src/app/` where the messages are shown |
+
 ## Critical Values
 
 ### Arc Fitting (`fit.go`, `dxf.go`)

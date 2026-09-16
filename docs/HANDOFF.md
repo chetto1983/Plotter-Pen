@@ -1,21 +1,56 @@
-# Handoff — Monday 2026-09-14
+# Handoff — Wednesday 2026-09-16
 
-State at the end of Friday 2026-09-11. Goal of the current work: milling and drilling on the same S7-1500 machine, fitted with a small router for wood and PCB, with the CAM inside Plotter-Pen (no external CAD/CAM).
+Goal of the current work: milling and drilling on the same S7-1500 machine, fitted with a small
+router for wood and PCB, with the CAM inside Plotter-Pen (no external CAD/CAM).
 
 ## Where things stand
 
-- `main` is 4 commits ahead of `origin/main` (`00dff19`); nothing is pushed.
-- The Compose container on port 41880 runs these commits and is healthy. A smoke run of 35 read-only checks matched the previous build, apart from `/health` and data changed from the UI.
-- Pieces 0–3 of the CAM plan are done. Piece 4 is approved and not started.
+- `origin/main` is `53bc28d`; nothing is waiting to be pushed.
+- The Compose container on port 41880 runs it and is healthy. The database in the
+  `plotter-pen_plotter-data` volume was backed up before every rebuild of the day, the last as
+  `plotter.db.bak-2026-09-16-before-narrow-details`.
+- The CAM list of "cosa manca" is finished: DXF bulges, round holes, the tool library, the work
+  area, the profile on the line, the piece and the tool in the 3D view, the camera that follows
+  the tool, and the details out of reach. Each piece has its own section below.
+- The OPC UA side addresses the PLC by the names of its variables, lists them from the machine and
+  tests a connection before it is saved; a program of 25 lines was transferred to the machine at
+  192.168.0.1 by name alone.
 
-| Commit | What |
-|--------|------|
-| `6e129a9` | `feat(cam)`: `cam.Chain` joins drawing primitives into closed contours |
-| `cb0dfc2` | `feat(clipper)`: `clipper.OffsetContours` offsets the whole contour set as one material |
-| `521b9ce` | `fix(ws)`: WebSocket disconnects no longer leave goroutines running |
-| `f90de08` | `docs`: code metrics refreshed |
+## Next milestone: the whole job
 
-Earlier on Friday: `00dff19` (chord-midpoint check in `plc.FitArcsAndLines`, dead code removed, lefthook and golangci-lint set up like D:\Aura) and `97371a5` (docs corrected against the code).
+Today the app makes **one** program at a time. To cut a real piece the operator has to generate
+the drilling, send it, change the tool by hand, then come back, switch the panel to the profile,
+generate and send again. The milestone is the step from "I get a toolpath" to "I make a piece".
+
+**The constraint that shapes it:** the machine tells the app when it has *received* a program, not
+when it has *finished cutting* it. `statusNode`, `alarmNode` and `progressNode` are empty in the
+saved configuration, and the interface of the PLC carries only `Point`, `TriggerWrite`,
+`ReadDone`, `EndOfFile` and `Pos`. So a job cannot chain itself: the operator paces it, and the
+app must never send the next program without an explicit confirmation.
+
+**Decisions taken with the user (2026-09-16):**
+
+- A job is an ordered list of steps. Each step carries its operation (pen, profile or drilling),
+  its tool from the library, its own parameters and **the layer it works on** (or the whole
+  drawing). Layers were chosen over a frozen selection because they survive a reopen and a
+  reimport, so the job can be run again tomorrow; the live selection stays as it is for the single
+  operation.
+- The default order puts the drilling before the profile — the holes while the piece is still
+  attached to the stock — and the user can reorder.
+- Speeds come from the tool, with the global settings as the fallback for tools that do not carry
+  them.
+
+| # | Piece | What it holds |
+|---|-------|----------------|
+| 1 | Speeds in the tool | `Tool` gains feed, plunge and step-down; the operation reads them from the tool it was given. Migration, API, library window, panel. |
+| 2 | The job: model and API | `Job` and its ordered steps (operation, tool, parameters, layer) in the database, `GET/POST /api/cam/job`. The program of a step is generated with the endpoints that already exist. |
+| 3 | The job in the panel | The steps in the Output PLC panel: add, remove, reorder, duplicate; the active step is edited as the panel does today. |
+| 4 | Sending in sequence | Transfer a step, the operator runs it, confirms, the app asks for the tool change and goes on. Never a transfer without a confirmation, because nothing on the machine says the cut is over. |
+| 5 | Open contours, closed with help | Where the contour opens and an offer to close it within a tolerance, instead of today's flat refusal (`a profile needs closed contours`). |
+| 6 | Errors in Italian | The messages of the API where the user reads them; English stays in the logs. |
+
+Each piece keeps the rhythm of the others: a short design approved first, then TDD, then the
+checks, then commit, push and the container.
 
 ## CAM plan
 
