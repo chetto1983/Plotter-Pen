@@ -61,6 +61,11 @@
     box-shadow: 0 0 10px rgba(76, 175, 80, 0.4);
 }
 
+.cad-3d-btn.active {
+    background: rgba(66, 165, 245, 0.5);
+    box-shadow: 0 0 10px rgba(66, 165, 245, 0.4);
+}
+
 .cad-3d-btn svg {
     width: 20px;
     height: 20px;

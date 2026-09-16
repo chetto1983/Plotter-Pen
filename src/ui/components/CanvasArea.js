@@ -31,6 +31,9 @@ export class CanvasArea {
           <button type="button" class="cad-3d-btn" id="btn3DZoomExtent" title="Zoom Extent">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>
           </button>
+          <button type="button" class="cad-3d-btn" id="btn3DFollow" title="Segui utensile">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/><line x1="12" y1="1" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="23"/><line x1="1" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="23" y2="12"/></svg>
+          </button>
           <div class="cad-3d-spacer"></div>
           <button type="button" class="cad-3d-btn" id="btn3DRotateCCW" title="Ruota 90° CCW">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2.5 2v6h6"/><path d="M2.5 8C5 4 9 2 13.5 2a9.5 9.5 0 110 19c-4 0-7-2-9-5"/></svg>

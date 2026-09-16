@@ -5,6 +5,9 @@ import { CAMOperationManager } from './CAMOperationManager.js';
 import { camArea, visibleLayerKey } from './camArea.js';
 import { stockOf } from './camStock.js';
 
+// Remembered in the browser, like camParamsCollapsed
+const FOLLOW_TOOL_KEY = 'plc3dFollowTool';
+
 export class PLCOutputManager {
   constructor(app) {
     this.app = app;
@@ -330,6 +333,19 @@ export class PLCOutputManager {
     }
     if (btnZoomExtent) {
       btnZoomExtent.addEventListener('click', () => this.simulator3D?.zoomExtent());
+    }
+
+    // Wire the camera that follows the tool, remembered like the collapsed parameters
+    const btnFollow = document.getElementById('btn3DFollow');
+    if (btnFollow && this.simulator3D) {
+      const show = (on) => btnFollow.classList.toggle('active', on);
+      this.simulator3D.onFollowChange = (on) => {
+        show(on);
+        localStorage.setItem(FOLLOW_TOOL_KEY, String(on));
+      };
+      btnFollow.addEventListener('click', () => this.simulator3D.setFollowTool(!this.simulator3D.followTool));
+      if (localStorage.getItem(FOLLOW_TOOL_KEY) === 'true') this.simulator3D.setFollowTool(true);
+      show(this.simulator3D.followTool);
     }
 
     // Wire 3D rotation controls

@@ -11,6 +11,9 @@ import { BRANDING_CSS, injectBranding } from '../lib/branding.js';
 import { ViewCubeHelper } from './ViewCubeHelper.js';
 import { PrimitiveRenderer3D } from './PrimitiveRenderer3D.js';
 
+// How much of the way to the tool the camera goes at every step while it follows it
+const FOLLOW_STEP = 0.2;
+
 export class PLCSimulator3D {
     constructor(canvas) {
         if (!canvas) {
@@ -19,6 +22,11 @@ export class PLCSimulator3D {
 
         this.canvas = canvas;
         this.container = canvas.parentElement || canvas;
+
+        // The camera keeps the tool in view while this is on; a pan turns it off again
+        this.followTool = false;
+        // Called with the new state whenever it changes, so the toolbar can show it
+        this.onFollowChange = null;
 
         // Scene setup
         this.scene = new THREE.Scene();
@@ -274,7 +282,37 @@ export class PLCSimulator3D {
      */
     setToolPosition(x, y, z) {
         this.toolMesh.position.set(x, y, z);
-        this.renderFrame();
+        // followStep draws the frame itself, through updateCameraFromControls
+        if (this.followTool) this.followStep(FOLLOW_STEP);
+        else this.renderFrame();
+    }
+
+    /**
+     * Keep the camera on the tool, or let it go. What the camera looks at moves; the angle and
+     * the distance stay as the user set them, so orbiting and zooming keep working while it
+     * follows. Turning it on takes the view to the tool at once.
+     * @param {boolean} on
+     */
+    setFollowTool(on) {
+        if (this.followTool === on) return;
+        this.followTool = on;
+        if (on) this.followStep(1);
+        this.onFollowChange?.(on);
+    }
+
+    /**
+     * Move what the camera looks at part of the way to the tool. A whole step would make every
+     * rapid jerk the scene; a fraction of the distance follows without the jolt.
+     * @param {number} fraction of the remaining distance to cover, 1 to arrive at once
+     */
+    followStep(fraction) {
+        const target = this.controls?.target;
+        const tool = this.toolMesh?.position;
+        if (!target || !tool) return;
+        target.x += (tool.x - target.x) * fraction;
+        target.y += (tool.y - target.y) * fraction;
+        target.z += (tool.z - target.z) * fraction;
+        this.updateCameraFromControls();
     }
 
     /**
@@ -543,6 +581,8 @@ export class PLCSimulator3D {
                 const dy = centerY - this.controls.lastTouchCenter.y;
                 this.controls.lastTouchCenter = { x: centerX, y: centerY };
 
+                // Two fingers aim the view: the tool stops carrying it
+                this.setFollowTool(false);
                 const panSpeed = this.controls.radius * 0.001;
                 const right = new THREE.Vector3();
                 right.setFromMatrixColumn(this.camera.matrixWorld, 0);
@@ -616,7 +656,9 @@ export class PLCSimulator3D {
             this.controls.lastY = e.clientY;
 
             if (this.controls.isPanning) {
-                // Pan mode: move camera target in screen-aligned directions
+                // Pan mode: move camera target in screen-aligned directions. The user is aiming
+                // the view, so the tool stops carrying it.
+                this.setFollowTool(false);
                 const panSpeed = this.controls.radius * 0.001;
 
                 const right = new THREE.Vector3();
