@@ -24,6 +24,14 @@ const (
 type OpcuaHandler struct {
 	configMgr *opcua.ConfigManager
 	client    opcua.OPCUAClient
+	// newClient builds the throwaway client TestConnection tries a configuration with,
+	// so a test never touches the connection the app is working on.
+	newClient func(cfg opcua.Config) opcua.OPCUAClient
+}
+
+// clientForConfig is the newClient of a handler that talks to a real server.
+func clientForConfig(cfg opcua.Config) opcua.OPCUAClient {
+	return opcua.NewClient(opcua.NewConfigManagerFor(cfg))
 }
 
 // NewOpcuaHandler creates a new OPC UA handler with database backing
@@ -34,6 +42,7 @@ func NewOpcuaHandler(db *gorm.DB) *OpcuaHandler {
 	return &OpcuaHandler{
 		configMgr: configMgr,
 		client:    client,
+		newClient: clientForConfig,
 	}
 }
 
@@ -43,6 +52,7 @@ func NewOpcuaHandlerWithClient(db *gorm.DB, client opcua.OPCUAClient) *OpcuaHand
 	return &OpcuaHandler{
 		configMgr: configMgr,
 		client:    client,
+		newClient: clientForConfig,
 	}
 }
 
@@ -72,6 +82,8 @@ func (h *OpcuaHandler) RegisterRoutes(r *gin.RouterGroup) {
 		opcuaGroup.POST("/connect", h.Connect)
 		opcuaGroup.POST("/disconnect", h.Disconnect)
 		opcuaGroup.GET("/position", h.GetPosition)
+		opcuaGroup.GET("/variables", h.Variables)
+		opcuaGroup.POST("/test", h.TestConnection)
 		opcuaGroup.GET("/machine-status", h.GetMachineStatus)
 		opcuaGroup.GET("/ws", h.WebSocket) // Real-time WebSocket endpoint
 	}
@@ -416,4 +428,58 @@ func (h *OpcuaHandler) DownloadCertificate(c *gin.Context) {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+// Variables lists the variables the connected PLC exposes under its server interfaces, so the
+// settings window can offer them. It never opens a connection by itself: a window that is
+// merely looking at a configuration must not reach for the machine.
+func (h *OpcuaHandler) Variables(c *gin.Context) {
+	if !h.client.IsConnected() {
+		c.JSON(http.StatusOK, gin.H{"connected": false, "variables": []opcua.NodeVariable{}})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
+	defer cancel()
+
+	variables, err := h.client.Variables(ctx)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"connected": true, "variables": []opcua.NodeVariable{}, "error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"connected": true, "endpoint": h.configMgr.Get().Endpoint, "variables": variables})
+}
+
+// TestConnection tries the configuration in the request, the one the settings window has on
+// screen and has not saved yet, and lists what it finds. A failed connection is the answer to
+// the question asked, not a server error, so it comes back with 200 and a message.
+func (h *OpcuaHandler) TestConnection(c *gin.Context) {
+	cfg := h.configMgr.Get()
+	if c.Request.ContentLength > 0 {
+		if err := c.ShouldBindJSON(&cfg); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 20*time.Second)
+	defer cancel()
+
+	client := h.newClient(cfg)
+	if err := client.Connect(ctx); err != nil {
+		c.JSON(http.StatusOK, gin.H{"connected": false, "endpoint": cfg.Endpoint, "variables": []opcua.NodeVariable{}, "error": err.Error()})
+		return
+	}
+	defer func() {
+		if err := client.Disconnect(context.Background()); err != nil {
+			log.Printf("OPC UA: closing the test connection to %s: %v", cfg.Endpoint, err)
+		}
+	}()
+
+	variables, err := client.Variables(ctx)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"connected": true, "endpoint": cfg.Endpoint, "variables": []opcua.NodeVariable{}, "error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"connected": true, "endpoint": cfg.Endpoint, "variables": variables})
 }

@@ -234,3 +234,35 @@ func TestNamedNodes_S7Sim(t *testing.T) {
 		}
 	}
 }
+
+// TestVariables_S7Sim browses the simulator the way the settings window does: the seven
+// variables of the interface, the twenty strings of the array left out of the list.
+func TestVariables_S7Sim(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	client, _ := connectS7Sim(ctx, t)
+
+	variables, err := client.Variables(ctx)
+	if err != nil {
+		t.Fatalf("Variables: %v", err)
+	}
+
+	want := []string{
+		"ServerInterfaces/Com/EndOfFile",
+		"ServerInterfaces/Com/Point",
+		"ServerInterfaces/Com/Pos/X",
+		"ServerInterfaces/Com/Pos/Y",
+		"ServerInterfaces/Com/Pos/Z",
+		"ServerInterfaces/Com/ReadDone",
+		"ServerInterfaces/Com/TriggerWrite",
+	}
+	if len(variables) != len(want) {
+		t.Fatalf("variables = %+v, want %d", variables, len(want))
+	}
+	for i, v := range variables {
+		if v.Path != want[i] || v.NodeID == "" {
+			t.Errorf("variable %d = %+v, want %s with a node ID", i, v, want[i])
+		}
+	}
+	t.Logf("the window would offer: %+v", variables)
+}

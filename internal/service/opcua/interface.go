@@ -13,6 +13,9 @@ type OPCUAClient interface {
 	// Data operations
 	SendWithTrigger(ctx context.Context, data any, cfg Config) error
 
+	// Variables the server interfaces expose, for the settings window
+	Variables(ctx context.Context) ([]NodeVariable, error)
+
 	// Position and status
 	ReadPosition(ctx context.Context) (Position, error)
 	GetMachineStatus(ctx context.Context) MachineStatus

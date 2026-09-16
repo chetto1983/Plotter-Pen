@@ -3,6 +3,8 @@ package opcua
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"slices"
 	"strings"
 	"sync"
 
@@ -172,4 +174,68 @@ func namedNodes(cfg Config) Config {
 		}
 	}
 	return cfg
+}
+
+// NodeVariable is one variable the PLC exposes under its server interfaces.
+type NodeVariable struct {
+	Path   string `json:"path"`
+	NodeID string `json:"nodeId"`
+}
+
+const (
+	// interfacesName is the folder a Siemens server keeps its interfaces in.
+	interfacesName = "ServerInterfaces"
+	// maxInterfaceDepth stops a walk that a cyclic address space would never end.
+	maxInterfaceDepth = 6
+)
+
+// arrayElement matches the browse name of an element of an array, such as "[19]".
+var arrayElement = regexp.MustCompile(`^\[\d+\]$`)
+
+// interfaceVariables lists the variables the server interfaces expose, the ones a node
+// address can point at. It goes into everything that has children, because a structure of
+// the PLC such as Pos is a variable carrying its members, and leaves out the elements of an
+// array: the twenty strings of the point array are not offered one by one.
+func interfaceVariables(ctx context.Context, browser nodeBrowser) ([]NodeVariable, error) {
+	objects := ua.NewNumericNodeID(0, id.ObjectsFolder)
+	root, err := childByName(ctx, browser, objects, "Objects", interfacesName)
+	if err != nil {
+		return nil, err
+	}
+
+	var variables []NodeVariable
+	var walk func(node *ua.NodeID, path string, depth int) error
+	walk = func(node *ua.NodeID, path string, depth int) error {
+		if depth > maxInterfaceDepth {
+			return nil
+		}
+		refs, err := browser.references(ctx, node)
+		if err != nil {
+			return fmt.Errorf("browsing %s failed: %w", path, err)
+		}
+		for _, ref := range refs {
+			if ref == nil || ref.BrowseName == nil || ref.NodeID == nil || ref.NodeID.NodeID == nil {
+				continue
+			}
+			if arrayElement.MatchString(ref.BrowseName.Name) {
+				continue
+			}
+			child := path + nodeSeparator + ref.BrowseName.Name
+			if ref.NodeClass == ua.NodeClassVariable {
+				variables = append(variables, NodeVariable{Path: child, NodeID: ref.NodeID.NodeID.String()})
+			}
+			if ref.NodeClass == ua.NodeClassVariable || ref.NodeClass == ua.NodeClassObject {
+				if err := walk(ref.NodeID.NodeID, child, depth+1); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+
+	if err := walk(root, interfacesName, 1); err != nil {
+		return nil, err
+	}
+	slices.SortFunc(variables, func(a, b NodeVariable) int { return strings.Compare(a.Path, b.Path) })
+	return variables, nil
 }

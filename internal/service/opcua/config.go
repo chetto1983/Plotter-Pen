@@ -71,6 +71,12 @@ func NewConfigManager(db *gorm.DB) *ConfigManager {
 	return cm
 }
 
+// NewConfigManagerFor builds a manager over one configuration, with no database behind it:
+// the settings window tries a configuration that is not saved yet.
+func NewConfigManagerFor(cfg Config) *ConfigManager {
+	return &ConfigManager{config: cfg}
+}
+
 // loadFromDB loads the active config from database
 func (cm *ConfigManager) loadFromDB() {
 	var dbCfg persistence.OPCUAConfig

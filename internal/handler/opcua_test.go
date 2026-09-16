@@ -443,3 +443,131 @@ func TestOpcuaHandler_GetMachineStatus_Mock(t *testing.T) {
 		t.Errorf("Expected status=running, got %s", status.Status)
 	}
 }
+
+func TestOpcuaHandler_Variables_NotConnected(t *testing.T) {
+	mockClient := opcua.NewMockClient()
+	r, _ := setupTestOpcuaServerWithMock(t, mockClient)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/opcua/variables", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+	var resp struct {
+		Connected bool                 `json:"connected"`
+		Variables []opcua.NodeVariable `json:"variables"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("Failed to parse response: %v", err)
+	}
+	if resp.Connected || len(resp.Variables) != 0 {
+		t.Errorf("Expected no variables while disconnected, got %+v", resp)
+	}
+	if mockClient.VariablesCalls() != 0 {
+		t.Error("Expected no browse while disconnected")
+	}
+}
+
+func TestOpcuaHandler_Variables_Connected(t *testing.T) {
+	mockClient := opcua.NewMockClient()
+	mockClient.SetConnected(true)
+	mockClient.SetVariables([]opcua.NodeVariable{
+		{Path: "ServerInterfaces/Com/Point", NodeID: "ns=4;i=12"},
+		{Path: "ServerInterfaces/Com/Pos/X", NodeID: "ns=4;i=79"},
+	})
+	r, _ := setupTestOpcuaServerWithMock(t, mockClient)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/opcua/variables", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+	var resp struct {
+		Connected bool                 `json:"connected"`
+		Variables []opcua.NodeVariable `json:"variables"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("Failed to parse response: %v", err)
+	}
+	if !resp.Connected || len(resp.Variables) != 2 || resp.Variables[0].Path != "ServerInterfaces/Com/Point" ||
+		resp.Variables[1].NodeID != "ns=4;i=79" {
+		t.Errorf("Expected the two variables of the interface, got %+v", resp)
+	}
+}
+
+func TestOpcuaHandler_TestConnection_TriesTheSettingsInTheRequest(t *testing.T) {
+	live := opcua.NewMockClient()
+	tried := opcua.NewMockClient()
+	tried.SetVariables([]opcua.NodeVariable{{Path: "ServerInterfaces/Com/Point", NodeID: "ns=4;i=12"}})
+
+	r, h := setupTestOpcuaServerWithMock(t, live)
+	var used opcua.Config
+	h.newClient = func(cfg opcua.Config) opcua.OPCUAClient {
+		used = cfg
+		return tried
+	}
+
+	body, _ := json.Marshal(opcua.Config{Endpoint: "opc.tcp://127.0.0.1:4840", SecurityMode: "None"})
+	req := httptest.NewRequest(http.MethodPost, "/api/opcua/test", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+	var resp struct {
+		Connected bool                 `json:"connected"`
+		Endpoint  string               `json:"endpoint"`
+		Variables []opcua.NodeVariable `json:"variables"`
+		Error     string               `json:"error"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("Failed to parse response: %v", err)
+	}
+	if used.Endpoint != "opc.tcp://127.0.0.1:4840" {
+		t.Errorf("Tried %q, want the endpoint of the request", used.Endpoint)
+	}
+	if !resp.Connected || resp.Endpoint != "opc.tcp://127.0.0.1:4840" || len(resp.Variables) != 1 || resp.Error != "" {
+		t.Errorf("Expected a successful test with one variable, got %+v", resp)
+	}
+	if !tried.DisconnectCalled() {
+		t.Error("Expected the client of the test to be disconnected again")
+	}
+	if live.ConnectCalls() != 0 {
+		t.Error("Expected the live connection to be left alone")
+	}
+}
+
+func TestOpcuaHandler_TestConnection_ReportsTheFailure(t *testing.T) {
+	live := opcua.NewMockClient()
+	tried := opcua.NewMockClient()
+	tried.SetConnectError(errors.New("connection refused"))
+
+	r, h := setupTestOpcuaServerWithMock(t, live)
+	h.newClient = func(opcua.Config) opcua.OPCUAClient { return tried }
+
+	body, _ := json.Marshal(opcua.Config{Endpoint: "opc.tcp://192.0.2.1:4840"})
+	req := httptest.NewRequest(http.MethodPost, "/api/opcua/test", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+	var resp struct {
+		Connected bool   `json:"connected"`
+		Error     string `json:"error"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("Failed to parse response: %v", err)
+	}
+	if resp.Connected || resp.Error == "" {
+		t.Errorf("Expected the failure to be reported, got %+v", resp)
+	}
+}

@@ -31,6 +31,32 @@ type Client struct {
 	stopOnce       sync.Once // protects stopCh close
 	onStatusChange func(connected bool)
 	nodes          nodeCache // node IDs resolved from the configured names, per connection
+	variablesMu    sync.Mutex
+	variables      []NodeVariable // what the server interfaces expose, browsed once per connection
+}
+
+// Variables lists the variables of the server interfaces of the connected server, so the
+// settings window can offer them. Browsed once per connection.
+func (c *Client) Variables(ctx context.Context) ([]NodeVariable, error) {
+	c.variablesMu.Lock()
+	defer c.variablesMu.Unlock()
+
+	if c.variables != nil {
+		return c.variables, nil
+	}
+	variables, err := interfaceVariables(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	c.variables = variables
+	return variables, nil
+}
+
+// forgetVariables drops what was browsed from a connection that is gone.
+func (c *Client) forgetVariables() {
+	c.variablesMu.Lock()
+	defer c.variablesMu.Unlock()
+	c.variables = nil
 }
 
 // references browses the children of a node. It gives resolveNodeAddress its view of the
@@ -105,6 +131,7 @@ func (c *Client) Connect(ctx context.Context) error {
 	c.client = client
 	c.connected.Store(true)
 	c.nodes.clear() // node IDs belong to the server we just left
+	c.forgetVariables()
 	c.stopCh = make(chan struct{})
 	c.stopOnce = sync.Once{}
 
@@ -247,6 +274,7 @@ func (c *Client) Disconnect(ctx context.Context) error {
 	c.client = nil
 	c.connected.Store(false)
 	c.nodes.clear()
+	c.forgetVariables()
 	return err
 }
 

@@ -14,6 +14,11 @@ type MockClient struct {
 	position        Position
 	positionError   error
 	machineStatus   MachineStatus
+	variables       []NodeVariable
+	variablesError  error
+	variablesCalls  int
+	connectCalls    int
+	disconnectCalls int
 }
 
 // NewMockClient creates a new mock client
@@ -58,8 +63,43 @@ func (m *MockClient) SetMachineStatus(status MachineStatus) {
 	m.machineStatus = status
 }
 
+// SetVariables configures the variables the mock browses
+func (m *MockClient) SetVariables(variables []NodeVariable) {
+	m.variables = variables
+}
+
+// SetVariablesError configures the mock to return an error on Variables
+func (m *MockClient) SetVariablesError(err error) {
+	m.variablesError = err
+}
+
+// VariablesCalls reports how many times the variables were browsed
+func (m *MockClient) VariablesCalls() int {
+	return m.variablesCalls
+}
+
+// ConnectCalls reports how many times the mock was asked to connect
+func (m *MockClient) ConnectCalls() int {
+	return m.connectCalls
+}
+
+// DisconnectCalled reports whether the mock was disconnected
+func (m *MockClient) DisconnectCalled() bool {
+	return m.disconnectCalls > 0
+}
+
+// Variables implements OPCUAClient
+func (m *MockClient) Variables(ctx context.Context) ([]NodeVariable, error) {
+	m.variablesCalls++
+	if m.variablesError != nil {
+		return nil, m.variablesError
+	}
+	return m.variables, nil
+}
+
 // Connect implements OPCUAClient
 func (m *MockClient) Connect(ctx context.Context) error {
+	m.connectCalls++
 	if m.connectError != nil {
 		return m.connectError
 	}
@@ -70,6 +110,7 @@ func (m *MockClient) Connect(ctx context.Context) error {
 
 // Disconnect implements OPCUAClient
 func (m *MockClient) Disconnect(ctx context.Context) error {
+	m.disconnectCalls++
 	if m.disconnectError != nil {
 		return m.disconnectError
 	}

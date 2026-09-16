@@ -20,13 +20,21 @@ func (f *fakeServer) references(_ context.Context, parent *ua.NodeID) ([]*ua.Ref
 	return f.tree[parent.String()], nil
 }
 
-// childRef builds a browse result: the namespace of the browse name is deliberately
-// free to differ from the namespace of the node, as it does on the PLC.
+// childRef builds a browse result for a variable: the namespace of the browse name is
+// deliberately free to differ from the namespace of the node, as it does on the PLC.
 func childRef(nameNS uint16, name string, nodeID *ua.NodeID) *ua.ReferenceDescription {
 	return &ua.ReferenceDescription{
 		BrowseName: &ua.QualifiedName{NamespaceIndex: nameNS, Name: name},
 		NodeID:     &ua.ExpandedNodeID{NodeID: nodeID},
+		NodeClass:  ua.NodeClassVariable,
 	}
+}
+
+// objectRef builds a browse result for an object, the kind of node the walk goes into.
+func objectRef(nameNS uint16, name string, nodeID *ua.NodeID) *ua.ReferenceDescription {
+	ref := childRef(nameNS, name, nodeID)
+	ref.NodeClass = ua.NodeClassObject
+	return ref
 }
 
 var objectsFolderID = ua.NewNumericNodeID(0, id.ObjectsFolder)
@@ -36,19 +44,25 @@ var objectsFolderID = ua.NewNumericNodeID(0, id.ObjectsFolder)
 func plcTree() *fakeServer {
 	serverInterfaces := ua.NewStringNodeID(3, "ServerInterfaces")
 	com := ua.NewNumericNodeID(4, 1)
+	point := ua.NewNumericNodeID(4, 12)
 	pos := ua.NewNumericNodeID(4, 78)
 	return &fakeServer{tree: map[string][]*ua.ReferenceDescription{
 		objectsFolderID.String(): {
-			childRef(0, "Server", ua.NewNumericNodeID(0, id.Server)),
-			childRef(3, "ServerInterfaces", serverInterfaces),
+			objectRef(0, "Server", ua.NewNumericNodeID(0, id.Server)),
+			objectRef(3, "ServerInterfaces", serverInterfaces),
 		},
-		serverInterfaces.String(): {childRef(4, "Com", com)},
+		serverInterfaces.String(): {objectRef(4, "Com", com)},
 		com.String(): {
-			childRef(4, "Point", ua.NewNumericNodeID(4, 12)),
+			childRef(4, "Point", point),
 			childRef(4, "TriggerWrite", ua.NewNumericNodeID(4, 43)),
 			childRef(4, "ReadDone", ua.NewNumericNodeID(4, 54)),
 			childRef(4, "EndOfFile", ua.NewNumericNodeID(4, 65)),
-			childRef(4, "Pos", pos),
+			objectRef(4, "Pos", pos),
+		},
+		// the twenty strings of the array: the walk must not offer them one by one
+		point.String(): {
+			childRef(4, "[0]", ua.NewNumericNodeID(4, 13)),
+			childRef(4, "[1]", ua.NewNumericNodeID(4, 14)),
 		},
 		pos.String(): {
 			childRef(4, "X", ua.NewNumericNodeID(4, 79)),
@@ -64,8 +78,8 @@ func otherServerTree() *fakeServer {
 	serverInterfaces := ua.NewStringNodeID(1, "ServerInterfaces")
 	com := ua.NewNumericNodeID(7, 500)
 	return &fakeServer{tree: map[string][]*ua.ReferenceDescription{
-		objectsFolderID.String():  {childRef(1, "ServerInterfaces", serverInterfaces)},
-		serverInterfaces.String(): {childRef(7, "Com", com)},
+		objectsFolderID.String():  {objectRef(1, "ServerInterfaces", serverInterfaces)},
+		serverInterfaces.String(): {objectRef(7, "Com", com)},
 		com.String():              {childRef(7, "Point", ua.NewStringNodeID(7, "DB1.Point"))},
 	}}
 }
@@ -231,5 +245,93 @@ func TestNamedNodes_LeavesEveryOtherNodeIDAlone(t *testing.T) {
 
 	if cfg != saved {
 		t.Errorf("configuration = %+v, want it unchanged %+v", cfg, saved)
+	}
+}
+
+func TestInterfaceVariables_ListsWhatTheInterfacesExpose(t *testing.T) {
+	server := plcTree()
+
+	variables, err := interfaceVariables(context.Background(), server)
+	if err != nil {
+		t.Fatalf("interfaceVariables: %v", err)
+	}
+
+	want := []NodeVariable{
+		{Path: "ServerInterfaces/Com/EndOfFile", NodeID: "ns=4;i=65"},
+		{Path: "ServerInterfaces/Com/Point", NodeID: "ns=4;i=12"},
+		{Path: "ServerInterfaces/Com/Pos/X", NodeID: "ns=4;i=79"},
+		{Path: "ServerInterfaces/Com/Pos/Y", NodeID: "ns=4;i=80"},
+		{Path: "ServerInterfaces/Com/Pos/Z", NodeID: "ns=4;i=81"},
+		{Path: "ServerInterfaces/Com/ReadDone", NodeID: "ns=4;i=54"},
+		{Path: "ServerInterfaces/Com/TriggerWrite", NodeID: "ns=4;i=43"},
+	}
+	if len(variables) != len(want) {
+		t.Fatalf("variables = %+v, want %d of them", variables, len(want))
+	}
+	for i, v := range variables {
+		if v != want[i] {
+			t.Errorf("variable %d = %+v, want %+v", i, v, want[i])
+		}
+	}
+}
+
+func TestInterfaceVariables_LeavesTheArrayElementsOut(t *testing.T) {
+	variables, err := interfaceVariables(context.Background(), plcTree())
+	if err != nil {
+		t.Fatalf("interfaceVariables: %v", err)
+	}
+	for _, v := range variables {
+		if strings.HasSuffix(v.Path, "[0]") || strings.HasSuffix(v.Path, "[1]") {
+			t.Errorf("the twenty strings of Point are offered one by one: %+v", variables)
+		}
+	}
+}
+
+// A structure of the PLC, such as Pos, can come back as a variable that has the members
+// inside it. The window must offer the members, which is what a node field points at.
+func TestInterfaceVariables_GoesIntoAStructure(t *testing.T) {
+	serverInterfaces := ua.NewStringNodeID(3, "ServerInterfaces")
+	com := ua.NewNumericNodeID(4, 1)
+	pos := ua.NewNumericNodeID(4, 78)
+	server := &fakeServer{tree: map[string][]*ua.ReferenceDescription{
+		objectsFolderID.String():  {objectRef(3, "ServerInterfaces", serverInterfaces)},
+		serverInterfaces.String(): {objectRef(4, "Com", com)},
+		com.String():              {childRef(4, "Pos", pos)}, // a variable, not an object
+		pos.String(): {
+			childRef(4, "X", ua.NewNumericNodeID(4, 79)),
+			childRef(4, "Y", ua.NewNumericNodeID(4, 80)),
+			childRef(4, "Z", ua.NewNumericNodeID(4, 81)),
+		},
+	}}
+
+	variables, err := interfaceVariables(context.Background(), server)
+	if err != nil {
+		t.Fatalf("interfaceVariables: %v", err)
+	}
+
+	want := []string{
+		"ServerInterfaces/Com/Pos",
+		"ServerInterfaces/Com/Pos/X",
+		"ServerInterfaces/Com/Pos/Y",
+		"ServerInterfaces/Com/Pos/Z",
+	}
+	if len(variables) != len(want) {
+		t.Fatalf("variables = %+v, want the structure and its three members", variables)
+	}
+	for i, v := range variables {
+		if v.Path != want[i] {
+			t.Errorf("variable %d = %q, want %q", i, v.Path, want[i])
+		}
+	}
+}
+
+func TestInterfaceVariables_WithoutServerInterfaces(t *testing.T) {
+	bare := &fakeServer{tree: map[string][]*ua.ReferenceDescription{
+		objectsFolderID.String(): {objectRef(0, "Server", ua.NewNumericNodeID(0, id.Server))},
+	}}
+
+	_, err := interfaceVariables(context.Background(), bare)
+	if err == nil || !strings.Contains(err.Error(), "ServerInterfaces") {
+		t.Fatalf("error = %v, want one naming ServerInterfaces", err)
 	}
 }
