@@ -154,19 +154,31 @@ export class Modals {
         </fieldset>
         <!-- Position Nodes Section -->
         <fieldset class="cad-fieldset"><legend>Nodi Posizione (Lettura)</legend>
-        <p class="cad-fieldset-hint">Ogni nodo si scrive col nome della variabile sul PLC (ServerInterfaces/Com/Pos/X) oppure col NodeID (ns=4;i=79).</p>
+        <p class="cad-fieldset-hint">Ogni nodo si scrive col nome della variabile sul PLC (ServerInterfaces/Com/Pos/X) oppure col NodeID (ns=4;i=79). Con <em>Prova connessione</em> le variabili lette dal PLC compaiono nella tendina di ogni campo.</p>
         <div class="cad-modal-cols-3">
           <div class="cad-input-row">
             <label for="positionXNode">Pos.X</label>
-            <input type="text" id="positionXNode" name="positionXNode" placeholder="ServerInterfaces/Com/Pos/X" class="cad-modal-input" />
+            <div class="cad-combo">
+              <input type="text" id="positionXNode" name="positionXNode" autocomplete="off" placeholder="ServerInterfaces/Com/Pos/X" class="cad-modal-input" />
+              <button type="button" class="cad-combo-toggle" data-combo="positionXNode" aria-label="Variabili del PLC">&#9662;</button>
+              <ul class="cad-combo-list" hidden></ul>
+            </div>
           </div>
           <div class="cad-input-row">
             <label for="positionYNode">Pos.Y</label>
-            <input type="text" id="positionYNode" name="positionYNode" placeholder="ServerInterfaces/Com/Pos/Y" class="cad-modal-input" />
+            <div class="cad-combo">
+              <input type="text" id="positionYNode" name="positionYNode" autocomplete="off" placeholder="ServerInterfaces/Com/Pos/Y" class="cad-modal-input" />
+              <button type="button" class="cad-combo-toggle" data-combo="positionYNode" aria-label="Variabili del PLC">&#9662;</button>
+              <ul class="cad-combo-list" hidden></ul>
+            </div>
           </div>
           <div class="cad-input-row">
             <label for="positionZNode">Pos.Z</label>
-            <input type="text" id="positionZNode" name="positionZNode" placeholder="ServerInterfaces/Com/Pos/Z" class="cad-modal-input" />
+            <div class="cad-combo">
+              <input type="text" id="positionZNode" name="positionZNode" autocomplete="off" placeholder="ServerInterfaces/Com/Pos/Z" class="cad-modal-input" />
+              <button type="button" class="cad-combo-toggle" data-combo="positionZNode" aria-label="Variabili del PLC">&#9662;</button>
+              <ul class="cad-combo-list" hidden></ul>
+            </div>
           </div>
         </div>
         </fieldset>
@@ -175,21 +187,37 @@ export class Modals {
         <div class="cad-modal-cols-2">
           <div class="cad-input-row">
             <label for="pointArrayNode">Point (String[20])</label>
-            <input type="text" id="pointArrayNode" name="pointArrayNode" required placeholder="ServerInterfaces/Com/Point" class="cad-modal-input" />
+            <div class="cad-combo">
+              <input type="text" id="pointArrayNode" name="pointArrayNode" autocomplete="off" required placeholder="ServerInterfaces/Com/Point" class="cad-modal-input" />
+              <button type="button" class="cad-combo-toggle" data-combo="pointArrayNode" aria-label="Variabili del PLC">&#9662;</button>
+              <ul class="cad-combo-list" hidden></ul>
+            </div>
           </div>
           <div class="cad-input-row">
             <label for="triggerWriteNode">TriggerWrite</label>
-            <input type="text" id="triggerWriteNode" name="triggerWriteNode" placeholder="ServerInterfaces/Com/TriggerWrite" class="cad-modal-input" />
+            <div class="cad-combo">
+              <input type="text" id="triggerWriteNode" name="triggerWriteNode" autocomplete="off" placeholder="ServerInterfaces/Com/TriggerWrite" class="cad-modal-input" />
+              <button type="button" class="cad-combo-toggle" data-combo="triggerWriteNode" aria-label="Variabili del PLC">&#9662;</button>
+              <ul class="cad-combo-list" hidden></ul>
+            </div>
           </div>
         </div>
         <div class="cad-modal-cols-2">
           <div class="cad-input-row">
             <label for="readDoneNode">ReadDone</label>
-            <input type="text" id="readDoneNode" name="readDoneNode" placeholder="ServerInterfaces/Com/ReadDone" class="cad-modal-input" />
+            <div class="cad-combo">
+              <input type="text" id="readDoneNode" name="readDoneNode" autocomplete="off" placeholder="ServerInterfaces/Com/ReadDone" class="cad-modal-input" />
+              <button type="button" class="cad-combo-toggle" data-combo="readDoneNode" aria-label="Variabili del PLC">&#9662;</button>
+              <ul class="cad-combo-list" hidden></ul>
+            </div>
           </div>
           <div class="cad-input-row">
             <label for="endOfFileNode">EndOfFile</label>
-            <input type="text" id="endOfFileNode" name="endOfFileNode" placeholder="ServerInterfaces/Com/EndOfFile" class="cad-modal-input" />
+            <div class="cad-combo">
+              <input type="text" id="endOfFileNode" name="endOfFileNode" autocomplete="off" placeholder="ServerInterfaces/Com/EndOfFile" class="cad-modal-input" />
+              <button type="button" class="cad-combo-toggle" data-combo="endOfFileNode" aria-label="Variabili del PLC">&#9662;</button>
+              <ul class="cad-combo-list" hidden></ul>
+            </div>
           </div>
         </div>
         <div class="cad-modal-cols-2">
@@ -226,6 +254,7 @@ export class Modals {
         <div id="configStatus" class="cad-modal-status" hidden></div>
         <div class="cad-modal-actions-right">
           <button type="button" class="cad-primary-btn cad-btn-outline" id="reloadConfigBtn">Ricarica</button>
+          <button type="button" class="cad-primary-btn cad-btn-outline" id="btnTestConnection">Prova connessione</button>
           <button type="submit" class="cad-primary-btn">Salva Configurazione</button>
         </div>
       </form>

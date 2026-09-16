@@ -6,6 +6,9 @@ export class PLCConfigManager {
         this.openBtn = document.getElementById('btnOpenPLCConfig');
         this.closeBtn = document.getElementById('btnClosePLCConfig');
         this.reloadBtn = document.getElementById('reloadConfigBtn');
+        this.testBtn = document.getElementById('btnTestConnection');
+        this.combos = [...document.querySelectorAll('.cad-combo')];
+        this.variables = [];
 
         // Multi-PLC elements
         this.plcSelector = document.getElementById('plcSelector');
@@ -44,6 +47,10 @@ export class PLCConfigManager {
         if (this.reloadBtn) {
             this.reloadBtn.addEventListener('click', () => this.loadPLCList());
         }
+        if (this.testBtn) {
+            this.testBtn.addEventListener('click', () => this.testConnection());
+        }
+        this.initCombos();
         // Multi-PLC handlers
         if (this.plcSelector) {
             this.plcSelector.addEventListener('change', () => this.onPLCSelect());
@@ -74,6 +81,156 @@ export class PLCConfigManager {
             this.modal.classList.add('open');
             this.loadPLCList();
             this.checkCertificates();
+            this.loadVariables();
+        }
+    }
+
+    // Every node field is a combo box: the button opens the variables read from the PLC,
+    // clicking one writes its path in the field, and the field stays free to type in.
+    initCombos() {
+        for (const combo of this.combos ?? []) {
+            const input = combo.querySelector("input");
+            const toggle = combo.querySelector(".cad-combo-toggle");
+            const list = combo.querySelector(".cad-combo-list");
+            if (!input || !toggle || !list) continue;
+
+            toggle.addEventListener("click", () => {
+                const wasOpen = !list.hidden;
+                this.closeCombos();
+                // the button shows everything: a field already holding a variable would
+                // otherwise offer only itself
+                if (!wasOpen) this.openCombo(combo, false);
+            });
+            input.addEventListener("input", () => {
+                input.title = input.value;
+                if (!list.hidden) this.openCombo(combo, true);
+            });
+            list.addEventListener("click", (event) => {
+                const item = event.target.closest("li");
+                if (!item || item.classList.contains("empty")) return;
+                input.value = item.dataset.path;
+                input.title = item.dataset.path;
+                input.dispatchEvent(new Event("change", { bubbles: true }));
+                this.closeCombos();
+            });
+        }
+
+        document.addEventListener("click", (event) => {
+            if (!event.target.closest(".cad-combo")) this.closeCombos();
+        });
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") this.closeCombos();
+        });
+    }
+
+    closeCombos() {
+        for (const combo of this.combos ?? []) {
+            const list = combo.querySelector(".cad-combo-list");
+            if (list) list.hidden = true;
+        }
+    }
+
+    // Show what the PLC exposes, narrowed by what is being typed when it is the typing
+    // that opens the list
+    openCombo(combo, narrow = false) {
+        const input = combo.querySelector("input");
+        const list = combo.querySelector(".cad-combo-list");
+        const typed = narrow ? input.value.trim().toLowerCase() : "";
+        const shown = this.variables.filter((v) => !typed || v.path.toLowerCase().includes(typed));
+
+        list.innerHTML = "";
+        if (this.variables.length === 0) {
+            list.appendChild(this.comboMessage("Nessuna variabile letta: usa Prova connessione."));
+        } else if (shown.length === 0) {
+            list.appendChild(this.comboMessage(`Nessuna variabile contiene "${input.value.trim()}".`));
+        } else {
+            // every variable of one PLC starts with the same interface: showing that prefix
+            // in each row would push the part that tells them apart out of sight
+            const prefix = this.commonPrefix(this.variables.map((v) => v.path));
+            for (const variable of shown) {
+                const item = document.createElement("li");
+                item.dataset.path = variable.path;
+                item.textContent = variable.path.slice(prefix.length);
+                item.title = `${variable.path} (${variable.nodeId})`;
+                const nodeId = document.createElement("span");
+                nodeId.className = "node-id";
+                nodeId.textContent = variable.nodeId;
+                item.appendChild(nodeId);
+                list.appendChild(item);
+            }
+        }
+        list.hidden = false;
+    }
+
+    // The part every path starts with, cut at the last separator
+    commonPrefix(paths) {
+        if (paths.length < 2) return "";
+        let prefix = paths[0];
+        for (const path of paths.slice(1)) {
+            while (prefix && !path.startsWith(prefix)) prefix = prefix.slice(0, -1);
+        }
+        return prefix.slice(0, prefix.lastIndexOf("/") + 1);
+    }
+
+    comboMessage(text) {
+        const item = document.createElement("li");
+        item.className = "empty";
+        item.textContent = text;
+        return item;
+    }
+
+    // Keep the variables the PLC answered with, for every combo to offer
+    fillVariables(variables) {
+        this.variables = variables ?? [];
+        this.closeCombos();
+        return this.variables.length;
+    }
+
+    // Variables of the PLC the app is already connected to. It never opens a connection:
+    // opening the window must not reach for the machine by itself.
+    async loadVariables() {
+        try {
+            const response = await fetch("/api/opcua/variables", { headers: { "Accept": "application/json" } });
+            if (!response.ok) return;
+            const payload = await response.json();
+            if (payload?.connected) this.fillVariables(payload.variables);
+        } catch {
+            // the list is a convenience: without it the fields still take a name or a NodeID
+        }
+    }
+
+    // Try the settings on screen, without saving them and without touching the connection
+    // the app is working on, and fill the lists with what the PLC answers.
+    async testConnection() {
+        const payload = this.readForm();
+        if (!payload?.endpoint) {
+            this.showStatus("Endpoint mancante.", "error");
+            return;
+        }
+
+        this.setFormDisabled(true);
+        this.showStatus("Prova connessione in corso...", "info");
+        try {
+            const response = await fetch("/api/opcua/test", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Accept": "application/json" },
+                body: JSON.stringify(payload),
+            });
+            const result = await response.json();
+            if (!response.ok || !result?.connected) {
+                this.showStatus(`Connessione fallita: ${result?.error ?? `Status ${response.status}`}`, "error");
+                return;
+            }
+            const count = this.fillVariables(result.variables);
+            if (result.error) {
+                this.showStatus(`Collegato a ${result.endpoint}, variabili non leggibili: ${result.error}`, "error");
+            } else {
+                this.showStatus(`Collegato a ${result.endpoint} — ${count} variabili trovate`, "success");
+            }
+        } catch (error) {
+            this.showStatus(`Connessione fallita: ${error.message}`, "error");
+        } finally {
+            this.setFormDisabled(false);
         }
     }
 
@@ -261,6 +418,11 @@ export class PLCConfigManager {
         if (this.form.endOfFileNode) this.form.endOfFileNode.value = data.endOfFileNode ?? "";
         if (this.form.triggerWriteNode) this.form.triggerWriteNode.value = data.triggerWriteNode ?? "";
         if (this.form.readDoneNode) this.form.readDoneNode.value = data.readDoneNode ?? "";
+        // the fields are narrower than a path: hovering one shows it whole
+        for (const combo of this.combos ?? []) {
+            const input = combo.querySelector("input");
+            if (input) input.title = input.value;
+        }
         if (this.form.chunkSize) this.form.chunkSize.value = data.chunkSize ?? 20;
         if (this.form.ackTimeout) this.form.ackTimeout.value = data.ackTimeout ?? 5000;
         if (this.form.pollInterval) this.form.pollInterval.value = data.pollInterval ?? 100;
