@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"maps"
 	"net/http"
 	"net/http/httptest"
@@ -101,6 +102,36 @@ func TestCAMOperation_SavesTheKindOfTool(t *testing.T) {
 	}
 	if got := loadCAMOperation(t, r); got.ToolType != "vbit" || got.DrillType != "ballnose" {
 		t.Fatalf("loaded tool %q and drill %q, want %q and %q", got.ToolType, got.DrillType, "vbit", "ballnose")
+	}
+}
+
+// The operation remembers which tools of the library it was given, so it can read their speeds;
+// 0 is no tool, and a negative id is a mistake.
+func TestCAMOperation_RemembersTheChosenTools(t *testing.T) {
+	r, cleanup := setupTestDB(t)
+	defer cleanup()
+	body := func(toolID, drillID int) string {
+		return fmt.Sprintf(`{"operation": "profile", "thickness": 1.6, "overcut": 0.2,
+			"toolDiameter": 3, "toolType": "endmill", "toolId": %d, "side": "outside", "direction": "conventional",
+			"profileThrough": true, "profileDepth": 1, "drillDiameter": 1, "drillType": "drill", "drillId": %d,
+			"minHoleDiameter": 0.4, "maxHoleDiameter": 1.2, "peckDepth": 0, "tipAngle": 118, "tipThrough": false,
+			"drillThrough": true, "drillDepth": 1}`, toolID, drillID)
+	}
+
+	if w := camOperationRequest(r, http.MethodPost, body(3, 5)); w.Code != http.StatusOK {
+		t.Fatalf("save: status %d, body %s", w.Code, w.Body.String())
+	}
+	if got := loadCAMOperation(t, r); got.ToolID != 3 || got.DrillID != 5 {
+		t.Fatalf("loaded tool %d and drill %d, want 3 and 5", got.ToolID, got.DrillID)
+	}
+
+	for _, ids := range [][2]int{{-1, 0}, {0, -2}} {
+		if w := camOperationRequest(r, http.MethodPost, body(ids[0], ids[1])); w.Code != http.StatusBadRequest {
+			t.Errorf("tool %d, drill %d: status %d, want 400", ids[0], ids[1], w.Code)
+		}
+	}
+	if got := loadCAMOperation(t, r); got.ToolID != 3 || got.DrillID != 5 {
+		t.Fatalf("a refused save changed the tools to %d and %d", got.ToolID, got.DrillID)
 	}
 }
 

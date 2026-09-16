@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -188,9 +189,16 @@ func (h *PersistenceHandler) CreateTool(c *gin.Context) {
 		Name        string  `json:"name" binding:"required"`
 		Type        string  `json:"type"`
 		Diameter    float64 `json:"diameter" binding:"required"`
+		Feed        float64 `json:"feed"`
+		Plunge      float64 `json:"plunge"`
+		StepDown    float64 `json:"stepDown"`
 		Description string  `json:"description"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := checkToolSpeeds(&req.Feed, &req.Plunge, &req.StepDown); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -199,6 +207,9 @@ func (h *PersistenceHandler) CreateTool(c *gin.Context) {
 		Name:        req.Name,
 		Type:        req.Type,
 		Diameter:    req.Diameter,
+		Feed:        req.Feed,
+		Plunge:      req.Plunge,
+		StepDown:    req.StepDown,
 		Description: req.Description,
 	}
 	if tool.Type == "" {
@@ -212,7 +223,19 @@ func (h *PersistenceHandler) CreateTool(c *gin.Context) {
 	c.JSON(http.StatusCreated, tool)
 }
 
-// UpdateTool updates the supplied nonempty fields and positive diameter of a tool.
+// checkToolSpeeds refuses a negative speed or step-down; a missing one (nil) is fine, and so is
+// 0, which means the global setting.
+func checkToolSpeeds(feed, plunge, stepDown *float64) error {
+	for name, value := range map[string]*float64{"feed": feed, "plunge": plunge, "stepDown": stepDown} {
+		if value != nil && *value < 0 {
+			return fmt.Errorf("%s must not be negative, 0 takes the global setting", name)
+		}
+	}
+	return nil
+}
+
+// UpdateTool updates the supplied nonempty fields and positive diameter of a tool, and every speed
+// the request carries, 0 included.
 func (h *PersistenceHandler) UpdateTool(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -220,13 +243,22 @@ func (h *PersistenceHandler) UpdateTool(c *gin.Context) {
 		return
 	}
 
+	// The speeds are pointers: 0 is a value here, the way back to the global speed, and must be
+	// told apart from a field the request does not carry.
 	var req struct {
-		Name        string  `json:"name"`
-		Type        string  `json:"type"`
-		Diameter    float64 `json:"diameter"`
-		Description string  `json:"description"`
+		Name        string   `json:"name"`
+		Type        string   `json:"type"`
+		Diameter    float64  `json:"diameter"`
+		Feed        *float64 `json:"feed"`
+		Plunge      *float64 `json:"plunge"`
+		StepDown    *float64 `json:"stepDown"`
+		Description string   `json:"description"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := checkToolSpeeds(req.Feed, req.Plunge, req.StepDown); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -243,6 +275,11 @@ func (h *PersistenceHandler) UpdateTool(c *gin.Context) {
 	}
 	if req.Description != "" {
 		updates["description"] = req.Description
+	}
+	for column, speed := range map[string]*float64{"feed": req.Feed, "plunge": req.Plunge, "step_down": req.StepDown} {
+		if speed != nil {
+			updates[column] = *speed
+		}
 	}
 
 	if err := h.db.Model(&persistence.Tool{}).Where("id = ?", id).Updates(updates).Error; err != nil {

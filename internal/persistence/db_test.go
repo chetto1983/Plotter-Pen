@@ -391,6 +391,52 @@ func TestInitDB_ExistingCAMOperationGetsThePieceDefaults(t *testing.T) {
 	}
 }
 
+// toolBeforeSpeeds is the tools table of databases created before a tool carried its speeds.
+type toolBeforeSpeeds struct {
+	ID          int64   `gorm:"primaryKey;autoIncrement"`
+	Name        string  `gorm:"not null"`
+	Type        string  `gorm:"default:'pen'"`
+	Diameter    float64 `gorm:"not null"`
+	Description string
+	CreatedAt   time.Time `gorm:"autoCreateTime"`
+}
+
+func (toolBeforeSpeeds) TableName() string { return "tools" }
+
+// The tools of an existing database are kept, and with no speeds of their own they take the
+// global ones.
+func TestInitDB_ExistingToolsTakeTheGlobalSpeeds(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "old.db")
+	old, err := gorm.Open(sqlite.Open(path), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	if err := old.AutoMigrate(&toolBeforeSpeeds{}); err != nil {
+		t.Fatalf("old schema: %v", err)
+	}
+	if err := old.Create(&toolBeforeSpeeds{Name: "Fresa di casa", Type: "endmill", Diameter: 4}).Error; err != nil {
+		t.Fatalf("old row: %v", err)
+	}
+	closeDB(t, old)
+
+	db, err := InitDB(path)
+	if err != nil {
+		t.Fatalf("InitDB: %v", err)
+	}
+	t.Cleanup(func() { closeDB(t, db) })
+
+	var tools []Tool
+	if err := db.Find(&tools).Error; err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(tools) != 1 {
+		t.Fatalf("%d tools after the migration, want the one there was", len(tools))
+	}
+	if got := tools[0]; got.Name != "Fresa di casa" || got.Diameter != 4 || got.Feed != 0 || got.Plunge != 0 || got.StepDown != 0 {
+		t.Fatalf("tool after the migration %+v, want its own name and diameter and no speeds", got)
+	}
+}
+
 func closeDB(t *testing.T, db *gorm.DB) {
 	t.Helper()
 	sqlDB, err := db.DB()

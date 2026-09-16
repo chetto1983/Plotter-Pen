@@ -28,10 +28,15 @@ type Drawing struct {
 
 // Tool represents a drawing tool (pen, marker, etc.)
 type Tool struct {
-	ID          int64     `gorm:"primaryKey;autoIncrement" json:"id"`
-	Name        string    `gorm:"not null" json:"name"`
-	Type        string    `gorm:"default:'pen'" json:"type"`
-	Diameter    float64   `gorm:"not null" json:"diameter"`
+	ID       int64   `gorm:"primaryKey;autoIncrement" json:"id"`
+	Name     string  `gorm:"not null" json:"name"`
+	Type     string  `gorm:"default:'pen'" json:"type"`
+	Diameter float64 `gorm:"not null" json:"diameter"`
+	// The speeds the tool cuts at, in mm/s like V, and how deep it goes in one pass, in mm. 0 is
+	// no speed of its own: the operation takes the global one from PLCSimulationSettings.
+	Feed        float64   `gorm:"default:0" json:"feed"`
+	Plunge      float64   `gorm:"default:0" json:"plunge"`
+	StepDown    float64   `gorm:"default:0" json:"stepDown"`
 	Description string    `json:"description,omitempty"`
 	CreatedAt   time.Time `gorm:"autoCreateTime" json:"createdAt"`
 }
@@ -68,13 +73,18 @@ type CAMOperation struct {
 	ToolDiameter float64 `gorm:"default:2" json:"toolDiameter"`
 	// ToolType and DrillType are the kind of tool chosen in the library, so the 3D view can draw
 	// the tool that is cutting; the program does not depend on them.
-	ToolType        string    `gorm:"default:'endmill'" json:"toolType"`
+	ToolType string `gorm:"default:'endmill'" json:"toolType"`
+	// ToolID and DrillID are the tools of the library the profile and the drilling were given, 0
+	// when none was: the operation reads their speeds, and a tool deleted since falls back on the
+	// global ones.
+	ToolID          int64     `gorm:"default:0" json:"toolId"`
 	Side            string    `gorm:"default:'outside'" json:"side"`
 	Direction       string    `gorm:"default:'conventional'" json:"direction"`
 	ProfileThrough  bool      `gorm:"default:true" json:"profileThrough"`
 	ProfileDepth    float64   `gorm:"default:1" json:"profileDepth"`
 	DrillDiameter   float64   `gorm:"default:1" json:"drillDiameter"`
 	DrillType       string    `gorm:"default:'drill'" json:"drillType"`
+	DrillID         int64     `gorm:"default:0" json:"drillId"`
 	MinHoleDiameter float64   `gorm:"default:0.4" json:"minHoleDiameter"`
 	MaxHoleDiameter float64   `gorm:"default:1.2" json:"maxHoleDiameter"`
 	PeckDepth       float64   `gorm:"default:0" json:"peckDepth"`

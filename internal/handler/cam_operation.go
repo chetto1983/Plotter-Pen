@@ -57,6 +57,10 @@ func (h *PersistenceHandler) SaveCAMOperation(c *gin.Context) {
 			return
 		}
 	}
+	if req.ToolID < 0 || req.DrillID < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "toolId and drillId must not be negative, 0 is no tool"})
+		return
+	}
 	if req.Direction != cam.CuttingConventional && req.Direction != cam.CuttingClimb {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("direction must be %q or %q", cam.CuttingConventional, cam.CuttingClimb)})
 		return
@@ -69,12 +73,14 @@ func (h *PersistenceHandler) SaveCAMOperation(c *gin.Context) {
 		"overcut":           req.Overcut,
 		"tool_diameter":     req.ToolDiameter,
 		"tool_type":         req.ToolType,
+		"tool_id":           req.ToolID,
 		"side":              req.Side,
 		"direction":         req.Direction,
 		"profile_through":   req.ProfileThrough,
 		"profile_depth":     req.ProfileDepth,
 		"drill_diameter":    req.DrillDiameter,
 		"drill_type":        req.DrillType,
+		"drill_id":          req.DrillID,
 		"min_hole_diameter": req.MinHoleDiameter,
 		"max_hole_diameter": req.MaxHoleDiameter,
 		"peck_depth":        req.PeckDepth,
