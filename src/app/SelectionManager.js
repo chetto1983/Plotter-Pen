@@ -60,6 +60,14 @@ export class SelectionManager {
 
     if (this.app.renderer) this.app.renderer.invalidateCache();
     this.app.render();
+    this.notifySelectionChanged();
+  }
+
+  /**
+   * Tell the rest of the app the selection changed: the layer panel marks its rows and the CAM
+   * regenerates the program, because the selection is its work area
+   */
+  notifySelectionChanged() {
     document.dispatchEvent(new CustomEvent('selectionChanged', { detail: { selection: this.app.selectedPrimitives } }));
   }
 
@@ -118,7 +126,7 @@ export class SelectionManager {
     if (this.app.snapManager) this.app.snapManager.setPrimitives(this.app.primitives);
     this.app.render();
     this.app.refreshPLCOutput();
-    document.dispatchEvent(new CustomEvent('selectionChanged', { detail: { selection: this.app.selectedPrimitives } }));
+    this.notifySelectionChanged();
     this.app.ui.updateStatus('Elementi eliminati');
   }
 
@@ -325,6 +333,10 @@ export class SelectionManager {
 
     // Select primitives based on mode
     for (const primitive of this.app.primitives) {
+      // Skip invisible layers, as a click does: what is not on the screen must not be selected,
+      // deleted, moved or cut
+      if (this.app.layerManager && !this.app.layerManager.isPrimitiveVisible(primitive)) continue;
+
       const intersects = primitive.intersectsBox(minX, minY, maxX, maxY);
 
       if (crossing) {
@@ -348,6 +360,7 @@ export class SelectionManager {
     this.app.ui.updateStatus(count > 0 ? `Selezionati: ${count} (${mode})` : 'Nessun elemento selezionato');
     if (this.app.renderer) this.app.renderer.invalidateCache();
     this.app.render();
+    this.notifySelectionChanged();
   }
 
   /**
@@ -365,7 +378,7 @@ export class SelectionManager {
     if (this.app.snapManager) this.app.snapManager.setPrimitives(this.app.primitives);
     this.app.render();
     this.app.refreshPLCOutput();
-    document.dispatchEvent(new CustomEvent('selectionChanged', { detail: { selection: this.app.selectedPrimitives } }));
+    this.notifySelectionChanged();
     this.app.ui.updateStatus('Area di lavoro pulita');
   }
 }

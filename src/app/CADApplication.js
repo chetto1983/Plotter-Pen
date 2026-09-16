@@ -305,6 +305,7 @@ export class CADApplication {
         }
         this.selectedPrimitives.clear();
         this.highlightedPrimitive = null;
+        if (this.selectionManager) this.selectionManager.notifySelectionChanged();
         this.ui.updateStatus('Operazione annullata');
     }
 
