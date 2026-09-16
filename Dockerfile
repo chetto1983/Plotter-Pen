@@ -54,11 +54,13 @@ FROM alpine:latest AS runner
 # Install runtime dependencies
 RUN apk add --no-cache sqlite-libs ca-certificates wget
 
-# Environment variables
+# Environment variables. A container has no browser to open: without OPEN_BROWSER=false the
+# server tries xdg-open at every start and logs the failure.
 ENV GIN_MODE=release \
     HOST=0.0.0.0 \
     PORT=8000 \
-    DB_PATH=/app/data/plotter.db
+    DB_PATH=/app/data/plotter.db \
+    OPEN_BROWSER=false
 
 WORKDIR /app
 

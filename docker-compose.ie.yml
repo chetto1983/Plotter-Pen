@@ -12,6 +12,8 @@ services:
       HOST: "0.0.0.0"
       PORT: "8000"
       GIN_MODE: "release"
+      # no browser in the container (also set in the image)
+      OPEN_BROWSER: "false"
 
       # Database
       DB_PATH: "/app/data/plotter.db"
