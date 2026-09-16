@@ -155,8 +155,9 @@ step, whose program and 3D view are the ones shown.
   primitives on CONTORNO and FORI, one layer in the app. `LayerManager.adoptPrimitiveLayers()` now
   makes a layer, named as its id, for every id the primitives carry and the drawing lacks. It runs
   after a DXF import and after a restore (undo and redo, the autosaved session, a drawing file or a
-  saved drawing), so the drawing already in the container gets its layers without a reimport. It
-  only adds: nothing the drawing had goes away. An undo brings the layers back as they were, since
+  saved drawing), so a drawing imported before the fix gets its layers without a reimport. The
+  session saved in the container has none to get: its 314 primitives carry no layer id and sit on
+  Layer 0 (read on 2026-09-16). It only adds: nothing the drawing had goes away. An undo brings the layers back as they were, since
   its snapshot holds them.
 - **The job** (`src/app/JobManager.js`): the steps, the active one (remembered in the browser as
   `camActiveStep`), and the whole list saved to `/api/cam/job` 300 ms after a change, with the
