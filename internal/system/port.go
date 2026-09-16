@@ -3,6 +3,7 @@ package system
 import (
 	"fmt"
 	"net"
+	"strconv"
 	"time"
 )
 
@@ -44,9 +45,16 @@ func IsPortAvailable(port int) bool {
 	return ln.Close() == nil
 }
 
-// IsPortInUse checks if a TCP port is currently in use
+// IsPortInUse reports whether something is serving on the port, by connecting to it.
+// It does not ask whether the port can be listened on: an operating system refuses a listen
+// for reasons of its own, and Windows reserves whole ranges for Hyper-V, where nothing is
+// serving at all.
 func IsPortInUse(port int) bool {
-	return !IsPortAvailable(port)
+	conn, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), 200*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	return conn.Close() == nil
 }
 
 // FindMultipleAvailablePorts finds n available ports

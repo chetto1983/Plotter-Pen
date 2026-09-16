@@ -447,26 +447,47 @@ func TestWaitForPort_Timeout(t *testing.T) {
 // === WaitForPortInUse Tests ===
 
 func TestWaitForPortInUse_AlreadyInUse(t *testing.T) {
-	// Start a listener
-	ln, err := net.Listen("tcp", ":59992")
+	// A port the system hands out, so the test does not fall into a range Windows reserves
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		t.Skip("Could not start listener")
+		t.Fatalf("Could not start listener: %v", err)
 	}
 	defer ln.Close()
+	port := ln.Addr().(*net.TCPAddr).Port
 
 	// Wait should succeed immediately since port is in use
-	err = WaitForPortInUse(59992, 200*time.Millisecond)
-	if err != nil {
+	if err := WaitForPortInUse(port, 200*time.Millisecond); err != nil {
 		t.Errorf("Expected success for port in use: %v", err)
 	}
 }
 
 func TestWaitForPortInUse_Timeout(t *testing.T) {
-	// Use high port unlikely to be in use
-	port := 59993
-	err := WaitForPortInUse(port, 100*time.Millisecond)
-	if err == nil {
-		t.Error("Expected timeout error for available port")
+	// The same port once the listener is gone: free, whatever the system thinks of binding it
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Could not start listener: %v", err)
+	}
+	port := ln.Addr().(*net.TCPAddr).Port
+	ln.Close()
+
+	if err := WaitForPortInUse(port, 100*time.Millisecond); err == nil {
+		t.Error("Expected timeout error for a port nothing is serving")
+	}
+}
+
+func TestIsPortInUse_FollowsTheServer(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Could not start listener: %v", err)
+	}
+	port := ln.Addr().(*net.TCPAddr).Port
+
+	if !IsPortInUse(port) {
+		t.Error("Expected the port of a running listener to be in use")
+	}
+	ln.Close()
+	if IsPortInUse(port) {
+		t.Error("Expected the port to be free once the listener is closed")
 	}
 }
 
