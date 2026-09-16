@@ -130,7 +130,7 @@ decisions behind it, is in `docs/HANDOFF.md` ("Next milestone: the whole job").
 | 1 | Speeds in the tool — done 2026-09-16 | `internal/persistence/db.go`, `src/app/toolCatalog.js`, `src/app/ToolLibraryManager.js` |
 | 2 | The job: model and API — done 2026-09-16 | `internal/persistence/db.go`, `internal/handler/cam_job.go` |
 | 3 | The job in the panel — done 2026-09-16 | `src/app/JobManager.js`, `src/app/CAMOperationManager.js`, `src/app/LayerManager.js`, `src/ui/components/SidebarRight.js` |
-| 4 | Sending in sequence | `src/app/PLCOutputManager.js`, `internal/handler/opcua.go` |
+| 4 | Sending in sequence — done 2026-09-16 | `src/app/JobRunner.js`, `src/app/PLCOutputManager.js` |
 | 5 | Open contours, closed with help | `internal/service/cam/chain.go` |
 | 6 | Errors in Italian | `src/app/` where the messages are shown |
 

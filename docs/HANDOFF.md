@@ -5,16 +5,16 @@ router for wood and PCB, with the CAM inside Plotter-Pen (no external CAD/CAM).
 
 ## Where things stand
 
-- `origin/main` carries the job in the panel; nothing is waiting to be pushed.
+- `origin/main` carries the run of the job; nothing is waiting to be pushed.
 - The Compose container on port 41880 runs it and is healthy. The database in the
   `plotter-pen_plotter-data` volume was backed up before every rebuild of the day, the last as
-  `plotter.db.bak-2026-09-16-before-job-panel`.
+  `plotter.db.bak-2026-09-16-before-job-run`.
 - The CAM list of "cosa manca" is finished: DXF bulges, round holes, the tool library, the work
   area, the profile on the line, the piece and the tool in the 3D view, the camera that follows
   the tool, and the details out of reach. Each piece has its own section below.
-- The milestone "the whole job" is under way: pieces 1 to 3 are done — the speeds in the tool,
-  the job in the database, and the job in the panel, with the layers of a DXF now layers of the
-  app. Piece 4, sending the steps in sequence, is next and needs its short design first.
+- The milestone "the whole job" is under way: pieces 1 to 4 are done — the speeds in the tool,
+  the job in the database, the job in the panel, and running it step by step on the PLC. Piece 5,
+  open contours closed with help, is next and needs its short design first.
 - The OPC UA side addresses the PLC by the names of its variables, lists them from the machine and
   tests a connection before it is saved; a program of 25 lines was transferred to the machine at
   192.168.0.1 by name alone.
@@ -48,7 +48,7 @@ app must never send the next program without an explicit confirmation.
 | 1 | Speeds in the tool — **done 2026-09-16** | `Tool` gains feed, plunge and step-down; the operation reads them from the tool it was given. Migration, API, library window, panel. |
 | 2 | The job: model and API — **done 2026-09-16** | The ordered steps (operation, tool, parameters, layer) in the database, `GET/POST /api/cam/job`. The program of a step is generated with the endpoints that already exist. |
 | 3 | The job in the panel — **done 2026-09-16** | The steps in the Output PLC panel: add, remove, reorder, duplicate; the active step is edited as the panel does today. |
-| 4 | Sending in sequence | Transfer a step, the operator runs it, confirms, the app asks for the tool change and goes on. Never a transfer without a confirmation, because nothing on the machine says the cut is over. |
+| 4 | Sending in sequence — **done 2026-09-16** | Transfer a step, the operator runs it, confirms, the app asks for the tool change and goes on. Never a transfer without a confirmation, because nothing on the machine says the cut is over. |
 | 5 | Open contours, closed with help | Where the contour opens and an offer to close it within a tolerance, instead of today's flat refusal (`a profile needs closed contours`). |
 | 6 | Errors in Italian | The messages of the API where the user reads them; English stays in the logs. |
 
@@ -197,6 +197,65 @@ step, whose program and 3D view are the ones shown.
   - the layout at 1440 × 900 and 1024 × 768, with the menu open inside the panel.
   - the checks of the earlier pieces, pointed at the job where they read the operation.
   - `npm run lint` and `npm run build` with no warnings.
+
+### Piece 4: running the job (2026-09-16)
+
+The machine says when it has **received** a program — the chunked transfer ends with the PLC's
+acknowledgement — and never when it has **finished** cutting it. So the operator paces the job
+(decided with the user: a bar at the top of the panel, and a second confirmation when the tool
+changes).
+
+- **Start** (`src/app/JobRunner.js`, the ▶ button of the job): every step is generated first; a
+  step whose layer is hidden, missing or empty, or whose program the server refuses or leaves
+  empty, keeps the job from starting and the bar names it (`Passo 1: il livello FORI è
+  nascosto.`). Without the WebSocket the job does not start. The run begins at the active step.
+- **One step at a time**, in the bar:
+  - *ready*: `Passo N di M · Operazione · livello` and the tool, named from the library when the
+    step was given one of its tools (`Punta prova (punta Ø1)`), else by kind and diameter. The
+    first step of a run, and every step whose tool differs from the one before (kind, id and
+    diameter), needs **Montato: …** ticked before **Invia passo N** is enabled; the same tool
+    again says `Stesso utensile` and needs nothing.
+  - *sending*: the program is generated again at that moment, from the drawing as it is, and goes
+    through the existing chunked transfer; a layer hidden since the check makes the step fail
+    instead.
+  - *loaded*: only on `transfer_complete`, that is after the PLC acknowledged every chunk and the
+    end of file: `Passo N caricato sul PLC (L righe). Avvia la macchina…` and **Passo N finito**.
+    Nothing else is offered: the next step cannot be sent before that press.
+  - *failed*: `transfer_error`, a server error, a cancelled transfer or a lost connection give the
+    message and **Riprova**, which sends the same step again without asking for the tool.
+  - *finished*: `Lavoro finito`, and the panel is given back.
+- **Ferma** is there while the job runs: it cancels a transfer under way and ends the run. It does
+  not stop the machine, which the app cannot do, and the bar says so next to it.
+- **While the job runs** the list, the layer, the tabs and the parameters are disabled
+  (`JobManager.locked`, which only the run can move past with `activate()`); the panel follows
+  the step being run, with its program and its tool in 3D; the ribbon **Invia** and the `SEND`
+  command answer `Lavoro in corso: si invia dalla barra del lavoro`. The run lives in the page: a
+  reload ends it.
+- **Code moved for it**: `PLCOutputManager.generate(step)` makes the program of any step without
+  showing it (the panel's own extraction uses it too), and `CAMOperationManager.request()` and
+  `cutKeys()` take the step.
+- **The HTTP send is gone.** When the WebSocket was not open, the page fell back on `POST
+  /api/opcua/send` with `{commands}`, which the handler refuses (it binds `data`), and which in any
+  case writes the whole program in one write — not how the PLC reads a program. Now **Invia**
+  without the WebSocket says `PLC non connesso: niente inviato`. The endpoint stays in the API.
+- **Checked** against **the PLC at 192.168.0.1**, as the user asked ("più veritiero"; no mechanics
+  attached, writes allowed), from a local server on a temporary database, with the drawing made in
+  the app's own CAD and two tools of the library — 21 checks: a hidden layer keeps the job from
+  starting and nothing is sent; the first step names its tool and sends nothing until it is ticked;
+  the note about Ferma is shown; list, layer, tabs and parameters are locked and the ribbon send
+  sends nothing; step 1 (9 lines) reaches *loaded* after the PLC's acknowledgements, the program
+  sent is the one on screen, and step 2 is not offered before **Passo 1 finito**; step 2 asks for
+  the other tool and sends its own 80 lines; step 3 with the same tool asks nothing and is sent;
+  the job finishes and the panel comes back; Ferma before sending sends nothing; without the
+  WebSocket nothing goes over HTTP and the job does not start; no page errors. Each run sent
+  three programs to the PLC; the full run passed before a last change (a finished job no longer
+  shows Ferma and gives the panel back) and again on the final code.
+- **Met on the way**: from the local server the PLC refused every session with `EOF` while the
+  configuration asked for `SignAndEncrypt`; with `None`, which is what the container uses, it
+  connected at once. The error reached the bar as `Invio non riuscito: connection failed: failed
+  to connect: EOF.` with **Riprova**, which is the failure path working. The session limit noted
+  under "Choosing the variables from the PLC" is the likely cause, not verified; the container
+  kept its own session throughout. The earlier checks, which send nothing, pass on the final bundle.
 
 ### After piece 3: three issues found on the way (2026-09-16)
 

@@ -148,10 +148,10 @@ plotter-pen/
 | `/api/opcua/certificates/download/:type` | GET | Download a certificate |
 | `/api/opcua/connect`, `/api/opcua/disconnect` | POST | Connection control |
 | `/api/opcua/status` | GET | Connection status |
-| `/api/opcua/send` | POST | Send commands to the PLC |
+| `/api/opcua/send` | POST | Write `data` to the data node in one write and set the trigger; the page sends through the chunked transfer of `/api/opcua/ws` instead |
 | `/api/opcua/position` | GET | Current position |
 | `/api/opcua/machine-status` | GET | Machine status |
-| `/api/opcua/ws` | WS | Real-time position stream |
+| `/api/opcua/ws` | WS | Real-time position stream, and the chunked transfer of a program with the PLC's acknowledgements (`transfer`, `transfer_progress`, `transfer_complete`, `transfer_error`) |
 
 ### Health
 
