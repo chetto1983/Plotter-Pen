@@ -6,6 +6,7 @@ import { applyDrawingData, buildDrawingData } from "./file/drawingData.js";
 import { downloadLegacy, pickFileLegacy } from "./file/fileHelpers.js";
 
 import { createPrimitiveFromJSON } from "../geometry/primitives.js";
+import { responseError } from "../services/serverError.js";
 
 export class FileManager {
   constructor(app) {
@@ -132,10 +133,7 @@ export class FileManager {
         body: content
       });
 
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.message || 'Import failed');
-      }
+      if (!response.ok) throw await responseError(response);
 
       this.app.ui.updateStatus('Download risultati...');
       const result = await response.json();
@@ -210,10 +208,7 @@ export class FileManager {
         body: content
       });
 
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.message || 'Import failed');
-      }
+      if (!response.ok) throw await responseError(response);
 
       this.app.ui.updateStatus('Download risultati...');
       const result = await response.json();
@@ -382,10 +377,7 @@ export class FileManager {
         body: JSON.stringify({ name, data, previewImg })
       });
 
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.message || 'Save failed');
-      }
+      if (!response.ok) throw await responseError(response);
 
       this.app.ui.updateStatus(`Disegno "${name}" salvato`);
       return true;
@@ -398,12 +390,12 @@ export class FileManager {
   async listDrawings() {
     try {
       const response = await fetch('/api/drawings');
-      if (!response.ok) throw new Error('Failed to fetch list');
+      if (!response.ok) throw await responseError(response);
       const res = await response.json();
       if (Array.isArray(res)) return res;
       return Array.isArray(res.data) ? res.data : [];
-    } catch {
-      this.app.ui.updateStatus('Errore recupero lista disegni');
+    } catch (err) {
+      this.app.ui.updateStatus(`Errore recupero lista disegni: ${err.message}`);
       return [];
     }
   }
@@ -414,11 +406,11 @@ export class FileManager {
     this.app.ui.updateStatus(`Caricamento "${label}"...`);
     try {
       const response = await fetch(`/api/drawings/${encodeURIComponent(id)}`);
-      if (!response.ok) throw new Error('Failed to load drawing');
+      if (!response.ok) throw await responseError(response);
 
       const drawing = await response.json();
       const rawData = drawing.data;
-      if (!rawData) throw new Error('Empty data');
+      if (!rawData) throw new Error('il disegno salvato è vuoto');
       const data = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
 
       applyDrawingData(this.app, data);
@@ -433,11 +425,11 @@ export class FileManager {
 
   async deleteDrawing(id, name = '') {
     try {
-      if (!id) throw new Error('Missing drawing id');
+      if (!id) throw new Error('manca l\'id del disegno');
       const response = await fetch(`/api/drawings/${encodeURIComponent(id)}`, {
         method: 'DELETE'
       });
-      if (!response.ok) throw new Error('Delete failed');
+      if (!response.ok) throw await responseError(response);
       const label = name || `ID ${id}`;
       this.app.ui.updateStatus(`Disegno "${label}" eliminato`);
       return true;

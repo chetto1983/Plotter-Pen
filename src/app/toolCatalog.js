@@ -3,6 +3,8 @@
  * reads the speeds of the tool an operation was given.
  */
 
+import { responseError } from '../services/serverError.js';
+
 let tools = [];
 
 /**
@@ -11,7 +13,7 @@ let tools = [];
  */
 export async function loadTools() {
   const response = await fetch('/api/tools', { headers: { Accept: 'application/json' } });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  if (!response.ok) throw await responseError(response);
   const payload = await response.json();
   // the endpoint answers with a bare array, unlike the rest of the API
   tools = Array.isArray(payload) ? payload : (payload?.data ?? []);

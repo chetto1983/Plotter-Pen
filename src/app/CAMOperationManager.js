@@ -50,6 +50,11 @@ const LABELS = { pen: 'Penna', profile: 'Profilo', drill: 'Foratura' };
 // A number as the panel writes it, with a decimal comma
 const comma = (value) => String(value).replace('.', ',');
 
+// The messages of the server start in lower case, as they follow a lead; in the report they start
+// a line, and the error is a sentence of its own
+const capitalized = (text) => `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+const sentence = (text) => `${capitalized(text)}${/[.!?]$/.test(text) ? '' : '.'}`;
+
 // Remembered in the browser, like plcPanelCollapsed
 const PARAMS_COLLAPSED_KEY = 'camParamsCollapsed';
 
@@ -348,7 +353,7 @@ export class CAMOperationManager {
     box.className = 'cam-op-message';
     // the server lists the warnings of the open contours last, one each: they are said from their details
     const others = warnings.slice(0, Math.max(0, warnings.length - open.length));
-    const lines = [...others, ...open.map((c) => this.openLine(c))];
+    const lines = [...others.map(capitalized), ...open.map((c) => this.openLine(c))];
     const summaries = [];
     if (others.length > 0) {
       summaries.push(this.operation.operation === 'drill'
@@ -359,7 +364,7 @@ export class CAMOperationManager {
 
     if (error) {
       box.classList.add('error');
-      box.append(`${this.label}: programma non generato. ${open.length > 0 ? 'Nel disegno non c\'è nessun contorno chiuso.' : error}`);
+      box.append(`${this.label}: programma non generato. ${open.length > 0 ? 'Nel disegno non c\'è nessun contorno chiuso.' : sentence(error)}`);
     } else if (lines.length > 0) {
       box.classList.add('warning');
     }

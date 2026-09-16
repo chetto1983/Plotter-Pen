@@ -7,6 +7,7 @@
  * programs that use it.
  */
 import { loadTools } from './toolCatalog.js';
+import { responseError } from '../services/serverError.js';
 
 const TYPE_LABELS = {
   pen: 'penna',
@@ -165,7 +166,7 @@ export class ToolLibraryManager {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(tool)
       });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (!response.ok) throw await responseError(response);
       const saved = await response.json().catch(() => null);
       if (creating && saved?.id) this.selectedId = saved.id;
       await this.loadTools();
@@ -180,7 +181,7 @@ export class ToolLibraryManager {
     if (this.selectedId === null) return;
     try {
       const response = await fetch(`/api/tools/${this.selectedId}`, { method: 'DELETE' });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (!response.ok) throw await responseError(response);
       this.selectedId = null;
       this.startNew();
       await this.loadTools();

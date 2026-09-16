@@ -5,6 +5,8 @@
  * and the tabs and parameters below edit the active step.
  */
 
+import { responseError } from '../services/serverError.js';
+
 // Remembered in the browser, like camParamsCollapsed
 const ACTIVE_STEP_KEY = 'camActiveStep';
 
@@ -210,10 +212,7 @@ export class JobManager {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ steps: this.steps })
       });
-      if (!response.ok) {
-        const result = await response.json().catch(() => ({}));
-        throw new Error(result.error || `HTTP ${response.status}`);
-      }
+      if (!response.ok) throw await responseError(response);
     } catch (err) {
       this.app.ui.updateStatus(`Errore salvataggio lavoro: ${err.message}`);
     }

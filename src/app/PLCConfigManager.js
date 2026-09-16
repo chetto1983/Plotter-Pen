@@ -1,3 +1,5 @@
+import { errorText, responseError } from "../services/serverError.js";
+
 export class PLCConfigManager {
     constructor() {
         this.modal = document.getElementById('plcConfigModal');
@@ -216,9 +218,9 @@ export class PLCConfigManager {
                 headers: { "Content-Type": "application/json", "Accept": "application/json" },
                 body: JSON.stringify(payload),
             });
-            const result = await response.json();
+            const result = await response.json().catch(() => null);
             if (!response.ok || !result?.connected) {
-                this.showStatus(`Connessione fallita: ${result?.error ?? `Status ${response.status}`}`, "error");
+                this.showStatus(`Connessione fallita: ${errorText(result, response)}`, "error");
                 return;
             }
             const count = this.fillVariables(result.variables);
@@ -240,7 +242,7 @@ export class PLCConfigManager {
         this.clearStatus();
         try {
             const response = await fetch("/api/opcua/plcs");
-            if (!response.ok) throw new Error(`Status ${response.status}`);
+            if (!response.ok) throw await responseError(response);
             const payload = await response.json();
             this.plcList = payload?.data || [];
             this.populatePLCSelector();
@@ -253,8 +255,8 @@ export class PLCConfigManager {
                 this.plcSelector.value = this.plcList[0].id;
                 this.populateForm(this.plcList[0]);
             }
-        } catch {
-            this.showStatus("Errore caricamento lista PLC.", "error");
+        } catch (error) {
+            this.showStatus(`Errore caricamento lista PLC: ${error.message}`, "error");
         } finally {
             this.setFormDisabled(false);
         }
@@ -273,12 +275,12 @@ export class PLCConfigManager {
         // Activate selected PLC
         try {
             const response = await fetch(`/api/opcua/plcs/${id}/activate`, { method: "POST" });
-            if (!response.ok) throw new Error("Activation failed");
+            if (!response.ok) throw await responseError(response);
             const payload = await response.json();
             this.populateForm(payload.data);
             this.showStatus("PLC attivato.", "success");
-        } catch {
-            this.showStatus("Errore attivazione PLC.", "error");
+        } catch (error) {
+            this.showStatus(`Errore attivazione PLC: ${error.message}`, "error");
         }
     }
 
@@ -291,11 +293,11 @@ export class PLCConfigManager {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ name, endpoint: "opc.tcp://192.168.0.1:4840" })
             });
-            if (!response.ok) throw new Error("Creation failed");
+            if (!response.ok) throw await responseError(response);
             this.showStatus("PLC creato.", "success");
             await this.loadPLCList();
-        } catch {
-            this.showStatus("Errore creazione PLC.", "error");
+        } catch (error) {
+            this.showStatus(`Errore creazione PLC: ${error.message}`, "error");
         }
     }
 
@@ -306,11 +308,11 @@ export class PLCConfigManager {
         if (!confirm(`Eliminare "${plc?.name}"?`)) return;
         try {
             const response = await fetch(`/api/opcua/plcs/${id}`, { method: "DELETE" });
-            if (!response.ok) throw new Error("Cannot delete active PLC");
+            if (!response.ok) throw await responseError(response);
             this.showStatus("PLC eliminato.", "success");
             await this.loadPLCList();
-        } catch {
-            this.showStatus("Impossibile eliminare PLC attivo.", "error");
+        } catch (error) {
+            this.showStatus(`Errore eliminazione PLC: ${error.message}`, "error");
         }
     }
 
@@ -322,7 +324,7 @@ export class PLCConfigManager {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({})
             });
-            if (!response.ok) throw new Error("Generation failed");
+            if (!response.ok) throw await responseError(response);
             const result = await response.json();
             if (this.certStatus) {
                 this.certStatus.textContent = "Generati";
@@ -330,8 +332,8 @@ export class PLCConfigManager {
             }
             this.enableDownloadButtons(true);
             this.showStatus(result.message || "Certificati generati.", "success");
-        } catch {
-            this.showStatus("Errore generazione certificati.", "error");
+        } catch (error) {
+            this.showStatus(`Errore generazione certificati: ${error.message}`, "error");
         }
     }
 
@@ -509,7 +511,7 @@ export class PLCConfigManager {
             const result = await response.json().catch(() => ({}));
 
             if (!response.ok) {
-                throw new Error(result.message || "Salvataggio fallito.");
+                throw new Error(errorText(result, response));
             }
 
             this.populateForm(result.data);

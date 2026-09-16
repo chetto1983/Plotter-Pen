@@ -4,6 +4,7 @@ import { getPLCSettingsFromUI, setPLCSettingsToUI, getPLCSettingsFromModal, setP
 import { CAMOperationManager } from './CAMOperationManager.js';
 import { camArea, visibleLayerKey } from './camArea.js';
 import { stockOf } from './camStock.js';
+import { errorText } from '../services/serverError.js';
 
 // Remembered in the browser, like camParamsCollapsed
 const FOLLOW_TOOL_KEY = 'plc3dFollowTool';
@@ -612,7 +613,7 @@ export class PLCOutputManager {
       body: JSON.stringify(body)
     });
     const result = await response.json().catch(() => ({}));
-    if (!response.ok) return { error: result.error || `HTTP ${response.status}`, result };
+    if (!response.ok) return { error: errorText(result, response), result };
     return { result };
   }
 
