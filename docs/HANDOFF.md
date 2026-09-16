@@ -5,15 +5,17 @@ router for wood and PCB, with the CAM inside Plotter-Pen (no external CAD/CAM).
 
 ## Where things stand
 
-- `origin/main` carries the speeds in the tool; nothing is waiting to be pushed.
+- `origin/main` carries the job in the database; nothing is waiting to be pushed.
 - The Compose container on port 41880 runs it and is healthy. The database in the
   `plotter-pen_plotter-data` volume was backed up before every rebuild of the day, the last as
-  `plotter.db.bak-2026-09-16-before-tool-speeds`.
+  `plotter.db.bak-2026-09-16-before-job-api`.
 - The CAM list of "cosa manca" is finished: DXF bulges, round holes, the tool library, the work
   area, the profile on the line, the piece and the tool in the 3D view, the camera that follows
   the tool, and the details out of reach. Each piece has its own section below.
-- The milestone "the whole job" has started: piece 1, the speeds in the tool, is done. Piece 2,
-  the job in the database, is next and needs its short design first.
+- The milestone "the whole job" is under way: piece 1 (the speeds in the tool) and piece 2 (the
+  job in the database and its API) are done. Piece 3, the job in the panel, is next and needs its
+  short design first — and it starts with the layers of a DXF, which the app does not register
+  (see "Piece 2" below).
 - The OPC UA side addresses the PLC by the names of its variables, lists them from the machine and
   tests a connection before it is saved; a program of 25 lines was transferred to the machine at
   192.168.0.1 by name alone.
@@ -45,7 +47,7 @@ app must never send the next program without an explicit confirmation.
 | # | Piece | What it holds |
 |---|-------|----------------|
 | 1 | Speeds in the tool — **done 2026-09-16** | `Tool` gains feed, plunge and step-down; the operation reads them from the tool it was given. Migration, API, library window, panel. |
-| 2 | The job: model and API | `Job` and its ordered steps (operation, tool, parameters, layer) in the database, `GET/POST /api/cam/job`. The program of a step is generated with the endpoints that already exist. |
+| 2 | The job: model and API — **done 2026-09-16** | The ordered steps (operation, tool, parameters, layer) in the database, `GET/POST /api/cam/job`. The program of a step is generated with the endpoints that already exist. |
 | 3 | The job in the panel | The steps in the Output PLC panel: add, remove, reorder, duplicate; the active step is edited as the panel does today. |
 | 4 | Sending in sequence | Transfer a step, the operator runs it, confirms, the app asks for the tool change and goes on. Never a transfer without a confirmation, because nothing on the machine says the cut is over. |
 | 5 | Open contours, closed with help | Where the contour opens and an offer to close it within a tolerance, instead of today's flat refusal (`a profile needs closed contours`). |
@@ -100,6 +102,47 @@ settings are what a tool without them falls back on.
   tool's speed, a deleted tool leaves the global speeds, an unsaved tool cannot be given. The
   three fields measured inside the window at 1440 and at 560 px wide. The earlier checks of the
   library and of the tool drawn in 3D still pass. No page errors.
+
+### Piece 2: the job in the database (2026-09-16)
+
+There is **one** job, for the drawing on screen, as there is one operation (decided with the user):
+no list of named jobs, and so no job that points at layers the open drawing does not have.
+
+- **The model** (`internal/persistence/db.go`): the parameters of an operation moved into
+  `CAMParams`, embedded in `CAMOperation`. An embedded struct keeps its column names and is flat in
+  JSON, so the table, the API and the panel did not change — the existing migration and handler
+  tests pass as they were. `JobStep` is a row of `job_steps`: `Position`, `Layer` and the same
+  `CAMParams`, `toolId` and `drillId` included. With one job there is no `Job` table: the job is
+  the steps in `Position` order.
+- **The layer** is the id of a layer, and empty for the whole drawing. The server does not check
+  it against the drawing, which it does not know.
+- **The API** (`internal/handler/cam_job.go`): `GET /api/cam/job` answers `{data: {steps: [...]}}`,
+  an empty list when there is no job. `POST /api/cam/job` takes `{steps: [...]}` and replaces the
+  whole job in one transaction, so adding, removing, moving and duplicating a step are all the
+  same save; `{"steps": []}` empties it, a body without `steps` is a 400. Row id and position are
+  not in the JSON: they change at every save, and the order of the list is the position.
+- **Checks**: every step goes through `checkCAMParams`, taken out of the operation handler, so a
+  step accepts what the operation accepts. One wrong step refuses the lot with its number
+  (`step 2: side must be …`) and the saved job stays as it was.
+- **A trap of GORM, avoided**: on `Create`, a field with a column default and a zero value gets the
+  default — `drillThrough: false` came back `true`, `overcut: 0` came back 0.2. The steps are
+  written from a map (`camParamsColumns`, which the operation already used for its update), and
+  `TestCAMJob_SavesTheStepsInOrder` fails if they are written from the struct: tried.
+- **Found for piece 3 — the layers of a DXF are not layers of the app.** An imported primitive
+  carries the name of its DXF layer (`layerId`), but `FileManager` never registers those layers in
+  the `LayerManager`: the panel still lists only "Layer 0", the DXF layers cannot be hidden
+  (`isPrimitiveVisible` answers true for a layer it does not know), and none could be chosen for a
+  step. Read in the code (`FileManager.js`, `LayerManager.js`), not yet seen in the browser. Piece
+  3 starts by registering them, with the DXF name as the id, which is what the primitives already
+  carry.
+- **Checked:** TDD (an empty job on a new database; order, layer and parameters kept, false and 0
+  included; flat JSON without id and position; empty kinds take the defaults; a save replaces the
+  job, fewer steps and none; a bad operation, side, direction, kind or tool id refuses the lot and
+  names the step; an older database gets the table and keeps the columns of the operation), then
+  `go vet`, `go test ./...` and `make quality` (0 issues). On a server with a temporary database:
+  the empty job, a save of two steps read back with their `false` values, a wrong side refused as
+  `step 2` with the job kept, a body without steps refused, an empty save, and the operation still
+  answering its 22 flat keys. No page to check: the piece has no interface.
 
 ## CAM plan
 

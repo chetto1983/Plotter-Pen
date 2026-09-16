@@ -116,7 +116,7 @@ plotter-pen/
 | `/api/state` | GET/POST | Autosave state |
 | `/api/drawings` | GET/POST | Named drawings |
 | `/api/drawings/:id` | GET/PUT/DELETE | Single drawing |
-| `/api/tools` | GET/POST | Tool library |
+| `/api/tools` | GET/POST | Tool library: name, kind, diameter, and the feed, plunge and step-down of the tool (0 takes the PLC settings) |
 | `/api/tools/:id` | PUT/DELETE | Single tool |
 
 ### Import
@@ -137,7 +137,8 @@ plotter-pen/
 | `/api/plc/settings` | GET/POST | PLC simulation settings, including step-down, plunge speed, ramp angle and the drilling retract clearance; work Z is the paper for the pen and the bed for profiles and drilling |
 | `/api/cam/profile` | POST | Profile cut of the closed contours as PLC commands, through a piece of the given thickness on the bed or to a depth below its top (same response as `/api/plc/extract`, plus `warnings` for contours the tool cannot reach) |
 | `/api/cam/drill` | POST | Drilling of the round holes in a diameter range (circles, or closed contours of arcs, polygons or lines that are round) as PLC commands, through the piece or to a depth, with optional pecks and drill point compensation (response of `/api/plc/extract` plus `warnings` for hole-sized contours that are not round) |
-| `/api/cam/operation` | GET/POST | The operation the PLC output panel shows (pen, profile or drill), the piece and the parameters |
+| `/api/cam/operation` | GET/POST | The operation the PLC output panel shows (pen, profile or drill), the piece, the parameters and the tools of the library it was given |
+| `/api/cam/job` | GET/POST | The job: its steps in cutting order, each an operation with its parameters on one layer; a save replaces the whole list, and one wrong step refuses it |
 | `/api/opcua/config` | GET/PUT | Active OPC UA configuration |
 | `/api/opcua/plcs` | GET/POST | PLC configurations |
 | `/api/opcua/plcs/:id` | GET/DELETE | Single PLC configuration |
