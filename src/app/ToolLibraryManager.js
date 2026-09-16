@@ -1,9 +1,12 @@
 /**
  * Tool library: the cutters saved in the database, chosen from the CAM panel.
  *
- * The window and the /api/tools endpoints already existed; this wires them together and hands
- * the chosen diameter to the operation that asked for it.
+ * The window and the /api/tools endpoints already existed; this wires them together. The
+ * operation that opened the window is given the tool itself — its id, its kind and its diameter —
+ * and reads the speeds from it each time it generates, so changing a tool here changes the
+ * programs that use it.
  */
+import { loadTools } from './toolCatalog.js';
 
 const TYPE_LABELS = {
   pen: 'penna',
@@ -13,6 +16,12 @@ const TYPE_LABELS = {
   drill: 'punta'
 };
 
+// The operation fields each diameter button fills
+const TARGET_FIELDS = {
+  toolDiameter: { kind: 'toolType', id: 'toolId' },
+  drillDiameter: { kind: 'drillType', id: 'drillId' }
+};
+
 export class ToolLibraryManager {
   constructor() {
     this.modal = document.getElementById('toolLibraryModal');
@@ -20,6 +29,9 @@ export class ToolLibraryManager {
     this.nameInput = document.getElementById('toolName');
     this.typeInput = document.getElementById('toolType');
     this.diameterInput = document.getElementById('toolDiameter');
+    this.feedInput = document.getElementById('toolFeed');
+    this.plungeInput = document.getElementById('toolPlunge');
+    this.stepDownInput = document.getElementById('toolStepDown');
     this.closeBtn = document.getElementById('btnCloseToolLibrary');
     this.newBtn = document.getElementById('btnNewTool');
     this.saveBtn = document.getElementById('btnSaveTool');
@@ -63,11 +75,7 @@ export class ToolLibraryManager {
   async loadTools() {
     this.list.innerHTML = '<div class="tool-lib-empty">Caricamento...</div>';
     try {
-      const response = await fetch('/api/tools', { headers: { Accept: 'application/json' } });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const payload = await response.json();
-      // the endpoint answers with a bare array, unlike the rest of the API
-      this.tools = Array.isArray(payload) ? payload : (payload?.data ?? []);
+      this.tools = await loadTools();
       this.renderList();
     } catch (err) {
       this.list.innerHTML = `<div class="tool-lib-empty">Errore caricamento utensili: ${err.message}</div>`;
@@ -90,7 +98,8 @@ export class ToolLibraryManager {
       row.textContent = tool.name;
       const detail = document.createElement('span');
       detail.className = 'tool-lib-item-detail';
-      detail.textContent = `${TYPE_LABELS[tool.type] ?? tool.type} · Ø${tool.diameter} mm`;
+      const feed = tool.feed > 0 ? ` · ${tool.feed} mm/s` : '';
+      detail.textContent = `${TYPE_LABELS[tool.type] ?? tool.type} · Ø${tool.diameter} mm${feed}`;
       row.appendChild(detail);
       row.addEventListener('click', () => this.select(tool.id));
       this.list.appendChild(row);
@@ -104,6 +113,10 @@ export class ToolLibraryManager {
     this.nameInput.value = tool.name;
     this.typeInput.value = tool.type;
     this.diameterInput.value = tool.diameter;
+    // 0 is no speed of its own: the empty field shows "globale"
+    this.feedInput.value = tool.feed > 0 ? tool.feed : '';
+    this.plungeInput.value = tool.plunge > 0 ? tool.plunge : '';
+    this.stepDownInput.value = tool.stepDown > 0 ? tool.stepDown : '';
     this.deleteBtn.disabled = false;
     this.renderList();
   }
@@ -113,23 +126,35 @@ export class ToolLibraryManager {
     this.nameInput.value = '';
     this.typeInput.value = 'endmill';
     this.diameterInput.value = '3';
+    this.feedInput.value = '';
+    this.plungeInput.value = '';
+    this.stepDownInput.value = '';
     this.deleteBtn.disabled = true;
     this.renderList();
     this.nameInput.focus();
   }
 
-  // The form as the API wants it, or null when it cannot make a tool
+  // The form as the API wants it, or null when it cannot make a tool. An empty speed is 0, the
+  // global one; a negative one is refused.
   readForm() {
     const name = this.nameInput.value.trim();
     const diameter = parseFloat(this.diameterInput.value);
     if (!name || !Number.isFinite(diameter) || diameter <= 0) return null;
-    return { name, type: this.typeInput.value, diameter };
+    const speed = (input) => {
+      const value = input.value.trim() === '' ? 0 : parseFloat(input.value);
+      return Number.isFinite(value) && value >= 0 ? value : null;
+    };
+    const feed = speed(this.feedInput);
+    const plunge = speed(this.plungeInput);
+    const stepDown = speed(this.stepDownInput);
+    if (feed === null || plunge === null || stepDown === null) return null;
+    return { name, type: this.typeInput.value, diameter, feed, plunge, stepDown };
   }
 
   async saveTool() {
     const tool = this.readForm();
     if (!tool) {
-      this.showListMessage('Servono un nome e un diametro maggiore di zero.');
+      this.showListMessage('Servono un nome, un diametro maggiore di zero e velocità non negative.');
       return;
     }
 
@@ -145,6 +170,7 @@ export class ToolLibraryManager {
       if (creating && saved?.id) this.selectedId = saved.id;
       await this.loadTools();
       if (this.selectedId !== null) this.select(this.selectedId);
+      this.refreshProgram();
     } catch (err) {
       this.showListMessage(`Errore salvataggio utensile: ${err.message}`);
     }
@@ -158,16 +184,18 @@ export class ToolLibraryManager {
       this.selectedId = null;
       this.startNew();
       await this.loadTools();
+      // an operation that used it falls back on the global speeds
+      this.refreshProgram();
     } catch (err) {
       this.showListMessage(`Errore eliminazione utensile: ${err.message}`);
     }
   }
 
-  // Hand the diameter to the operation whose button opened the window
+  // Give the saved tool to the operation whose button opened the window
   useTool() {
-    const tool = this.readForm();
+    const tool = this.tools.find((t) => t.id === this.selectedId);
     if (!tool) {
-      this.showListMessage('Scegli un utensile dalla lista.');
+      this.showListMessage('Scegli un utensile dalla lista: uno nuovo va salvato prima.');
       return;
     }
 
@@ -176,10 +204,16 @@ export class ToolLibraryManager {
       this.showListMessage('Pannello CAM non pronto.');
       return;
     }
-    // the kind travels with the diameter, so the 3D view draws the tool that is cutting
-    const kind = this.target === 'drillDiameter' ? 'drillType' : 'toolType';
-    operation.change({ [this.target]: tool.diameter, [kind]: tool.type });
+    // the kind is for the 3D view, the id for the speeds read at every generation
+    const fields = TARGET_FIELDS[this.target] ?? TARGET_FIELDS.toolDiameter;
+    operation.change({ [this.target]: tool.diameter, [fields.kind]: tool.type, [fields.id]: tool.id });
     this.close();
+  }
+
+  // The operations read the speeds of their tool when they generate: a tool changed or deleted
+  // here must reach the program on screen
+  refreshProgram() {
+    window.cadApp?.plcOutputManager?.refreshPLCOutput();
   }
 
   showListMessage(text) {

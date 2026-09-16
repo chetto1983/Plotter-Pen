@@ -78,6 +78,22 @@ export class Modals {
               <input type="number" id="toolDiameter" class="tool-input" step="0.1" value="3.0">
             </div>
           </div>
+          <div class="tool-lib-section-title tool-speeds-title">Velocità di taglio</div>
+          <div class="tool-form-grid tool-speeds">
+            <div class="tool-input-group">
+              <label for="toolFeed">Avanzamento (mm/s)</label>
+              <input type="number" id="toolFeed" class="tool-input" min="0" step="1" placeholder="globale">
+            </div>
+            <div class="tool-input-group">
+              <label for="toolPlunge">Discesa (mm/s)</label>
+              <input type="number" id="toolPlunge" class="tool-input" min="0" step="0.5" placeholder="globale">
+            </div>
+            <div class="tool-input-group">
+              <label for="toolStepDown">Passata (mm)</label>
+              <input type="number" id="toolStepDown" class="tool-input" min="0" step="0.1" placeholder="globale">
+            </div>
+          </div>
+          <div class="tool-speeds-hint">Vuoto: si usano le impostazioni globali del PLC.</div>
         </div>
         <div class="tool-actions">
           <button type="button" class="btn-tool-new" id="btnNewTool">Nuovo</button>

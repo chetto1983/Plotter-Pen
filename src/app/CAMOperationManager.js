@@ -4,6 +4,7 @@
  * profile and the drilling cut and their parameters, kept in the database (/api/cam/operation)
  * like the PLC settings.
  */
+import { loadTools, speedsFor } from './toolCatalog.js';
 
 // Same defaults as the CAMOperation columns
 const OPERATION_DEFAULTS = {
@@ -12,12 +13,14 @@ const OPERATION_DEFAULTS = {
   overcut: 0.2,
   toolDiameter: 2,
   toolType: 'endmill',
+  toolId: 0,
   side: 'outside',
   direction: 'conventional',
   profileThrough: true,
   profileDepth: 1,
   drillDiameter: 1,
   drillType: 'drill',
+  drillId: 0,
   minHoleDiameter: 0.4,
   maxHoleDiameter: 1.2,
   peckDepth: 0,
@@ -78,6 +81,8 @@ export class CAMOperationManager {
     document.getElementById('camParamsSummary')?.addEventListener('click', () => this.setParamsCollapsed(false));
 
     this.render();
+    // without the catalog the first program would be cut at the global speeds
+    await loadTools().catch(() => []);
     await this.load();
   }
 
@@ -217,9 +222,13 @@ export class CAMOperationManager {
    */
   request(primitives, settings) {
     const op = this.operation;
+    // The speeds of the tool the operation was given, the global ones where it has none; the pen
+    // has no tool of the library and cuts at the global ones
+    const toolId = { profile: op.toolId, drill: op.drillId }[op.operation] ?? 0;
+    const speeds = speedsFor(toolId, settings);
     const common = {
       primitives,
-      defaultSpeed: settings.workSpeed,
+      defaultSpeed: speeds.feed,
       rapidSpeed: settings.rapidSpeed,
       safeZ: settings.safeZ,
       workZ: settings.workZ,
@@ -234,7 +243,7 @@ export class CAMOperationManager {
           ...common,
           ...piece,
           toolDiameter: op.toolDiameter, side: op.side, direction: op.direction,
-          stepDown: settings.stepDown, plungeSpeed: settings.plungeSpeed, rampAngle: settings.rampAngle
+          stepDown: speeds.stepDown, plungeSpeed: speeds.plunge, rampAngle: settings.rampAngle
         }
       };
     }
@@ -244,7 +253,7 @@ export class CAMOperationManager {
         body: {
           ...common,
           ...piece,
-          plungeSpeed: settings.plungeSpeed, retractClearance: settings.retractClearance,
+          plungeSpeed: speeds.plunge, retractClearance: settings.retractClearance,
           drillDiameter: op.drillDiameter, minHoleDiameter: op.minHoleDiameter, maxHoleDiameter: op.maxHoleDiameter,
           peckDepth: op.peckDepth, tipAngle: op.tipAngle, tipThrough: op.tipThrough
         }

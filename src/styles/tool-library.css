@@ -41,7 +41,8 @@
 }
 
 #toolLibraryModal .cad-modal {
-    width: 520px;
+    /* wide enough for the three speeds to keep their labels on one line */
+    width: 560px;
     max-width: calc(100vw - 48px);
 }
 
@@ -122,6 +123,34 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 12px;
+}
+
+/* The speeds sit three in a row, under the details. A number field is wider than a third of the
+   column by itself: minmax(0, ...) and min-width let it shrink instead of pushing out of the window. */
+.tool-form-grid.tool-speeds {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* on a narrow screen a label may wrap: the fields stay on one line all the same */
+.tool-speeds .tool-input-group {
+    min-width: 0;
+    justify-content: flex-end;
+}
+
+.tool-speeds .tool-input {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.tool-speeds-title {
+    margin-top: 14px;
+}
+
+.tool-speeds-hint {
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--muted);
 }
 
 .tool-input-group {
