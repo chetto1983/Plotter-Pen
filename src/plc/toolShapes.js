@@ -10,9 +10,8 @@
  */
 import * as THREE from 'three';
 
-// How long the cutting part is drawn, in diameters, and how long the shank above it is
+// How long the cutting part is drawn, in diameters
 const FLUTE_LENGTH = 3;
-const SHANK_LENGTH = 4;
 // A pen is not measured by its diameter: it is drawn as the barrel of a plotter pen
 const PEN_DIAMETER = 2.5;
 const PEN_TIP = 1.2;
@@ -63,33 +62,22 @@ export function toolProfile(kind, diameter, tipAngle = 118) {
 }
 
 /**
- * The tool as a mesh, tip at the origin and pointing down -Z, with the shank above it.
+ * The tool as a mesh, tip at the origin and pointing down -Z. Only the cutting part is drawn: a
+ * shank above it hides the cut without saying anything about it.
  * @returns {THREE.Group}
  */
 export function toolMesh(kind, diameter, tipAngle = 118) {
   const group = new THREE.Group();
-  const profile = toolProfile(kind, diameter, tipAngle);
-  const top = profile[profile.length - 1];
 
-  // Cutting part: turned from the profile. The lathe spins round +Y, so the whole tool is laid
-  // down once at the end, tip at the origin and body towards +Z.
+  // Turned from the profile. The lathe spins round +Y, so the tool is laid down once at the end,
+  // tip at the origin and body towards +Z.
   const cutter = new THREE.Mesh(
-    new THREE.LatheGeometry(profile, 32),
+    new THREE.LatheGeometry(toolProfile(kind, diameter, tipAngle), 32),
     new THREE.MeshPhongMaterial({ color: kind === 'pen' ? 0x2266ff : 0xc8ccd4, shininess: 90 })
   );
   group.add(cutter);
 
-  // The shank, wider and dark, so the tool reads against the piece
-  const shankRadius = Math.max(top.x * 1.4, 1.5);
-  const shankLength = Math.max(diameter, 1) * SHANK_LENGTH;
-  const shank = new THREE.Mesh(
-    new THREE.CylinderGeometry(shankRadius, shankRadius, shankLength, 32),
-    new THREE.MeshPhongMaterial({ color: 0x333333 })
-  );
-  shank.position.y = top.y + shankLength / 2;
-  group.add(shank);
-
-  // Built along +Y, stood up along +Z: the tip stays at the origin and the shank rises above it
+  // Built along +Y, stood up along +Z: the tip stays at the origin and the tool rises above it
   group.rotation.x = Math.PI / 2;
   return group;
 }
