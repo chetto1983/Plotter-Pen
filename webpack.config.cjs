@@ -57,6 +57,15 @@ module.exports = {
       },
     ],
   },
+  // The bundle is served by the local container to the HMI on the same machine, not over the
+  // internet, so webpack's 244 KiB default budget is the wrong yardstick here: three.js alone is
+  // most of the megabyte. The budget is set to what the app weighs today plus room to work, so a
+  // bundle that really starts growing still says so.
+  performance: {
+    hints: 'warning',
+    maxAssetSize: 1_500_000,
+    maxEntrypointSize: 1_500_000,
+  },
   resolve: {
     extensions: ['.js'],
     alias: {
