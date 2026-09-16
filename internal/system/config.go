@@ -16,7 +16,6 @@ type ServerConfig struct {
 	OpenBrowser  bool
 	BrowserDelay time.Duration
 	GinMode      string
-	OPCUAConfig  string
 	MaxPortTries int
 	ReadTimeout  time.Duration
 	WriteTimeout time.Duration
@@ -32,7 +31,6 @@ func DefaultServerConfig() ServerConfig {
 		OpenBrowser:  true,
 		BrowserDelay: 500 * time.Millisecond,
 		GinMode:      "release",
-		OPCUAConfig:  "opcua_config.json",
 		MaxPortTries: 10,
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
@@ -50,7 +48,6 @@ func LoadServerConfig() ServerConfig {
 	cfg.StaticDir = GetEnvString("STATIC_DIR", cfg.StaticDir)
 	cfg.OpenBrowser = GetEnvBool("OPEN_BROWSER", cfg.OpenBrowser)
 	cfg.GinMode = GetEnvString("GIN_MODE", cfg.GinMode)
-	cfg.OPCUAConfig = GetEnvString("OPCUA_CONFIG", cfg.OPCUAConfig)
 	cfg.MaxPortTries = GetEnvInt("MAX_PORT_TRIES", cfg.MaxPortTries)
 
 	if delay := GetEnvInt("BROWSER_DELAY_MS", 0); delay > 0 {

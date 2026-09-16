@@ -160,7 +160,10 @@ func (g *outputGenerator) primitiveToCommands(prim Primitive) []Command {
 		if prim.ThroughPoint == nil && (prim.X1 == nil || prim.Y1 == nil) {
 			return nil
 		}
-		aux := arcAuxPoint(prim)
+		aux, ok := arcAuxPoint(prim)
+		if !ok {
+			return nil
+		}
 		cmd := Command{
 			Type:        "A",
 			CommandStr:  fmt.Sprintf("A X %s, Y %s, Z %s, I %s, J %s, V %s", g.format(*prim.X2), g.format(*prim.Y2), g.format(g.workZ), g.format(aux.X), g.format(aux.Y), g.format(g.defaultSpeed)),
@@ -342,12 +345,17 @@ func primitiveEndXY(prim Primitive) (geom.Point, bool) {
 	}
 }
 
-func arcAuxPoint(prim Primitive) geom.Point {
+// arcAuxPoint returns the PLC "through point" (I,J) for an A command. Unlike
+// G-code, the PLC arc format has no centre offset: I/J is a point the arc
+// must pass through, so start+through+end together define the arc. Reports
+// ok=false when no point on the arc can be derived from the primitive,
+// instead of guessing.
+func arcAuxPoint(prim Primitive) (geom.Point, bool) {
 	if prim.ThroughPoint != nil {
-		return *prim.ThroughPoint
+		return *prim.ThroughPoint, true
 	}
 	if prim.Cx == nil || prim.Cy == nil || prim.X1 == nil || prim.Y1 == nil {
-		return geom.Point{}
+		return geom.Point{}, false
 	}
 
 	cx, cy := *prim.Cx, *prim.Cy
@@ -358,14 +366,35 @@ func arcAuxPoint(prim Primitive) geom.Point {
 	if radius == 0 {
 		radius = math.Hypot(*prim.X1-cx, *prim.Y1-cy)
 	}
+	if radius == 0 {
+		// Start point coincides with the centre: not a real arc, no point on it exists.
+		return geom.Point{}, false
+	}
 
 	startAngle := math.Atan2(*prim.Y1-cy, *prim.X1-cx)
 	if prim.Sweep != nil {
 		midAngle := startAngle + (*prim.Sweep)/2
-		return geom.Point{X: cx + radius*math.Cos(midAngle), Y: cy + radius*math.Sin(midAngle)}
+		return geom.Point{X: cx + radius*math.Cos(midAngle), Y: cy + radius*math.Sin(midAngle)}, true
 	}
 
-	return geom.Point{X: cx, Y: cy}
+	// No sweep either: derive the through point as the midpoint of the arc
+	// between start and end (same construction as pkg/plc.Generator.Arc),
+	// using IsClockwise to pick which of the two possible arcs applies.
+	if prim.X2 == nil || prim.Y2 == nil {
+		return geom.Point{}, false
+	}
+	endAngle := math.Atan2(*prim.Y2-cy, *prim.X2-cx)
+	sweep := endAngle - startAngle
+	if prim.IsClockwise {
+		if sweep > 0 {
+			sweep -= 2 * math.Pi
+		}
+	} else if sweep < 0 {
+		sweep += 2 * math.Pi
+	}
+	midAngle := startAngle + sweep/2
+
+	return geom.Point{X: cx + radius*math.Cos(midAngle), Y: cy + radius*math.Sin(midAngle)}, true
 }
 
 func pushCommand(commands *[]Command, cmd Command) {
