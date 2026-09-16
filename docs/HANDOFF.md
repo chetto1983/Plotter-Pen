@@ -424,11 +424,7 @@ Hooks: pre-commit runs gofmt, vet, golangci-lint on the whole packages the commi
 
 ## Known issues, not fixed
 
-- **Legacy lint:** `make lint` on the whole tree reports about 138 issues plus 17 files that gofmt would change. About 40 more files differ only in line endings (CRLF working copies, the index is LF). As a result `make quality` fails at lint.
-- **Import fitter:** `fitArcsToPoints` in `internal/service/import/dxf.go` still checks only the vertices. It was left alone on purpose, so the plotter flow does not change.
-- **Arc through point:** `arcAuxPoint` in `internal/service/plc/extractor.go` returns the arc centre when an arc has neither `throughPoint` nor `sweep`.
-- **Import cache:** `SmartImportCached` keys the cache on the content only and returns the cached object without copying it.
-- **Unused configuration:** `ServerConfig.OPCUAConfig` (`OPCUA_CONFIG`) is not used by anything.
+- **Dependency advisory:** `govulncheck` reports GO-2026-5932 on `golang.org/x/crypto`, whose `openpgp` package is unmaintained. Nothing here imports it (0 vulnerabilities reachable or imported); the module arrives as an indirect requirement of Gin through `validator/v10` and `x/crypto/sha3`, and the advisory has no fixed version. It stays until Gin stops requiring it.
 - **Interface export:** `docs/interface.xml` is the export of the current PLC program, kept as a reference only: the app reads the names from the machine at every connection, because the program can change.
 ## Working rules to keep
 
