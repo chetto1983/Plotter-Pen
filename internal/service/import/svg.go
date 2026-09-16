@@ -7,6 +7,8 @@ import (
 	"math"
 	"strconv"
 	"strings"
+
+	"plotter-pen/internal/i18n"
 )
 
 const (
@@ -191,7 +193,7 @@ func parseSVGContent(content string, opts svgParseOptions) (*ParseResult, error)
 		token, err := decoder.Token()
 		if err != nil {
 			if err == io.EOF {
-				return nil, fmt.Errorf("no svg root element found")
+				return nil, i18n.Errorf("no svg root element found")
 			}
 			return nil, err
 		}
@@ -959,11 +961,11 @@ func (p *svgPathParser) parse() error {
 func (p *svgPathParser) parseMove(abs bool) error {
 	x, ok := p.nextNumber()
 	if !ok {
-		return fmt.Errorf("svg path: move missing x")
+		return i18n.Errorf("svg path: move missing %s", "x")
 	}
 	y, ok := p.nextNumber()
 	if !ok {
-		return fmt.Errorf("svg path: move missing y")
+		return i18n.Errorf("svg path: move missing %s", "y")
 	}
 	if !abs {
 		x += p.curr.X
@@ -983,7 +985,7 @@ func (p *svgPathParser) parseMove(abs bool) error {
 		}
 		y, ok = p.nextNumber()
 		if !ok {
-			return fmt.Errorf("svg path: move missing y")
+			return i18n.Errorf("svg path: move missing %s", "y")
 		}
 		if !abs {
 			x += p.curr.X
@@ -1002,7 +1004,7 @@ func (p *svgPathParser) parseLine(abs bool) error {
 		}
 		y, ok := p.nextNumber()
 		if !ok {
-			return fmt.Errorf("svg path: line missing y")
+			return i18n.Errorf("svg path: line missing %s", "y")
 		}
 		if !abs {
 			x += p.curr.X
@@ -1049,23 +1051,23 @@ func (p *svgPathParser) parseCubic(abs bool) error {
 		}
 		y1, ok := p.nextNumber()
 		if !ok {
-			return fmt.Errorf("svg path: cubic missing y1")
+			return i18n.Errorf("svg path: cubic missing %s", "y1")
 		}
 		x2, ok := p.nextNumber()
 		if !ok {
-			return fmt.Errorf("svg path: cubic missing x2")
+			return i18n.Errorf("svg path: cubic missing %s", "x2")
 		}
 		y2, ok := p.nextNumber()
 		if !ok {
-			return fmt.Errorf("svg path: cubic missing y2")
+			return i18n.Errorf("svg path: cubic missing %s", "y2")
 		}
 		x, ok := p.nextNumber()
 		if !ok {
-			return fmt.Errorf("svg path: cubic missing x")
+			return i18n.Errorf("svg path: cubic missing %s", "x")
 		}
 		y, ok := p.nextNumber()
 		if !ok {
-			return fmt.Errorf("svg path: cubic missing y")
+			return i18n.Errorf("svg path: cubic missing %s", "y")
 		}
 		if !abs {
 			x1 += p.curr.X
@@ -1088,15 +1090,15 @@ func (p *svgPathParser) parseSmoothCubic(abs bool) error {
 		}
 		y2, ok := p.nextNumber()
 		if !ok {
-			return fmt.Errorf("svg path: smooth cubic missing y2")
+			return i18n.Errorf("svg path: smooth cubic missing %s", "y2")
 		}
 		x, ok := p.nextNumber()
 		if !ok {
-			return fmt.Errorf("svg path: smooth cubic missing x")
+			return i18n.Errorf("svg path: smooth cubic missing %s", "x")
 		}
 		y, ok := p.nextNumber()
 		if !ok {
-			return fmt.Errorf("svg path: smooth cubic missing y")
+			return i18n.Errorf("svg path: smooth cubic missing %s", "y")
 		}
 		if !abs {
 			x2 += p.curr.X
@@ -1126,15 +1128,15 @@ func (p *svgPathParser) parseQuadratic(abs bool) error {
 		}
 		y1, ok := p.nextNumber()
 		if !ok {
-			return fmt.Errorf("svg path: quadratic missing y1")
+			return i18n.Errorf("svg path: quadratic missing %s", "y1")
 		}
 		x, ok := p.nextNumber()
 		if !ok {
-			return fmt.Errorf("svg path: quadratic missing x")
+			return i18n.Errorf("svg path: quadratic missing %s", "x")
 		}
 		y, ok := p.nextNumber()
 		if !ok {
-			return fmt.Errorf("svg path: quadratic missing y")
+			return i18n.Errorf("svg path: quadratic missing %s", "y")
 		}
 		if !abs {
 			x1 += p.curr.X
@@ -1155,7 +1157,7 @@ func (p *svgPathParser) parseSmoothQuadratic(abs bool) error {
 		}
 		y, ok := p.nextNumber()
 		if !ok {
-			return fmt.Errorf("svg path: smooth quadratic missing y")
+			return i18n.Errorf("svg path: smooth quadratic missing %s", "y")
 		}
 		if !abs {
 			x += p.curr.X
@@ -1183,27 +1185,27 @@ func (p *svgPathParser) parseArc(abs bool) error {
 		}
 		ry, ok := p.nextNumber()
 		if !ok {
-			return fmt.Errorf("svg path: arc missing ry")
+			return i18n.Errorf("svg path: arc missing %s", "ry")
 		}
 		angle, ok := p.nextNumber()
 		if !ok {
-			return fmt.Errorf("svg path: arc missing rotation")
+			return i18n.Errorf("svg path: arc missing %s", "rotation")
 		}
 		largeArcFlag, ok := p.nextNumber()
 		if !ok {
-			return fmt.Errorf("svg path: arc missing large-arc flag")
+			return i18n.Errorf("svg path: arc missing %s", "large-arc flag")
 		}
 		sweepFlag, ok := p.nextNumber()
 		if !ok {
-			return fmt.Errorf("svg path: arc missing sweep flag")
+			return i18n.Errorf("svg path: arc missing %s", "sweep flag")
 		}
 		x, ok := p.nextNumber()
 		if !ok {
-			return fmt.Errorf("svg path: arc missing x")
+			return i18n.Errorf("svg path: arc missing %s", "x")
 		}
 		y, ok := p.nextNumber()
 		if !ok {
-			return fmt.Errorf("svg path: arc missing y")
+			return i18n.Errorf("svg path: arc missing %s", "y")
 		}
 		if !abs {
 			x += p.curr.X

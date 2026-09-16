@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/whutwxn/dxf-go/entities"
+	"plotter-pen/internal/i18n"
 )
 
 // Precision constants for DXF import
@@ -108,7 +109,7 @@ type dxfImporter struct {
 func ParseDXF(content string) (*ParseResult, error) {
 	doc, entityTypes, err := readDXF(content)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse DXF: %w", err)
+		return nil, i18n.Errorf("failed to parse DXF: %w", err)
 	}
 
 	scaleFactor := detectUnitsScale(content)

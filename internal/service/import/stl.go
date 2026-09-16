@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/hschendel/stl"
+	"plotter-pen/internal/i18n"
 )
 
 // STLTriangle represents a triangle from STL mesh
@@ -43,7 +44,7 @@ func ParseSTL(content []byte) (*STLResult, error) {
 
 	solid, err := stl.ReadAll(reader)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse STL: %w", err)
+		return nil, i18n.Errorf("failed to parse STL: %w", err)
 	}
 
 	return stlResult(solid), nil
@@ -53,7 +54,7 @@ func ParseSTL(content []byte) (*STLResult, error) {
 func ParseSTLFile(filepath string) (*STLResult, error) {
 	solid, err := stl.ReadFile(filepath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read STL file: %w", err)
+		return nil, i18n.Errorf("failed to read STL file: %w", err)
 	}
 	return stlResult(solid), nil
 }

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"plotter-pen/internal/i18n"
 	importservice "plotter-pen/internal/service/import"
 
 	"github.com/gin-gonic/gin"
@@ -36,7 +37,7 @@ type ParseDXFRequest struct {
 func (h *DXFHandler) ParseDXF(c *gin.Context) {
 	var req ParseDXFRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		badRequest(c, err)
 		return
 	}
 
@@ -52,7 +53,7 @@ type ParseSVGRequest struct {
 func (h *DXFHandler) ParseSVG(c *gin.Context) {
 	var req ParseSVGRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		badRequest(c, err)
 		return
 	}
 
@@ -62,16 +63,13 @@ func (h *DXFHandler) ParseSVG(c *gin.Context) {
 // Keep format-specific binding errors in the handlers and share the parse response.
 func parseDrawing(c *gin.Context, content, format string, validate func(string) bool, parse func(string) (*importservice.ParseResult, error)) {
 	if !validate(content) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid " + format + " content"})
+		respondError(c, http.StatusBadRequest, i18n.Errorf("the content is not a valid %s file", format))
 		return
 	}
 
 	result, err := parse(content)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "failed to parse " + format,
-			"details": err.Error(),
-		})
+		respondError(c, http.StatusInternalServerError, importError(format, err))
 		return
 	}
 
@@ -81,6 +79,17 @@ func parseDrawing(c *gin.Context, content, format string, validate func(string) 
 		"bounds":     result.Bounds,
 		"stats":      result.Stats,
 	})
+}
+
+// importError says that a file of the format could not be imported, and why.
+func importError(format string, err error) error {
+	switch format {
+	case "SVG":
+		return i18n.Errorf("the SVG could not be imported: %w", err)
+	case "STL":
+		return i18n.Errorf("the STL could not be imported: %w", err)
+	}
+	return i18n.Errorf("the DXF could not be imported: %w", err)
 }
 
 // SmartImportRequest represents smart import input
@@ -123,7 +132,7 @@ func (h *DXFHandler) SmartImport(c *gin.Context) {
 	if strings.HasPrefix(contentType, "text/plain") {
 		body, err := io.ReadAll(c.Request.Body)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
+			respondError(c, http.StatusBadRequest, i18n.Errorf("failed to read body"))
 			return
 		}
 		content = string(body)
@@ -140,7 +149,7 @@ func (h *DXFHandler) SmartImport(c *gin.Context) {
 		// Handle JSON body
 		var req SmartImportRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			badRequest(c, err)
 			return
 		}
 		content = req.Content
@@ -156,16 +165,13 @@ func (h *DXFHandler) SmartImport(c *gin.Context) {
 
 	// Validate content
 	if !importservice.ValidateContent(content) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid DXF content"})
+		respondError(c, http.StatusBadRequest, i18n.Errorf("the content is not a valid %s file", "DXF"))
 		return
 	}
 
 	result, err := importservice.SmartImportCached(content, opts)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "smart import failed",
-			"details": err.Error(),
-		})
+		respondError(c, http.StatusInternalServerError, importError("DXF", err))
 		return
 	}
 
@@ -192,7 +198,7 @@ func (h *DXFHandler) SmartImportSVG(c *gin.Context) {
 	if strings.HasPrefix(contentType, "text/plain") {
 		body, err := io.ReadAll(c.Request.Body)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
+			respondError(c, http.StatusBadRequest, i18n.Errorf("failed to read body"))
 			return
 		}
 		content = string(body)
@@ -207,7 +213,7 @@ func (h *DXFHandler) SmartImportSVG(c *gin.Context) {
 	} else {
 		var req SmartImportSVGRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			badRequest(c, err)
 			return
 		}
 		content = req.Content
@@ -223,16 +229,13 @@ func (h *DXFHandler) SmartImportSVG(c *gin.Context) {
 	}
 
 	if !importservice.ValidateSVGContent(content) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid SVG content"})
+		respondError(c, http.StatusBadRequest, i18n.Errorf("the content is not a valid %s file", "SVG"))
 		return
 	}
 
 	result, err := importservice.SmartImportSVG(content, opts)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "smart SVG import failed",
-			"details": err.Error(),
-		})
+		respondError(c, http.StatusInternalServerError, importError("SVG", err))
 		return
 	}
 
@@ -256,21 +259,18 @@ type ParseSTLRequest struct {
 func (h *DXFHandler) ParseSTL(c *gin.Context) {
 	var req ParseSTLRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		badRequest(c, err)
 		return
 	}
 
 	if !importservice.ValidateSTLContent(req.Content) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid STL content"})
+		respondError(c, http.StatusBadRequest, i18n.Errorf("the content is not a valid %s file", "STL"))
 		return
 	}
 
 	result, err := importservice.ParseSTL(req.Content)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "failed to parse STL",
-			"details": err.Error(),
-		})
+		respondError(c, http.StatusInternalServerError, importError("STL", err))
 		return
 	}
 

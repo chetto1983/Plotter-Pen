@@ -1,13 +1,12 @@
 package importservice
 
 import (
-	"errors"
-	"fmt"
 	"io"
 	"strings"
 
 	"github.com/whutwxn/dxf-go/core"
 	"github.com/whutwxn/dxf-go/document"
+	"plotter-pen/internal/i18n"
 )
 
 // The reader logs the tags it does not use to stderr; the import counts what it skips in its stats instead.
@@ -24,7 +23,7 @@ func init() {
 // unless the reader's own tags reach the end of the ENTITIES section with every LWPOLYLINE whole.
 func readDXF(content string) (doc *document.DxfDocument, entityTypes map[string]int, err error) {
 	if strings.HasPrefix(content, "AutoCAD Binary DXF") {
-		return nil, nil, errors.New("binary DXF is not supported: save the drawing as ASCII DXF")
+		return nil, nil, i18n.Errorf("binary DXF is not supported: save the drawing as ASCII DXF")
 	}
 	entityTypes, err = countEntityTypes(core.AllTags(core.Tagger(strings.NewReader(content))))
 	if err != nil {
@@ -33,7 +32,7 @@ func readDXF(content string) (doc *document.DxfDocument, entityTypes map[string]
 
 	defer func() {
 		if r := recover(); r != nil {
-			doc, entityTypes, err = nil, nil, fmt.Errorf("the DXF could not be read: %v", r)
+			doc, entityTypes, err = nil, nil, i18n.Errorf("the DXF could not be read: %v", r)
 		}
 	}()
 	doc, err = document.DxfDocumentFromStream(strings.NewReader(content))
@@ -77,7 +76,7 @@ func countEntityTypes(tags []*core.Tag) (map[string]int, error) {
 			lw.written++
 		}
 	}
-	return nil, errors.New("the DXF has no complete ENTITIES section: the file is truncated or has a line that is not a group code")
+	return nil, i18n.Errorf("the DXF has no complete ENTITIES section: the file is truncated or has a line that is not a group code")
 }
 
 // lwpolylineCount compares the vertices an LWPOLYLINE declares (90) with the ones it writes (10).
@@ -88,10 +87,10 @@ type lwpolylineCount struct {
 
 func (c lwpolylineCount) check() error {
 	if c.open && c.declared < 0 {
-		return errors.New("an LWPOLYLINE does not declare how many vertices it has (group code 90): the DXF is damaged")
+		return i18n.Errorf("an LWPOLYLINE does not declare how many vertices it has (group code 90): the DXF is damaged")
 	}
 	if c.open && c.declared != c.written {
-		return fmt.Errorf("an LWPOLYLINE declares %d vertices but writes %d: the DXF is damaged", c.declared, c.written)
+		return i18n.Errorf("an LWPOLYLINE declares %d vertices but writes %d: the DXF is damaged", c.declared, c.written)
 	}
 	return nil
 }
