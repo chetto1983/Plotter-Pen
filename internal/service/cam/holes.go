@@ -40,7 +40,7 @@ func (req DrillRequest) holes() (holes []plc.Primitive, warnings []string, err e
 		add(p.ID, geom.Point{X: x, Y: y}, 2*r)
 	}
 
-	contours, err := Chain(others)
+	contours, err := Chain(others, 0)
 	if err != nil {
 		return nil, nil, err
 	}

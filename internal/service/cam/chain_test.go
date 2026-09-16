@@ -34,7 +34,7 @@ func requirePaths(t *testing.T, kind string, got, want []geom.Path) {
 
 func mustChain(t *testing.T, prims ...plc.Primitive) Contours {
 	t.Helper()
-	c, err := Chain(prims)
+	c, err := Chain(prims, 0)
 	if err != nil {
 		t.Fatalf("Chain: %v", err)
 	}
@@ -189,7 +189,7 @@ func TestChain_RejectsIncompletePrimitives(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := Chain([]plc.Primitive{tt.prim}); err == nil {
+			if _, err := Chain([]plc.Primitive{tt.prim}, 0); err == nil {
 				t.Fatal("want an error")
 			}
 		})

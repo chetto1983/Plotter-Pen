@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -23,7 +24,9 @@ func (h *CAMHandler) RegisterRoutes(rg *gin.RouterGroup) {
 }
 
 // Profile handles POST /api/cam/profile: the PLC program of a profile cut, in the response shape
-// of /api/plc/extract. A drawing or settings that cannot be cut is a bad request.
+// of /api/plc/extract. A drawing or settings that cannot be cut is a bad request, except a drawing
+// whose contours are all open: that is unprocessable, and the answer lists the contours with the
+// gap that closes them, so the panel can offer to close them.
 func (h *CAMHandler) Profile(c *gin.Context) {
 	var req cam.ProfileRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -32,6 +35,10 @@ func (h *CAMHandler) Profile(c *gin.Context) {
 	}
 
 	result, err := cam.Profile(req)
+	if open, ok := errors.AsType[*cam.OpenContoursError](err); ok {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error(), "open": open.Open})
+		return
+	}
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

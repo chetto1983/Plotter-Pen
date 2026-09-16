@@ -463,7 +463,7 @@ func TestInitDB_ExistingDatabaseGetsAnEmptyJob(t *testing.T) {
 	if steps != 0 {
 		t.Fatalf("%d steps in a database that had no job, want 0", steps)
 	}
-	for _, column := range []string{"position", "layer", "operation", "tool_id", "drill_id", "drill_depth"} {
+	for _, column := range []string{"position", "layer", "operation", "tool_id", "drill_id", "drill_depth", "close_gap"} {
 		if !db.Migrator().HasColumn(&JobStep{}, column) {
 			t.Errorf("job_steps has no column %q", column)
 		}

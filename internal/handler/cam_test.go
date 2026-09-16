@@ -2,12 +2,14 @@ package handler
 
 import (
 	"encoding/json"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"plotter-pen/internal/service/cam"
 	"plotter-pen/internal/service/plc"
 )
 
@@ -129,15 +131,53 @@ func TestCAMDrill_NoHoleInTheRangeIsBadRequest(t *testing.T) {
 	}
 }
 
-func TestCAMProfile_OpenContourIsBadRequest(t *testing.T) {
+// A drawing with nothing closed cannot be cut, but the answer still says where it is open and
+// what gap would close it, so the panel can offer to close it.
+func TestCAMProfile_OnlyOpenContoursAreUnprocessable(t *testing.T) {
 	w := postCAMProfile(t, `{
-		"primitives": [{"type": "line", "x1": 0, "y1": 0, "x2": 10, "y2": 0}],
+		"primitives": [
+			{"type": "line", "id": "a", "x1": 0, "y1": 0, "x2": 10, "y2": 0},
+			{"type": "line", "id": "b", "x1": 10.04, "y1": 0, "x2": 0, "y2": 10},
+			{"type": "line", "id": "c", "x1": 0, "y1": 10, "x2": 0, "y2": 0}
+		],
 		"defaultSpeed": 50, "rapidSpeed": 1000, "safeZ": 5, "workZ": 0,
 		"thickness": 1, "through": true,
 		"toolDiameter": 3, "side": "outside", "stepDown": 1, "plungeSpeed": 5, "rampAngle": 3
 	}`)
 
-	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "open contour") {
-		t.Fatalf("status %d, body %s; want 400 naming the open contour", w.Code, w.Body.String())
+	var body struct {
+		Error string            `json:"error"`
+		Open  []cam.OpenContour `json:"open"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("body %s: %v", w.Body.String(), err)
+	}
+	if w.Code != http.StatusUnprocessableEntity || !strings.Contains(body.Error, "open contour") ||
+		len(body.Open) != 1 || math.Abs(body.Open[0].Gap-0.04) > 1e-9 {
+		t.Fatalf("status %d, body %s; want 422 with the contour and its gap", w.Code, w.Body.String())
+	}
+}
+
+// Closed contours are cut, and the open ones come back beside the program.
+func TestCAMProfile_ReportsOpenContoursBesideTheProgram(t *testing.T) {
+	w := postCAMProfile(t, `{
+		"primitives": [
+			{"type": "rectangle", "id": "r", "x": 0, "y": 0, "width": 20, "height": 20},
+			{"type": "line", "id": "stray", "x1": 30, "y1": 0, "x2": 40, "y2": 0}
+		],
+		"defaultSpeed": 50, "rapidSpeed": 1000, "safeZ": 5, "workZ": 0,
+		"thickness": 1, "through": true,
+		"toolDiameter": 3, "side": "outside", "stepDown": 1, "plungeSpeed": 5, "rampAngle": 3
+	}`)
+
+	var body struct {
+		Count int               `json:"count"`
+		Open  []cam.OpenContour `json:"open"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("body %s: %v", w.Body.String(), err)
+	}
+	if w.Code != http.StatusOK || body.Count == 0 || len(body.Open) != 1 || body.Open[0].PrimitiveIDs[0] != "stray" {
+		t.Fatalf("status %d, body %s; want the program and the stray line", w.Code, w.Body.String())
 	}
 }

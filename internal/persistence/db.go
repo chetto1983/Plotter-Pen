@@ -80,11 +80,14 @@ type CAMParams struct {
 	// ToolID and DrillID are the tools of the library the profile and the drilling were given, 0
 	// when none was: the operation reads their speeds, and a tool deleted since falls back on the
 	// global ones.
-	ToolID          int64   `gorm:"default:0" json:"toolId"`
-	Side            string  `gorm:"default:'outside'" json:"side"`
-	Direction       string  `gorm:"default:'conventional'" json:"direction"`
-	ProfileThrough  bool    `gorm:"default:true" json:"profileThrough"`
-	ProfileDepth    float64 `gorm:"default:1" json:"profileDepth"`
+	ToolID         int64   `gorm:"default:0" json:"toolId"`
+	Side           string  `gorm:"default:'outside'" json:"side"`
+	Direction      string  `gorm:"default:'conventional'" json:"direction"`
+	ProfileThrough bool    `gorm:"default:true" json:"profileThrough"`
+	ProfileDepth   float64 `gorm:"default:1" json:"profileDepth"`
+	// CloseGap is the widest gap between two ends that the profile closes; 0 joins only the ends
+	// that meet.
+	CloseGap        float64 `gorm:"default:0" json:"closeGap"`
 	DrillDiameter   float64 `gorm:"default:1" json:"drillDiameter"`
 	DrillType       string  `gorm:"default:'drill'" json:"drillType"`
 	DrillID         int64   `gorm:"default:0" json:"drillId"`

@@ -16,7 +16,22 @@ const (
 	// arcChordTolerance is the largest distance between an arc and the chords that replace it,
 	// the same 5 µm used as arc tolerance for the Clipper2 offsets.
 	arcChordTolerance = 0.005
+	// MaxCloseGap is the widest gap a closing gap may bridge, in mm: past it a gap is part of the
+	// drawing, not an imprecise joint.
+	MaxCloseGap = 1.0
+	// closeGapSteps is how many closing gaps per mm are tried to say which one closes a contour:
+	// the 0.01 mm steps the panel offers.
+	closeGapSteps = 100
+	// minLoopArea is the smallest area of a loop of pieces, in mm²: a loop with less is a line
+	// that goes out and back, or a short piece closed on itself, and stays open.
+	minLoopArea = joinTolerance * joinTolerance
+	// gapSlack is how far a distance may pass a tolerance and still be within it. Gaps are drawn and
+	// typed in decimal mm, which a float64 holds only nearly: 80.04 - 80 is 0.04000000000000625, and
+	// a closing gap of 0.04 must close it. 1 nm is far below the µm of the PLC coordinates.
+	gapSlack = 1e-9
 )
+
+func within(distance, tol float64) bool { return distance <= tol+gapSlack }
 
 // Contours is the chained drawing: closed loops, with the last point not repeated, and the
 // chains that could not be closed.
@@ -25,13 +40,22 @@ type Contours struct {
 	// ClosedIDs names, for each closed contour, the primitives it is made of.
 	ClosedIDs [][]string
 	Open      []geom.Path
+	// OpenIDs names, for each open chain, the primitives it is made of.
+	OpenIDs [][]string
+	// OpenGaps is, for each open chain, the closing gap that closes it, wider than the one asked
+	// for, at most MaxCloseGap and in steps of 1/closeGapSteps mm; 0 when none does.
+	OpenGaps []float64
 }
 
 // Chain joins primitives end to end into contours, reversing pieces where needed. Two ends are
 // joined only when each is the other's only neighbour within joinTolerance: where three or more
 // ends meet the contour is ambiguous, so the chains stay open there. Zero-length pieces are
 // dropped; a primitive with missing data is an error, since skipping it would change the shape.
-func Chain(primitives []plc.Primitive) (Contours, error) {
+//
+// A closeGap wider than joinTolerance then joins the chains left open by the same rule, with
+// closeGap in place of joinTolerance. Such a joint keeps both ends and bridges the gap with a
+// straight edge, so no point of the drawing moves.
+func Chain(primitives []plc.Primitive, closeGap float64) (Contours, error) {
 	var out Contours
 	var pieces []geom.Path
 	var pieceIDs []string
@@ -50,17 +74,92 @@ func Chain(primitives []plc.Primitive) (Contours, error) {
 			pieceIDs = append(pieceIDs, p.ID)
 		}
 	}
-	loops, loopPieces, open := chainPieces(pieces)
-	out.Closed = append(out.Closed, loops...)
-	for _, indices := range loopPieces {
-		ids := make([]string, len(indices))
-		for k, i := range indices {
+
+	loops, first := chainPieces(pieces, joinTolerance)
+	open := first
+	if closeGap > joinTolerance {
+		bridged, left := chainPieces(pathsOf(first), closeGap)
+		loops = append(loops, through(bridged, first)...)
+		open = through(left, first)
+	}
+
+	names := func(c chain) []string {
+		ids := make([]string, len(c.pieces))
+		for k, i := range c.pieces {
 			ids[k] = pieceIDs[i]
 		}
-		out.ClosedIDs = append(out.ClosedIDs, ids)
+		return ids
 	}
-	out.Open = open
+	for _, loop := range loops {
+		out.Closed = append(out.Closed, loop.path)
+		out.ClosedIDs = append(out.ClosedIDs, names(loop))
+	}
+
+	firstGaps := closingGaps(first, closeGap)
+	chainOf := make([]int, len(pieces))
+	for c, ch := range first {
+		for _, i := range ch.pieces {
+			chainOf[i] = c
+		}
+	}
+	for _, ch := range open {
+		// a chain bridged from several closes when all of them do
+		gap := 0.0
+		for _, i := range ch.pieces {
+			g := firstGaps[chainOf[i]]
+			if g == 0 {
+				gap = 0
+				break
+			}
+			gap = math.Max(gap, g)
+		}
+		out.Open = append(out.Open, ch.path)
+		out.OpenIDs = append(out.OpenIDs, names(ch))
+		out.OpenGaps = append(out.OpenGaps, gap)
+	}
 	return out, nil
+}
+
+// closingGaps says, for each chain left open by the exact joints, the narrowest closing gap wider
+// than closeGap that closes it into a loop, trying them up to MaxCloseGap in the steps the panel
+// offers: the gap said is one the panel can set, and it closes the chain when set. 0 when none
+// does.
+//
+// Only the chains with an end near another end take part: the others are open lines, which no gap
+// closes and which are too far from every end to change a joint.
+func closingGaps(open []chain, closeGap float64) []float64 {
+	gaps := make([]float64, len(open))
+	near := make([]bool, 2*len(open))
+	eachNear(endsOf(pathsOf(open)), MaxCloseGap, func(i, _ int) { near[i] = true })
+	var trial []geom.Path
+	var trialChain []int
+	closable := 0
+	for c, ch := range open {
+		if near[2*c] || near[2*c+1] {
+			trial = append(trial, ch.path)
+			trialChain = append(trialChain, c)
+		}
+		if near[2*c] && near[2*c+1] {
+			closable++
+		}
+	}
+
+	for k := 1; k <= MaxCloseGap*closeGapSteps && closable > 0; k++ {
+		gap := float64(k) / closeGapSteps
+		if gap <= math.Max(closeGap, joinTolerance) {
+			continue
+		}
+		loops, _ := chainPieces(trial, gap)
+		for _, loop := range loops {
+			for _, i := range loop.pieces {
+				if c := trialChain[i]; gaps[c] == 0 {
+					gaps[c] = gap
+					closable--
+				}
+			}
+		}
+	}
+	return gaps
 }
 
 // toPath converts a primitive with the field conventions of the PLC extractor: arcs run from
@@ -128,21 +227,52 @@ func pathLength(path geom.Path) float64 {
 	return l
 }
 
-// chainPieces walks the joints between open pieces. End 2i is the start of piece i and end
-// 2i+1 its end; chains that begin at a free end are walked first, what is left forms cycles.
-// loopPieces lists, for each loop, the pieces it was walked through.
-func chainPieces(pieces []geom.Path) (loops []geom.Path, loopPieces [][]int, open []geom.Path) {
+// chain is a path walked through pieces, with the pieces in the order walked.
+type chain struct {
+	path   geom.Path
+	pieces []int
+}
+
+func pathsOf(chains []chain) []geom.Path {
+	paths := make([]geom.Path, len(chains))
+	for i, c := range chains {
+		paths[i] = c.path
+	}
+	return paths
+}
+
+// through turns chains walked through parts, which are chains themselves, into chains walked
+// through the parts' pieces.
+func through(chains, parts []chain) []chain {
+	for i, c := range chains {
+		var pieces []int
+		for _, p := range c.pieces {
+			pieces = append(pieces, parts[p].pieces...)
+		}
+		chains[i].pieces = pieces
+	}
+	return chains
+}
+
+func endsOf(pieces []geom.Path) []geom.Point {
 	ends := make([]geom.Point, 0, 2*len(pieces))
 	for _, p := range pieces {
 		ends = append(ends, p[0], p[len(p)-1])
 	}
-	partner := matchEnds(ends)
+	return ends
+}
+
+// chainPieces walks the joints within tol between open pieces. End 2i is the start of piece i
+// and end 2i+1 its end; chains that begin at a free end are walked first, what is left forms
+// cycles. A joint within joinTolerance becomes one point, a wider one keeps both ends. A cycle
+// with fewer than three points or no area is a line, not a loop, and stays open.
+func chainPieces(pieces []geom.Path, tol float64) (loops, open []chain) {
+	partner := matchEnds(endsOf(pieces), tol)
 	used := make([]bool, len(pieces))
 
 	walk := func(first int, reversed bool) {
 		used[first] = true
-		path := oriented(pieces[first], reversed)
-		walked := []int{first}
+		c := chain{path: oriented(pieces[first], reversed), pieces: []int{first}}
 		exit := 2*first + 1
 		if reversed {
 			exit = 2 * first
@@ -150,18 +280,30 @@ func chainPieces(pieces []geom.Path) (loops []geom.Path, loopPieces [][]int, ope
 		for {
 			next := partner[exit]
 			if next < 0 {
-				open = append(open, path)
+				open = append(open, c)
 				return
 			}
 			q := next / 2
 			if q == first {
-				loops = append(loops, path[:len(path)-1])
-				loopPieces = append(loopPieces, walked)
+				loop := c.path
+				if within(loop[len(loop)-1].Distance(loop[0]), joinTolerance) {
+					loop = loop[:len(loop)-1]
+				}
+				if len(loop) < 3 || math.Abs(signedArea(loop)) < minLoopArea {
+					open = append(open, c)
+					return
+				}
+				c.path = loop
+				loops = append(loops, c)
 				return
 			}
 			used[q] = true
-			walked = append(walked, q)
-			path = append(path, oriented(pieces[q], next%2 == 1)[1:]...)
+			c.pieces = append(c.pieces, q)
+			piece := oriented(pieces[q], next%2 == 1)
+			if within(c.path[len(c.path)-1].Distance(piece[0]), joinTolerance) {
+				piece = piece[1:]
+			}
+			c.path = append(c.path, piece...)
 			exit = next ^ 1
 		}
 	}
@@ -180,42 +322,24 @@ func chainPieces(pieces []geom.Path) (loops []geom.Path, loopPieces [][]int, ope
 			walk(i, false)
 		}
 	}
-	return loops, loopPieces, open
+	return loops, open
 }
 
-// matchEnds pairs every end with its only neighbour within joinTolerance, when that neighbour
-// has no other neighbour either; unpaired ends get -1.
-func matchEnds(ends []geom.Point) []int {
-	type cell struct{ x, y int64 }
-	cellOf := func(p geom.Point) cell {
-		return cell{int64(math.Floor(p.X / joinTolerance)), int64(math.Floor(p.Y / joinTolerance))}
-	}
-	grid := map[cell][]int{}
-	for i, p := range ends {
-		c := cellOf(p)
-		grid[c] = append(grid[c], i)
-	}
-
+// matchEnds pairs every end with its only neighbour within tol, when that neighbour has no other
+// neighbour either; unpaired ends get -1.
+func matchEnds(ends []geom.Point, tol float64) []int {
 	const none, several = -1, -2
 	only := make([]int, len(ends))
-	for i, p := range ends {
+	for i := range only {
 		only[i] = none
-		c := cellOf(p)
-		for dx := int64(-1); dx <= 1; dx++ {
-			for dy := int64(-1); dy <= 1; dy++ {
-				for _, j := range grid[cell{c.x + dx, c.y + dy}] {
-					if j == i || p.Distance(ends[j]) > joinTolerance {
-						continue
-					}
-					if only[i] == none {
-						only[i] = j
-					} else {
-						only[i] = several
-					}
-				}
-			}
-		}
 	}
+	eachNear(ends, tol, func(i, j int) {
+		if only[i] == none {
+			only[i] = j
+		} else {
+			only[i] = several
+		}
+	})
 
 	partner := make([]int, len(ends))
 	for i, j := range only {
@@ -225,6 +349,32 @@ func matchEnds(ends []geom.Point) []int {
 		}
 	}
 	return partner
+}
+
+// eachNear calls visit(i, j) for every end i and every other end j within tol of it, on a grid of
+// cells tol wide so that only the neighbouring cells are searched.
+func eachNear(ends []geom.Point, tol float64, visit func(i, j int)) {
+	type cell struct{ x, y int64 }
+	cellOf := func(p geom.Point) cell {
+		return cell{int64(math.Floor(p.X / tol)), int64(math.Floor(p.Y / tol))}
+	}
+	grid := map[cell][]int{}
+	for i, p := range ends {
+		c := cellOf(p)
+		grid[c] = append(grid[c], i)
+	}
+	for i, p := range ends {
+		c := cellOf(p)
+		for dx := int64(-1); dx <= 1; dx++ {
+			for dy := int64(-1); dy <= 1; dy++ {
+				for _, j := range grid[cell{c.x + dx, c.y + dy}] {
+					if j != i && within(p.Distance(ends[j]), tol) {
+						visit(i, j)
+					}
+				}
+			}
+		}
+	}
 }
 
 func oriented(p geom.Path, reversed bool) geom.Path {

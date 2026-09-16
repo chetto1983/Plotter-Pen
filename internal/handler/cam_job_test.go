@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"plotter-pen/internal/persistence"
+	"plotter-pen/internal/service/cam"
 )
 
 func jobRequest(r *gin.Engine, method, body string) *httptest.ResponseRecorder {
@@ -100,6 +101,7 @@ func TestCAMJob_SavesTheStepsInOrder(t *testing.T) {
 	outline.Direction = "climb"
 	outline.ProfileThrough = false
 	outline.Overcut = 0
+	outline.CloseGap = 0.05
 	lettering := step("pen", "")
 	steps := []persistence.JobStep{holes, outline, lettering}
 
@@ -189,6 +191,7 @@ func TestCAMJob_RefusesABadStepAndKeepsTheJob(t *testing.T) {
 		"direction": func(s *persistence.JobStep) { s.Direction = "sideways" },
 		"toolType":  func(s *persistence.JobStep) { s.ToolType = "spoon" },
 		"drillId":   func(s *persistence.JobStep) { s.DrillID = -1 },
+		"closeGap":  func(s *persistence.JobStep) { s.CloseGap = cam.MaxCloseGap + 0.5 },
 	}
 	for name, spoil := range bad {
 		wrong := step("profile", "CONTORNO")

@@ -664,7 +664,7 @@ func TestProfile_RejectsWhatCannotBeCut(t *testing.T) {
 		name   string
 		change func(*ProfileRequest)
 	}{
-		{"open contour", func(r *ProfileRequest) { r.Primitives = append(r.Primitives, lineP(30, 0, 40, 0)) }},
+		{"only open contours", func(r *ProfileRequest) { r.Primitives = []plc.Primitive{lineP(30, 0, 40, 0)} }},
 		{"no primitives", func(r *ProfileRequest) { r.Primitives = nil }},
 		{"tool wider than the only contour", func(r *ProfileRequest) { r.Side, r.ToolDiameter = "inside", 25 }},
 		{"no tool diameter", func(r *ProfileRequest) { r.ToolDiameter = 0 }},

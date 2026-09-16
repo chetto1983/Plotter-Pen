@@ -53,14 +53,19 @@ type ProfileRequest struct {
 	StepDown    float64 `json:"stepDown"`
 	PlungeSpeed float64 `json:"plungeSpeed"`
 	RampAngle   float64 `json:"rampAngle"`
+	// CloseGap is the widest gap between two ends that closes a contour, 0 to MaxCloseGap mm;
+	// 0 joins only the ends that meet.
+	CloseGap float64 `json:"closeGap,omitempty"`
 }
 
 // ProfileResponse is the program in the /api/plc/extract response shape, with a warning for each
-// contour the tool cannot reach and the same contours as measurements the drawing can mark.
+// contour the tool cannot reach and for each open contour, and the same contours as details the
+// drawing can mark.
 type ProfileResponse struct {
 	plc.ExtractResponse
 	Warnings  []string          `json:"warnings,omitempty"`
 	Unreached []UnreachedDetail `json:"unreached,omitempty"`
+	Open      []OpenContour     `json:"open,omitempty"`
 }
 
 // UnreachedDetail is a detail of the drawing the tool cannot cut: where it is, the primitives it
@@ -84,21 +89,22 @@ type UnreachedDetail struct {
 // every level at the ring start along a ramp and cuts all the levels without leaving the slot,
 // then goes back to safe Z; the program starts and ends at safe Z, ending at X 0 Y 0 like the
 // plotter programs.
-// Contours the tool cannot reach are left uncut and listed as warnings.
+// Contours the tool cannot reach are left uncut and listed as warnings. Open contours, the gaps
+// within CloseGap bridged, are not cut either: they are listed with the closing gap that would
+// close them, and a drawing that has only open contours is an *OpenContoursError.
 func Profile(req ProfileRequest) (ProfileResponse, error) {
 	if err := req.validate(); err != nil {
 		return ProfileResponse{}, err
 	}
-	contours, err := Chain(req.Primitives)
+	contours, err := Chain(req.Primitives, req.CloseGap)
 	if err != nil {
 		return ProfileResponse{}, err
 	}
-	if len(contours.Open) > 0 {
-		p := contours.Open[0][0]
-		return ProfileResponse{}, fmt.Errorf("%d open contours, the first starting at (%.3f, %.3f): a profile needs closed contours",
-			len(contours.Open), p.X, p.Y)
-	}
+	open, openWarnings := openContours(contours)
 	if len(contours.Closed) == 0 {
+		if len(open) > 0 {
+			return ProfileResponse{}, &OpenContoursError{Open: open}
+		}
 		return ProfileResponse{}, errors.New("nothing to cut: the drawing has no closed contours")
 	}
 
@@ -154,8 +160,9 @@ func Profile(req ProfileRequest) (ProfileResponse, error) {
 
 	return ProfileResponse{
 		ExtractResponse: response(g.Lines()),
-		Warnings:        warnings,
+		Warnings:        append(warnings, openWarnings...),
 		Unreached:       unreached,
+		Open:            open,
 	}, nil
 }
 
@@ -315,6 +322,7 @@ func (req ProfileRequest) validate() error {
 	check(req.DefaultSpeed > 0 && req.RapidSpeed > 0 && req.PlungeSpeed > 0, "cutting, rapid and plunge speeds must be positive")
 	check(req.RampAngle > 0 && req.RampAngle <= 90, "ramp angle must be above 0° and at most 90°")
 	check(req.WaitTime >= 0, "wait time must not be negative")
+	check(req.CloseGap >= 0 && req.CloseGap <= MaxCloseGap, fmt.Sprintf("closing gap must be between 0 and %g mm", float64(MaxCloseGap)))
 	if len(problems) > 0 {
 		return errors.New(strings.Join(problems, "; "))
 	}

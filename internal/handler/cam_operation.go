@@ -74,6 +74,9 @@ func checkCAMParams(p *persistence.CAMParams) error {
 	if p.Direction != cam.CuttingConventional && p.Direction != cam.CuttingClimb {
 		return fmt.Errorf("direction must be %q or %q", cam.CuttingConventional, cam.CuttingClimb)
 	}
+	if p.CloseGap < 0 || p.CloseGap > cam.MaxCloseGap {
+		return fmt.Errorf("closeGap must be between 0 and %g mm", float64(cam.MaxCloseGap))
+	}
 	return nil
 }
 
@@ -91,6 +94,7 @@ func camParamsColumns(p persistence.CAMParams) map[string]any {
 		"direction":         p.Direction,
 		"profile_through":   p.ProfileThrough,
 		"profile_depth":     p.ProfileDepth,
+		"close_gap":         p.CloseGap,
 		"drill_diameter":    p.DrillDiameter,
 		"drill_type":        p.DrillType,
 		"drill_id":          p.DrillID,
