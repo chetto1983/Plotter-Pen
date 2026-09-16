@@ -26,7 +26,7 @@ func (h *PLCHandler) RegisterRoutes(rg *gin.RouterGroup) {
 func (h *PLCHandler) Extract(c *gin.Context) {
 	var req plc.ExtractRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		badRequest(c, err)
 		return
 	}
 
