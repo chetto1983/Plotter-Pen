@@ -53,7 +53,7 @@ docker compose up --build
 
 OPC UA connections are stored in the SQLite database and managed from the web UI or through `/api/opcua/config` and `/api/opcua/plcs` (several PLCs, one active). Each configuration holds the endpoint, namespace, trigger/reset/data/end-of-file nodes, position nodes, chunk size and ACK timeout, security mode and policy, certificates and credentials. A default configuration is seeded into an empty database.
 
-A node is written either as a node ID (`ns=4;i=12`) or as the path of browse names of the PLC variable (`ServerInterfaces/Com/Point`), which the app resolves on the server it connects to. The names are the default because the numbers behind them change with the PLC program, while the same names fit the machine and the simulator.
+A node is written either as a node ID (`ns=4;i=12`) or as the path of browse names of the PLC variable (`ServerInterfaces/Com/Point`), which the app resolves on the server it connects to. The names are the default because the numbers behind them change with the PLC program, while the same names fit the machine and the simulator. The settings window offers the variables the connected PLC exposes (`GET /api/opcua/variables`) in a list on every node field, and `Prova connessione` tries the settings on screen before they are saved (`POST /api/opcua/test`), without touching the connection the app is using.
 
 `opcua_config.json` in the repository root is not read by the server.
 

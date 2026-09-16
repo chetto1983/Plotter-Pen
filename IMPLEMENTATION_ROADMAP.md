@@ -89,6 +89,7 @@ tools/s7sim/                  # S7-1500 OPC UA simulator (Python, not part of Co
 | Client | `internal/service/opcua/client.go` | Done | Auto-discovery, secure endpoints |
 | Config | `internal/service/opcua/config.go` | Done | Multi-PLC support, environment overrides |
 | Node names | `internal/service/opcua/nodes.go` | Done | Nodes addressed as `ServerInterfaces/Com/Point`, resolved on the server |
+| Variable list | `internal/handler/opcua.go` | Done | `GET /variables` and `POST /test` feed the combo boxes of the settings window |
 | Transfer | `internal/service/opcua/transfer.go` | Done | Chunked async with ACK |
 | WebSocket | `internal/handler/opcua_ws.go` | Done | Real-time position streaming |
 | Simulator | `tools/s7sim/s7sim.py` | Done | S7-1500 OPC UA simulator for transfer tests |

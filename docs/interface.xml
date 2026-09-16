@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<UANodeSet LastModified="2026-01-16T08:41:39+01:00" xmlns="http://opcfoundation.org/UA/2011/03/UANodeSet.xsd" xmlns:uax="http://opcfoundation.org/UA/2008/02/Types.xsd" xmlns:si="http://www.siemens.com/OPCUA/2017/SimaticNodeSetExtensions">
+<UANodeSet LastModified="2026-03-04T07:58:23+01:00" xmlns="http://opcfoundation.org/UA/2011/03/UANodeSet.xsd" xmlns:uax="http://opcfoundation.org/UA/2008/02/Types.xsd" xmlns:si="http://www.siemens.com/OPCUA/2017/SimaticNodeSetExtensions">
   <NamespaceUris>
     <Uri>http://www.siemens.com/simatic-s7-opcua</Uri>
-    <Uri>http://Comm</Uri>
+    <Uri>http://Com</Uri>
   </NamespaceUris>
   <Models>
-    <Model ModelUri="http://www.siemens.com/simatic-s7-opcua" PublicationDate="2026-01-16T08:41:39+01:00" Version="1.0.0" />
-    <Model ModelUri="http://Comm" PublicationDate="2026-01-16T08:41:39+01:00" Version="1.0.0" />
+    <Model ModelUri="http://www.siemens.com/simatic-s7-opcua" PublicationDate="2026-01-19T13:39:47+01:00" Version="1.0.0" />
+    <Model ModelUri="http://Com" PublicationDate="2026-01-19T13:39:47+01:00" Version="1.0.0" />
   </Models>
   <Aliases>
     <Alias Alias="BOOL">i=1</Alias>
@@ -25,47 +25,47 @@
       <si:Generator Product="TIA Portal" Edition="STEP 7 - Server Interface Generation" Version="V1.0.0" />
     </Extension>
   </Extensions>
-  <UAObject NodeId="ns=2;i=114" BrowseName="2:http://Comm" ParentNodeId="i=11715">
-    <DisplayName>http://Comm</DisplayName>
+  <UAObject NodeId="ns=2;i=82" BrowseName="2:http://Com" ParentNodeId="i=11715">
+    <DisplayName>http://Com</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=11616</Reference>
-      <Reference ReferenceType="HasProperty" IsForward="true">ns=2;i=115</Reference>
-      <Reference ReferenceType="HasProperty" IsForward="true">ns=2;i=116</Reference>
-      <Reference ReferenceType="HasProperty" IsForward="true">ns=2;i=117</Reference>
-      <Reference ReferenceType="HasProperty" IsForward="true">ns=2;i=118</Reference>
-      <Reference ReferenceType="HasProperty" IsForward="true">ns=2;i=119</Reference>
-      <Reference ReferenceType="HasProperty" IsForward="true">ns=2;i=120</Reference>
-      <Reference ReferenceType="HasProperty" IsForward="true">ns=2;i=121</Reference>
-      <Reference ReferenceType="HasProperty" IsForward="true">ns=2;i=122</Reference>
-      <Reference ReferenceType="HasProperty" IsForward="true">ns=2;i=123</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="true">ns=2;i=83</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="true">ns=2;i=84</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="true">ns=2;i=85</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="true">ns=2;i=86</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="true">ns=2;i=87</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="true">ns=2;i=88</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="true">ns=2;i=89</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="true">ns=2;i=90</Reference>
+      <Reference ReferenceType="HasProperty" IsForward="true">ns=2;i=91</Reference>
       <Reference ReferenceType="Organizes" IsForward="false">i=11715</Reference>
     </References>
   </UAObject>
-  <UAVariable NodeId="ns=2;i=115" BrowseName="2:NamespaceUri" ParentNodeId="ns=2;i=114" DataType="i=12" AccessLevel="1">
+  <UAVariable NodeId="ns=2;i=83" BrowseName="2:NamespaceUri" ParentNodeId="ns=2;i=82" DataType="i=12" AccessLevel="1">
     <DisplayName>NamespaceUri</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=68</Reference>
     </References>
     <Value>
-      <uax:String>http://Comm</uax:String>
+      <uax:String>http://Com</uax:String>
     </Value>
   </UAVariable>
-  <UAVariable NodeId="ns=2;i=116" BrowseName="2:NamespaceVersion" ParentNodeId="ns=2;i=114" DataType="i=12" AccessLevel="1">
+  <UAVariable NodeId="ns=2;i=84" BrowseName="2:NamespaceVersion" ParentNodeId="ns=2;i=82" DataType="i=12" AccessLevel="1">
     <DisplayName>NamespaceVersion</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=68</Reference>
     </References>
   </UAVariable>
-  <UAVariable NodeId="ns=2;i=117" BrowseName="2:NamespacePublicationDate" ParentNodeId="ns=2;i=114" DataType="i=13" AccessLevel="1">
+  <UAVariable NodeId="ns=2;i=85" BrowseName="2:NamespacePublicationDate" ParentNodeId="ns=2;i=82" DataType="i=13" AccessLevel="1">
     <DisplayName>NamespacePublicationDate</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=68</Reference>
     </References>
     <Value>
-      <uax:String>2026-01-16T09:41:39+01:00</uax:String>
+      <uax:String>2026-01-19T14:39:47+01:00</uax:String>
     </Value>
   </UAVariable>
-  <UAVariable NodeId="ns=2;i=118" BrowseName="2:IsNamespaceSubset" ParentNodeId="ns=2;i=114" DataType="BOOL" AccessLevel="1">
+  <UAVariable NodeId="ns=2;i=86" BrowseName="2:IsNamespaceSubset" ParentNodeId="ns=2;i=82" DataType="BOOL" AccessLevel="1">
     <DisplayName>IsNamespaceSubset</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=68</Reference>
@@ -74,31 +74,31 @@
       <uax:String>false</uax:String>
     </Value>
   </UAVariable>
-  <UAVariable NodeId="ns=2;i=119" BrowseName="2:StaticNodeIdTypes" ParentNodeId="ns=2;i=114" DataType="i=256" AccessLevel="1" ValueRank="1">
+  <UAVariable NodeId="ns=2;i=87" BrowseName="2:StaticNodeIdTypes" ParentNodeId="ns=2;i=82" DataType="i=256" AccessLevel="1" ValueRank="1">
     <DisplayName>StaticNodeIdTypes</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=68</Reference>
     </References>
   </UAVariable>
-  <UAVariable NodeId="ns=2;i=120" BrowseName="2:StaticNumericNodeIdRange" ParentNodeId="ns=2;i=114" DataType="i=291" AccessLevel="1" ValueRank="1">
+  <UAVariable NodeId="ns=2;i=88" BrowseName="2:StaticNumericNodeIdRange" ParentNodeId="ns=2;i=82" DataType="i=291" AccessLevel="1" ValueRank="1">
     <DisplayName>StaticNumericNodeIdRange</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=68</Reference>
     </References>
   </UAVariable>
-  <UAVariable NodeId="ns=2;i=121" BrowseName="2:StaticStringNodeIdPattern" ParentNodeId="ns=2;i=114" DataType="i=12" AccessLevel="1">
+  <UAVariable NodeId="ns=2;i=89" BrowseName="2:StaticStringNodeIdPattern" ParentNodeId="ns=2;i=82" DataType="i=12" AccessLevel="1">
     <DisplayName>StaticStringNodeIdPattern</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=68</Reference>
     </References>
   </UAVariable>
-  <UAVariable NodeId="ns=2;i=122" BrowseName="2:DefaultRolePermissions" ParentNodeId="ns=2;i=114" DataType="i=96" AccessLevel="1" ValueRank="1">
+  <UAVariable NodeId="ns=2;i=90" BrowseName="2:DefaultRolePermissions" ParentNodeId="ns=2;i=82" DataType="i=96" AccessLevel="1" ValueRank="1">
     <DisplayName>DefaultRolePermissions</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=68</Reference>
     </References>
   </UAVariable>
-  <UAVariable NodeId="ns=2;i=123" BrowseName="2:DefaultAccessRestrictions" ParentNodeId="ns=2;i=114" DataType="i=95" AccessLevel="1">
+  <UAVariable NodeId="ns=2;i=91" BrowseName="2:DefaultAccessRestrictions" ParentNodeId="ns=2;i=82" DataType="i=95" AccessLevel="1">
     <DisplayName>DefaultAccessRestrictions</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=68</Reference>
@@ -113,21 +113,21 @@
       <Reference ReferenceType="HasSubtype" IsForward="false">i=58</Reference>
     </References>
   </UAObjectType>
-  <UAVariable NodeId="ns=1;i=6010" BrowseName="Icon" DataType="i=2003" AccessLevel="1">
+  <UAVariable NodeId="ns=1;i=6010" BrowseName="Icon" ParentNodeId="ns=1;i=1004" DataType="i=2003" AccessLevel="1">
     <DisplayName>Icon</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=68</Reference>
       <Reference ReferenceType="HasModellingRule" IsForward="true">i=80</Reference>
     </References>
   </UAVariable>
-  <UAVariable NodeId="ns=1;i=6011" BrowseName="1:InterfaceUuid" DataType="i=14" AccessLevel="1">
+  <UAVariable NodeId="ns=1;i=6011" BrowseName="1:InterfaceUuid" ParentNodeId="ns=1;i=1004" DataType="i=14" AccessLevel="1">
     <DisplayName>InterfaceUuid</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=68</Reference>
       <Reference ReferenceType="HasModellingRule" IsForward="true">i=80</Reference>
     </References>
   </UAVariable>
-  <UAVariable NodeId="ns=1;i=6014" BrowseName="1:InterfaceVersion" DataType="ns=1;i=3064" AccessLevel="1">
+  <UAVariable NodeId="ns=1;i=6014" BrowseName="1:InterfaceVersion" ParentNodeId="ns=1;i=1004" DataType="ns=1;i=3064" AccessLevel="1">
     <DisplayName>InterfaceVersion</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=68</Reference>
@@ -140,7 +140,7 @@
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=76</Reference>
     </References>
   </UAObject>
-  <UAObject NodeId="ns=1;s=ServerInterfaces" BrowseName="1:ServerInterfaces">
+  <UAObject NodeId="ns=1;s=ServerInterfaces" BrowseName="1:ServerInterfaces" ParentNodeId="i=85">
     <DisplayName>ServerInterfaces</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=61</Reference>
@@ -148,351 +148,351 @@
       <Reference ReferenceType="Organizes" IsForward="false">i=85</Reference>
     </References>
   </UAObject>
-  <UAObject NodeId="ns=2;i=1" BrowseName="2:Comm" ParentNodeId="ns=1;s=ServerInterfaces">
-    <DisplayName>Comm</DisplayName>
+  <UAObject NodeId="ns=2;i=1" BrowseName="Com" ParentNodeId="ns=1;s=ServerInterfaces">
+    <DisplayName>Com</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">ns=1;i=1004</Reference>
       <Reference ReferenceType="Organizes" IsForward="true">ns=2;i=12</Reference>
-      <Reference ReferenceType="Organizes" IsForward="true">ns=2;i=23</Reference>
-      <Reference ReferenceType="Organizes" IsForward="true">ns=2;i=34</Reference>
-      <Reference ReferenceType="Organizes" IsForward="true">ns=2;i=93</Reference>
-      <Reference ReferenceType="Organizes" IsForward="true">ns=2;i=79</Reference>
+      <Reference ReferenceType="Organizes" IsForward="true">ns=2;i=43</Reference>
+      <Reference ReferenceType="Organizes" IsForward="true">ns=2;i=54</Reference>
+      <Reference ReferenceType="Organizes" IsForward="true">ns=2;i=65</Reference>
+      <Reference ReferenceType="Organizes" IsForward="true">ns=2;i=78</Reference>
     </References>
   </UAObject>
-  <UAVariable NodeId="ns=2;i=12" BrowseName="2:TriggerWrite" DataType="BOOL" AccessLevel="3">
-    <DisplayName>TriggerWrite</DisplayName>
+  <UAVariable NodeId="ns=2;i=12" BrowseName="2:Point" ParentNodeId="ns=2;i=1" DataType="STRING" AccessLevel="3" ValueRank="1" ArrayDimensions="20">
+    <DisplayName>Point</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=13</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=14</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=15</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=16</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=17</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=18</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=19</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=20</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=21</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=22</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=23</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=24</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=25</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=26</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=27</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=28</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=29</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=30</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=31</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=32</Reference>
     </References>
     <Extensions>
       <Extension>
-        <si:VariableMapping>"Db_Punti"."TriggerWrite"</si:VariableMapping>
+        <si:VariableMapping>"Cam_Exchange"."Point"</si:VariableMapping>
       </Extension>
     </Extensions>
   </UAVariable>
-  <UAVariable NodeId="ns=2;i=23" BrowseName="2:Trigger_read_done" DataType="BOOL" AccessLevel="3">
-    <DisplayName>Trigger_read_done</DisplayName>
-    <References>
-      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
-    </References>
-    <Extensions>
-      <Extension>
-        <si:VariableMapping>"Db_Punti"."Trigger_read_done"</si:VariableMapping>
-      </Extension>
-    </Extensions>
-  </UAVariable>
-  <UAVariable NodeId="ns=2;i=34" BrowseName="2:End_Of_File" DataType="BOOL" AccessLevel="3">
-    <DisplayName>End_Of_File</DisplayName>
-    <References>
-      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
-    </References>
-    <Extensions>
-      <Extension>
-        <si:VariableMapping>"Db_Punti"."End_Of_File"</si:VariableMapping>
-      </Extension>
-    </Extensions>
-  </UAVariable>
-  <UAVariable NodeId="ns=2;i=93" BrowseName="2:PointArr" DataType="STRING" AccessLevel="3" ValueRank="1" ArrayDimensions="20">
-    <DisplayName>PointArr</DisplayName>
-    <References>
-      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
-      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=94</Reference>
-      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=95</Reference>
-      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=96</Reference>
-      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=97</Reference>
-      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=98</Reference>
-      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=99</Reference>
-      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=100</Reference>
-      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=101</Reference>
-      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=102</Reference>
-      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=103</Reference>
-      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=104</Reference>
-      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=105</Reference>
-      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=106</Reference>
-      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=107</Reference>
-      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=108</Reference>
-      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=109</Reference>
-      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=110</Reference>
-      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=111</Reference>
-      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=112</Reference>
-      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=113</Reference>
-    </References>
-    <Extensions>
-      <Extension>
-        <si:VariableMapping>"Db_Punti"."punti"</si:VariableMapping>
-      </Extension>
-    </Extensions>
-  </UAVariable>
-  <UAVariable NodeId="ns=2;i=94" BrowseName="2:[0]" DataType="STRING" AccessLevel="1">
+  <UAVariable NodeId="ns=2;i=13" BrowseName="2:[0]" ParentNodeId="ns=2;i=12" DataType="STRING" AccessLevel="3">
     <DisplayName>[0]</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
     </References>
     <Extensions>
       <Extension>
-        <si:VariableMapping>"Db_Punti"."punti"[0]</si:VariableMapping>
+        <si:VariableMapping>"Cam_Exchange"."Point"[0]</si:VariableMapping>
       </Extension>
     </Extensions>
   </UAVariable>
-  <UAVariable NodeId="ns=2;i=95" BrowseName="2:[1]" DataType="STRING" AccessLevel="1">
+  <UAVariable NodeId="ns=2;i=14" BrowseName="2:[1]" ParentNodeId="ns=2;i=12" DataType="STRING" AccessLevel="3">
     <DisplayName>[1]</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
     </References>
     <Extensions>
       <Extension>
-        <si:VariableMapping>"Db_Punti"."punti"[1]</si:VariableMapping>
+        <si:VariableMapping>"Cam_Exchange"."Point"[1]</si:VariableMapping>
       </Extension>
     </Extensions>
   </UAVariable>
-  <UAVariable NodeId="ns=2;i=96" BrowseName="2:[2]" DataType="STRING" AccessLevel="1">
+  <UAVariable NodeId="ns=2;i=15" BrowseName="2:[2]" ParentNodeId="ns=2;i=12" DataType="STRING" AccessLevel="3">
     <DisplayName>[2]</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
     </References>
     <Extensions>
       <Extension>
-        <si:VariableMapping>"Db_Punti"."punti"[2]</si:VariableMapping>
+        <si:VariableMapping>"Cam_Exchange"."Point"[2]</si:VariableMapping>
       </Extension>
     </Extensions>
   </UAVariable>
-  <UAVariable NodeId="ns=2;i=97" BrowseName="2:[3]" DataType="STRING" AccessLevel="1">
+  <UAVariable NodeId="ns=2;i=16" BrowseName="2:[3]" ParentNodeId="ns=2;i=12" DataType="STRING" AccessLevel="3">
     <DisplayName>[3]</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
     </References>
     <Extensions>
       <Extension>
-        <si:VariableMapping>"Db_Punti"."punti"[3]</si:VariableMapping>
+        <si:VariableMapping>"Cam_Exchange"."Point"[3]</si:VariableMapping>
       </Extension>
     </Extensions>
   </UAVariable>
-  <UAVariable NodeId="ns=2;i=98" BrowseName="2:[4]" DataType="STRING" AccessLevel="1">
+  <UAVariable NodeId="ns=2;i=17" BrowseName="2:[4]" ParentNodeId="ns=2;i=12" DataType="STRING" AccessLevel="3">
     <DisplayName>[4]</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
     </References>
     <Extensions>
       <Extension>
-        <si:VariableMapping>"Db_Punti"."punti"[4]</si:VariableMapping>
+        <si:VariableMapping>"Cam_Exchange"."Point"[4]</si:VariableMapping>
       </Extension>
     </Extensions>
   </UAVariable>
-  <UAVariable NodeId="ns=2;i=99" BrowseName="2:[5]" DataType="STRING" AccessLevel="1">
+  <UAVariable NodeId="ns=2;i=18" BrowseName="2:[5]" ParentNodeId="ns=2;i=12" DataType="STRING" AccessLevel="3">
     <DisplayName>[5]</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
     </References>
     <Extensions>
       <Extension>
-        <si:VariableMapping>"Db_Punti"."punti"[5]</si:VariableMapping>
+        <si:VariableMapping>"Cam_Exchange"."Point"[5]</si:VariableMapping>
       </Extension>
     </Extensions>
   </UAVariable>
-  <UAVariable NodeId="ns=2;i=100" BrowseName="2:[6]" DataType="STRING" AccessLevel="1">
+  <UAVariable NodeId="ns=2;i=19" BrowseName="2:[6]" ParentNodeId="ns=2;i=12" DataType="STRING" AccessLevel="3">
     <DisplayName>[6]</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
     </References>
     <Extensions>
       <Extension>
-        <si:VariableMapping>"Db_Punti"."punti"[6]</si:VariableMapping>
+        <si:VariableMapping>"Cam_Exchange"."Point"[6]</si:VariableMapping>
       </Extension>
     </Extensions>
   </UAVariable>
-  <UAVariable NodeId="ns=2;i=101" BrowseName="2:[7]" DataType="STRING" AccessLevel="1">
+  <UAVariable NodeId="ns=2;i=20" BrowseName="2:[7]" ParentNodeId="ns=2;i=12" DataType="STRING" AccessLevel="3">
     <DisplayName>[7]</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
     </References>
     <Extensions>
       <Extension>
-        <si:VariableMapping>"Db_Punti"."punti"[7]</si:VariableMapping>
+        <si:VariableMapping>"Cam_Exchange"."Point"[7]</si:VariableMapping>
       </Extension>
     </Extensions>
   </UAVariable>
-  <UAVariable NodeId="ns=2;i=102" BrowseName="2:[8]" DataType="STRING" AccessLevel="1">
+  <UAVariable NodeId="ns=2;i=21" BrowseName="2:[8]" ParentNodeId="ns=2;i=12" DataType="STRING" AccessLevel="3">
     <DisplayName>[8]</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
     </References>
     <Extensions>
       <Extension>
-        <si:VariableMapping>"Db_Punti"."punti"[8]</si:VariableMapping>
+        <si:VariableMapping>"Cam_Exchange"."Point"[8]</si:VariableMapping>
       </Extension>
     </Extensions>
   </UAVariable>
-  <UAVariable NodeId="ns=2;i=103" BrowseName="2:[9]" DataType="STRING" AccessLevel="1">
+  <UAVariable NodeId="ns=2;i=22" BrowseName="2:[9]" ParentNodeId="ns=2;i=12" DataType="STRING" AccessLevel="3">
     <DisplayName>[9]</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
     </References>
     <Extensions>
       <Extension>
-        <si:VariableMapping>"Db_Punti"."punti"[9]</si:VariableMapping>
+        <si:VariableMapping>"Cam_Exchange"."Point"[9]</si:VariableMapping>
       </Extension>
     </Extensions>
   </UAVariable>
-  <UAVariable NodeId="ns=2;i=104" BrowseName="2:[10]" DataType="STRING" AccessLevel="1">
+  <UAVariable NodeId="ns=2;i=23" BrowseName="2:[10]" ParentNodeId="ns=2;i=12" DataType="STRING" AccessLevel="3">
     <DisplayName>[10]</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
     </References>
     <Extensions>
       <Extension>
-        <si:VariableMapping>"Db_Punti"."punti"[10]</si:VariableMapping>
+        <si:VariableMapping>"Cam_Exchange"."Point"[10]</si:VariableMapping>
       </Extension>
     </Extensions>
   </UAVariable>
-  <UAVariable NodeId="ns=2;i=105" BrowseName="2:[11]" DataType="STRING" AccessLevel="1">
+  <UAVariable NodeId="ns=2;i=24" BrowseName="2:[11]" ParentNodeId="ns=2;i=12" DataType="STRING" AccessLevel="3">
     <DisplayName>[11]</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
     </References>
     <Extensions>
       <Extension>
-        <si:VariableMapping>"Db_Punti"."punti"[11]</si:VariableMapping>
+        <si:VariableMapping>"Cam_Exchange"."Point"[11]</si:VariableMapping>
       </Extension>
     </Extensions>
   </UAVariable>
-  <UAVariable NodeId="ns=2;i=106" BrowseName="2:[12]" DataType="STRING" AccessLevel="1">
+  <UAVariable NodeId="ns=2;i=25" BrowseName="2:[12]" ParentNodeId="ns=2;i=12" DataType="STRING" AccessLevel="3">
     <DisplayName>[12]</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
     </References>
     <Extensions>
       <Extension>
-        <si:VariableMapping>"Db_Punti"."punti"[12]</si:VariableMapping>
+        <si:VariableMapping>"Cam_Exchange"."Point"[12]</si:VariableMapping>
       </Extension>
     </Extensions>
   </UAVariable>
-  <UAVariable NodeId="ns=2;i=107" BrowseName="2:[13]" DataType="STRING" AccessLevel="1">
+  <UAVariable NodeId="ns=2;i=26" BrowseName="2:[13]" ParentNodeId="ns=2;i=12" DataType="STRING" AccessLevel="3">
     <DisplayName>[13]</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
     </References>
     <Extensions>
       <Extension>
-        <si:VariableMapping>"Db_Punti"."punti"[13]</si:VariableMapping>
+        <si:VariableMapping>"Cam_Exchange"."Point"[13]</si:VariableMapping>
       </Extension>
     </Extensions>
   </UAVariable>
-  <UAVariable NodeId="ns=2;i=108" BrowseName="2:[14]" DataType="STRING" AccessLevel="1">
+  <UAVariable NodeId="ns=2;i=27" BrowseName="2:[14]" ParentNodeId="ns=2;i=12" DataType="STRING" AccessLevel="3">
     <DisplayName>[14]</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
     </References>
     <Extensions>
       <Extension>
-        <si:VariableMapping>"Db_Punti"."punti"[14]</si:VariableMapping>
+        <si:VariableMapping>"Cam_Exchange"."Point"[14]</si:VariableMapping>
       </Extension>
     </Extensions>
   </UAVariable>
-  <UAVariable NodeId="ns=2;i=109" BrowseName="2:[15]" DataType="STRING" AccessLevel="1">
+  <UAVariable NodeId="ns=2;i=28" BrowseName="2:[15]" ParentNodeId="ns=2;i=12" DataType="STRING" AccessLevel="3">
     <DisplayName>[15]</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
     </References>
     <Extensions>
       <Extension>
-        <si:VariableMapping>"Db_Punti"."punti"[15]</si:VariableMapping>
+        <si:VariableMapping>"Cam_Exchange"."Point"[15]</si:VariableMapping>
       </Extension>
     </Extensions>
   </UAVariable>
-  <UAVariable NodeId="ns=2;i=110" BrowseName="2:[16]" DataType="STRING" AccessLevel="1">
+  <UAVariable NodeId="ns=2;i=29" BrowseName="2:[16]" ParentNodeId="ns=2;i=12" DataType="STRING" AccessLevel="3">
     <DisplayName>[16]</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
     </References>
     <Extensions>
       <Extension>
-        <si:VariableMapping>"Db_Punti"."punti"[16]</si:VariableMapping>
+        <si:VariableMapping>"Cam_Exchange"."Point"[16]</si:VariableMapping>
       </Extension>
     </Extensions>
   </UAVariable>
-  <UAVariable NodeId="ns=2;i=111" BrowseName="2:[17]" DataType="STRING" AccessLevel="1">
+  <UAVariable NodeId="ns=2;i=30" BrowseName="2:[17]" ParentNodeId="ns=2;i=12" DataType="STRING" AccessLevel="3">
     <DisplayName>[17]</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
     </References>
     <Extensions>
       <Extension>
-        <si:VariableMapping>"Db_Punti"."punti"[17]</si:VariableMapping>
+        <si:VariableMapping>"Cam_Exchange"."Point"[17]</si:VariableMapping>
       </Extension>
     </Extensions>
   </UAVariable>
-  <UAVariable NodeId="ns=2;i=112" BrowseName="2:[18]" DataType="STRING" AccessLevel="1">
+  <UAVariable NodeId="ns=2;i=31" BrowseName="2:[18]" ParentNodeId="ns=2;i=12" DataType="STRING" AccessLevel="3">
     <DisplayName>[18]</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
     </References>
     <Extensions>
       <Extension>
-        <si:VariableMapping>"Db_Punti"."punti"[18]</si:VariableMapping>
+        <si:VariableMapping>"Cam_Exchange"."Point"[18]</si:VariableMapping>
       </Extension>
     </Extensions>
   </UAVariable>
-  <UAVariable NodeId="ns=2;i=113" BrowseName="2:[19]" DataType="STRING" AccessLevel="1">
+  <UAVariable NodeId="ns=2;i=32" BrowseName="2:[19]" ParentNodeId="ns=2;i=12" DataType="STRING" AccessLevel="3">
     <DisplayName>[19]</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
     </References>
     <Extensions>
       <Extension>
-        <si:VariableMapping>"Db_Punti"."punti"[19]</si:VariableMapping>
+        <si:VariableMapping>"Cam_Exchange"."Point"[19]</si:VariableMapping>
       </Extension>
     </Extensions>
   </UAVariable>
-  <UAObject NodeId="ns=2;i=78" BrowseName="Default Binary">
+  <UAVariable NodeId="ns=2;i=43" BrowseName="2:TriggerWrite" ParentNodeId="ns=2;i=1" DataType="BOOL" AccessLevel="3">
+    <DisplayName>TriggerWrite</DisplayName>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
+    </References>
+    <Extensions>
+      <Extension>
+        <si:VariableMapping>"Cam_Exchange"."TriggerWrite"</si:VariableMapping>
+      </Extension>
+    </Extensions>
+  </UAVariable>
+  <UAVariable NodeId="ns=2;i=54" BrowseName="2:ReadDone" ParentNodeId="ns=2;i=1" DataType="BOOL" AccessLevel="3">
+    <DisplayName>ReadDone</DisplayName>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
+    </References>
+    <Extensions>
+      <Extension>
+        <si:VariableMapping>"Cam_Exchange"."ReadDone"</si:VariableMapping>
+      </Extension>
+    </Extensions>
+  </UAVariable>
+  <UAVariable NodeId="ns=2;i=65" BrowseName="2:EndOfFile" ParentNodeId="ns=2;i=1" DataType="BOOL" AccessLevel="3">
+    <DisplayName>EndOfFile</DisplayName>
+    <References>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
+    </References>
+    <Extensions>
+      <Extension>
+        <si:VariableMapping>"Cam_Exchange"."EndOfFile"</si:VariableMapping>
+      </Extension>
+    </Extensions>
+  </UAVariable>
+  <UAObject NodeId="ns=2;i=77" BrowseName="Default Binary">
     <DisplayName>Default Binary</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=76</Reference>
     </References>
   </UAObject>
-  <UAVariable NodeId="ns=2;i=79" BrowseName="2:Pos" DataType="ns=2;i=77" AccessLevel="3">
+  <UAVariable NodeId="ns=2;i=78" BrowseName="2:Pos" ParentNodeId="ns=2;i=1" DataType="ns=2;i=76" AccessLevel="3">
     <DisplayName>Pos</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
+      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=79</Reference>
       <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=80</Reference>
       <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=81</Reference>
-      <Reference ReferenceType="HasComponent" IsForward="true">ns=2;i=82</Reference>
     </References>
     <Extensions>
       <Extension>
-        <si:VariableMapping>"Db_Punti"."Pos"</si:VariableMapping>
+        <si:VariableMapping>"Cam_Exchange"."Pos"</si:VariableMapping>
       </Extension>
     </Extensions>
   </UAVariable>
-  <UAVariable NodeId="ns=2;i=80" BrowseName="2:X" DataType="REAL" AccessLevel="3">
+  <UAVariable NodeId="ns=2;i=79" BrowseName="2:X" ParentNodeId="ns=2;i=78" DataType="REAL" AccessLevel="3">
     <DisplayName>X</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
     </References>
     <Extensions>
       <Extension>
-        <si:VariableMapping>"Db_Punti"."Pos"."X"</si:VariableMapping>
+        <si:VariableMapping>"Cam_Exchange"."Pos"."X"</si:VariableMapping>
       </Extension>
     </Extensions>
   </UAVariable>
-  <UAVariable NodeId="ns=2;i=81" BrowseName="2:Y" DataType="REAL" AccessLevel="3">
+  <UAVariable NodeId="ns=2;i=80" BrowseName="2:Y" ParentNodeId="ns=2;i=78" DataType="REAL" AccessLevel="3">
     <DisplayName>Y</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
     </References>
     <Extensions>
       <Extension>
-        <si:VariableMapping>"Db_Punti"."Pos"."Y"</si:VariableMapping>
+        <si:VariableMapping>"Cam_Exchange"."Pos"."Y"</si:VariableMapping>
       </Extension>
     </Extensions>
   </UAVariable>
-  <UAVariable NodeId="ns=2;i=82" BrowseName="2:Z" DataType="REAL" AccessLevel="3">
+  <UAVariable NodeId="ns=2;i=81" BrowseName="2:Z" ParentNodeId="ns=2;i=78" DataType="REAL" AccessLevel="3">
     <DisplayName>Z</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
     </References>
     <Extensions>
       <Extension>
-        <si:VariableMapping>"Db_Punti"."Pos"."Z"</si:VariableMapping>
+        <si:VariableMapping>"Cam_Exchange"."Pos"."Z"</si:VariableMapping>
       </Extension>
     </Extensions>
   </UAVariable>
@@ -813,7 +813,7 @@
   <UADataType NodeId="ns=1;i=3400" BrowseName="1:SimaticStructures" IsAbstract="true">
     <DisplayName>SimaticStructures</DisplayName>
     <References>
-      <Reference ReferenceType="HasSubtype" IsForward="true">ns=2;i=77</Reference>
+      <Reference ReferenceType="HasSubtype" IsForward="true">ns=2;i=76</Reference>
       <Reference ReferenceType="HasSubtype" IsForward="false">i=22</Reference>
     </References>
   </UADataType>
@@ -835,12 +835,12 @@
       <Field Name="Build" DataType="i=6" />
     </Definition>
   </UADataType>
-  <UADataType NodeId="ns=2;i=77" BrowseName="2:&quot;Db_Punti&quot;.&quot;Pos&quot;">
-    <DisplayName>"Db_Punti"."Pos"</DisplayName>
+  <UADataType NodeId="ns=2;i=76" BrowseName="2:&quot;Cam_Exchange&quot;.&quot;Pos&quot;">
+    <DisplayName>"Cam_Exchange"."Pos"</DisplayName>
     <References>
-      <Reference ReferenceType="HasEncoding" IsForward="true">ns=2;i=78</Reference>
+      <Reference ReferenceType="HasEncoding" IsForward="true">ns=2;i=77</Reference>
     </References>
-    <Definition Name="2:&quot;Db_Punti&quot;.&quot;Pos&quot;">
+    <Definition Name="2:&quot;Cam_Exchange&quot;.&quot;Pos&quot;">
       <Field Name="X" DataType="REAL" />
       <Field Name="Y" DataType="REAL" />
       <Field Name="Z" DataType="REAL" />

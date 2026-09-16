@@ -34,6 +34,7 @@ One piece at a time: a short design approved first, then TDD, then a check on th
 | — | LWPOLYLINE/POLYLINE bulges in the DXF import, with a new DXF reader | Done 2026-09-15 |
 | — | Drilling of round holes drawn as arcs, polygons or lines (`internal/service/cam/holes.go`) | Done 2026-09-15 |
 | — | OPC UA nodes addressed by the names of the PLC variables (`internal/service/opcua/nodes.go`) | Done 2026-09-16 |
+| — | Variables read from the PLC, chosen from a combo box, with a connection test | Done 2026-09-16 |
 
 Measured on `dxf/L28YO-tree-of-life-wall-spiritual-art.dxf`:
 
@@ -312,9 +313,9 @@ PLC program: what the app really needs is the names.
       Pos/X,Y,Z    ns=4;i=79,80,81   Float
   ```
 
-  `docs/OPC Ua Interface.xml` is an older export: it says `Comm`, `PointArr`,
-  `Trigger_read_done`, `End_Of_File` with `i=93/12/23/34`, names and numbers that are not on
-  the machine any more. **The defaults the app shipped with pointed at nodes the PLC does not
+  The export the app was built on (`docs/OPC Ua Interface.xml`, since replaced by
+  `docs/interface.xml`) said `Comm`, `PointArr`, `Trigger_read_done`, `End_Of_File` with
+  `i=93/12/23/34`, names and numbers that are not on the machine any more. **The defaults the app shipped with pointed at nodes the PLC does not
   have** (`ns=4;i=93`), so the names also repair them. `tools/s7sim` already used the true
   numbers and now carries the true names too, under `ServerInterfaces/Com`.
 - **Connecting to the PLC:** it offers only `Basic256Sha256` with `Sign` or `SignAndEncrypt`,
@@ -339,6 +340,56 @@ PLC program: what the app really needs is the names.
 - **Limits:** the names are resolved on the server the app is connected to, so a wrong name is
   found only at connection time, not while typing it. The app never writes the migrated names
   back to the database on its own: they are saved the first time the window is saved.
+
+### Choosing the variables from the PLC (2026-09-16)
+
+The node fields were text boxes. The user asked for the variables to be polled at connection
+and chosen from a combo box, and for a connection test before saving.
+
+- **What is listed** (`interfaceVariables` in `internal/service/opcua/nodes.go`): the walk
+  starts at `ServerInterfaces`, goes into everything that has children and lists every
+  variable it meets. It goes into variables too, because a structure of the PLC such as `Pos`
+  is a variable carrying its members, and it leaves out the elements of an array, so the
+  twenty strings of `Point` are not offered one by one. On the machine the list is seven
+  entries: Point, TriggerWrite, ReadDone, EndOfFile and Pos/X, Pos/Y, Pos/Z.
+- **Endpoints** (`internal/handler/opcua.go`):
+  - `GET /api/opcua/variables` answers from the connection the app already has, browsing once
+    per connection (`Client.Variables`, cache cleared on connect and disconnect). It never
+    opens a connection by itself: opening the settings window must not reach for the machine.
+  - `POST /api/opcua/test` tries the settings in the request, the ones on screen that have not
+    been saved, with a throwaway client, lists what it finds and disconnects. The live
+    connection of the app is not touched. A refused connection is the answer to the question
+    asked, so it comes back with 200, `connected: false` and the message. The handler builds
+    that client through `newClient`, a seam the tests replace.
+- **The window** (`src/ui/modals/Modals.js`, `src/app/PLCConfigManager.js`): every node field
+  is a combo box, an input with a button that drops the variables under it. The button shows
+  them all; typing narrows them. A row shows only the part that tells the variables apart
+  (`Pos/X`, not `ServerInterfaces/Com/Pos/X`) with the node ID beside it, and the full path in
+  the tooltip; clicking one writes the whole path in the field. `Prova connessione` sits
+  before `Salva Configurazione` and says `Collegato a … — 7 variabili trovate` or the error.
+  A `datalist` was tried first and dropped: the browser filters it by what the field already
+  holds, so a field carrying a variable offered only itself.
+- **Fixed on the way:** the status line of the window set `data-tone` while the styles matched
+  `.success`/`.error` classes, so it never had a colour.
+- **Checked:**
+  - Go tests on the walk (the seven variables, a structure whose members must come out, the
+    array elements left out, no ServerInterfaces) and on the two endpoints with the mock
+    client, including the disconnected case and a refused test.
+  - `go test -tags=s7sim`: `TestVariables_S7Sim` finds the seven on the simulator.
+  - Headless Chrome on a local server with the simulator: the window opens already carrying
+    the variables of the live connection, the button lists all seven, a row reads `Point
+    ns=4;i=12`, clicking writes the path, typing narrows, the test reports success, the
+    connection of the app is untouched, the choice is saved, an endpoint that does not answer
+    is reported, no page errors.
+  - Against the PLC at 192.168.0.1, with the user's authorisation (writes allowed, the PLC has
+    no mechanics attached): the seven variables listed from the live connection, the position
+    read, and a program of 25 lines transferred in chunks addressed only by name, in 0.24 s.
+- **Not verified on the machine:** the `Prova connessione` button. While testing, the PLC
+  started refusing every new session with `EOF`, including to an independent client and with a
+  freshly generated certificate, while the session the container already held kept working. It
+  is a limit of concurrent sessions or secure channels on the S7 server, not the app: the same
+  endpoint works against the simulator, and the app's own connect fails the same way from the
+  same process. It clears when the open channels time out.
 
 ## Environment
 
@@ -375,7 +426,7 @@ Hooks: pre-commit runs gofmt, vet, golangci-lint on changed lines and the 600-li
 - **Arc through point:** `arcAuxPoint` in `internal/service/plc/extractor.go` returns the arc centre when an arc has neither `throughPoint` nor `sweep`.
 - **Import cache:** `SmartImportCached` keys the cache on the content only and returns the cached object without copying it.
 - **Unused configuration:** `ServerConfig.OPCUAConfig` (`OPCUA_CONFIG`) is not used by anything.
-- **Stale interface export:** `docs/OPC Ua Interface.xml` no longer matches the machine (see the node names of 2026-09-16). It is kept as a record of the older program.
+- **Interface export:** `docs/interface.xml` is the export of the current PLC program, kept as a reference only: the app reads the names from the machine at every connection, because the program can change.
 ## Working rules to keep
 
 - Never send to the real PLC, and never run real-PLC/integration tests, without explicit authorisation. Use the simulator.
