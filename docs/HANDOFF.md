@@ -5,16 +5,17 @@ router for wood and PCB, with the CAM inside Plotter-Pen (no external CAD/CAM).
 
 ## Where things stand
 
-- `origin/main` carries the run of the job; nothing is waiting to be pushed.
-- The Compose container on port 41880 runs it and is healthy. The database in the
-  `plotter-pen_plotter-data` volume was backed up before every rebuild of the day, the last as
-  `plotter.db.bak-2026-09-16-before-job-run`.
+- `origin/main` carries the open contours closed with help; nothing is waiting to be pushed.
+- The Compose container on port 41880 runs it and is healthy. The older backups of the database
+  in the `plotter-pen_plotter-data` volume were deleted on the user's request; the one taken
+  before this rebuild is `plotter.db.bak-2026-09-16-before-open-contours`.
 - The CAM list of "cosa manca" is finished: DXF bulges, round holes, the tool library, the work
   area, the profile on the line, the piece and the tool in the 3D view, the camera that follows
   the tool, and the details out of reach. Each piece has its own section below.
-- The milestone "the whole job" is under way: pieces 1 to 4 are done — the speeds in the tool,
-  the job in the database, the job in the panel, and running it step by step on the PLC. Piece 5,
-  open contours closed with help, is next and needs its short design first.
+- The milestone "the whole job" is under way: pieces 1 to 5 are done — the speeds in the tool,
+  the job in the database, the job in the panel, running it step by step on the PLC, and open
+  contours closed with help. Piece 6, the errors in Italian, is next and needs its short design
+  first.
 - The OPC UA side addresses the PLC by the names of its variables, lists them from the machine and
   tests a connection before it is saved; a program of 25 lines was transferred to the machine at
   192.168.0.1 by name alone.
@@ -49,7 +50,7 @@ app must never send the next program without an explicit confirmation.
 | 2 | The job: model and API — **done 2026-09-16** | The ordered steps (operation, tool, parameters, layer) in the database, `GET/POST /api/cam/job`. The program of a step is generated with the endpoints that already exist. |
 | 3 | The job in the panel — **done 2026-09-16** | The steps in the Output PLC panel: add, remove, reorder, duplicate; the active step is edited as the panel does today. |
 | 4 | Sending in sequence — **done 2026-09-16** | Transfer a step, the operator runs it, confirms, the app asks for the tool change and goes on. Never a transfer without a confirmation, because nothing on the machine says the cut is over. |
-| 5 | Open contours, closed with help | Where the contour opens and an offer to close it within a tolerance, instead of today's flat refusal (`a profile needs closed contours`). |
+| 5 | Open contours, closed with help — **done 2026-09-16** | Where the contour opens and an offer to close it within a tolerance, instead of the flat refusal (`a profile needs closed contours`). |
 | 6 | Errors in Italian | The messages of the API where the user reads them; English stays in the logs. |
 
 Each piece keeps the rhythm of the others: a short design approved first, then TDD, then the
@@ -256,6 +257,67 @@ changes).
   to connect: EOF.` with **Riprova**, which is the failure path working. The session limit noted
   under "Choosing the variables from the PLC" is the likely cause, not verified; the container
   kept its own session throughout. The earlier checks, which send nothing, pass on the final bundle.
+
+### Piece 5: open contours, closed with help (2026-09-16)
+
+A profile refused the whole drawing as soon as one contour was open (`a profile needs closed
+contours`), without saying which one, and the only way out was to redraw. Decided with the user:
+**the closed contours are cut and the open ones reported**, and **nothing is closed until asked**.
+
+- **Chaining** (`internal/service/cam/chain.go`): `Chain(primitives, closeGap)`. The exact joints
+  (0.01 mm) are made first, as before. A `closeGap` wider than that then joins the chains left
+  open by the same rule — each end the other's only neighbour within the gap, so where three ends
+  meet nothing is joined — up to `MaxCloseGap`, 1 mm. A bridged joint keeps both ends with a
+  straight edge between them: no point of the drawing moves. A loop with fewer than three points
+  or no area (under 0.0001 mm²) stays open: a short line closed on itself, or a line that goes out
+  and back, is not a contour.
+- **The gap that closes a contour** (`closingGaps`): the closing gaps are tried in 0.01 mm steps,
+  from the one asked for up to 1 mm, on the chains with an end within 1 mm of another; each open
+  contour gets the first step that closes it into a loop, 0 when none does. The gap is tried
+  rather than measured, because the distance to the nearest end would offer gaps that close
+  nothing: an end near a line that stays open, or three ends together. Distances are compared
+  with 1 nm of slack: 80.04 − 80 is 0.04000000000000625 in a float64, and a gap of 0.04 must close
+  it. The browser check found this — the button offered 0.04 and the contour stayed open.
+- **The profile** (`profile.go`, `open.go`): `ProfileRequest.closeGap`, 0 to 1 mm. The response
+  carries `open`, one `OpenContour` per open contour (start, end, primitives, `gap`), and a
+  warning for each, after the other warnings. A drawing whose contours are all open is an
+  `OpenContoursError`, which the handler answers **422** with `{error, open}`; a drawing with
+  nothing at all to cut is still a 400.
+- **Saved in the step**: `CAMParams.CloseGap` (`close_gap`, default 0), in the job and in the
+  operation; `checkCAMParams` refuses a value outside 0–1 mm.
+- **The panel**: **Chiudi aperture** (mm, 0–1, step 0.01) among the profile parameters, and the
+  collapsed line adds `· chiude 0,04 mm` when it is set. The message lists the open contours in
+  Italian (`Contorno aperto da (80,000; 20,000) a (80,040; 20,000): non tagliato, chiudendo
+  aperture fino a 0,04 mm si chiude`, or `… è una linea aperta`), the drawing marks them dashed in
+  orange like the details out of reach, and **Chiudi aperture fino a X mm** sets the widest gap
+  offered, which saves the step and generates again. With only open contours the message is
+  `Profilo: programma non generato. Nel disegno non c'è nessun contorno chiuso.`, with the same
+  list and button. `PLCOutputManager.generate()` now returns the server's answer together with
+  its error, so the open contours reach the panel; the run of the job reads only the error, as
+  before.
+- **Checked:** TDD on the Go side — a gap within the closing gap is bridged with every point kept;
+  a narrower closing gap says the gap; two chains close into one; three ends stay open; a short
+  piece does not close on itself; exact joints are unchanged; an open line has no gap; a gap
+  towards a line that stays open closes nothing; the decimal gap; the profile cuts the closed
+  contours and reports the open ones on every side; 422 with the details; `closeGap` saved,
+  and refused out of range. Five changes made on purpose to the chaining — the nearest-end gap, no
+  degenerate guard, bridged points dropped, no second pass, no slack — each fails a test. Then
+  `go vet`, `go test ./...`, `make quality`, `npm run lint`, `npm run build`, and headless Chrome
+  on a temporary server with the simulator's configuration, nothing sent: 15 checks on a
+  rectangle of four lines with a 0.04 mm gap and a stray line, drawn with the app's own CAD (no
+  program and both contours listed and marked; the button closes the rectangle, saves 0.04 in
+  the step and cuts it, leaving only the stray line marked and no button; 0.03 opens it again and
+  offers 0.04; the drilling and the pen show nothing of it; no send, no page error). The checks
+  of the earlier pieces that send nothing pass on the final bundle, 12 scripts; the one of the
+  profile on the line had relied on the Ø2 operation saved by the script run before it, and now
+  saves its own. The run of the job was not repeated: it sends programs, and the send path did not
+  change.
+- **A value above 1 mm typed in the field** is refused by the server: no program, the message in
+  English (`closing gap must be between 0 and 1 mm`) until piece 6, and the step keeps the value
+  saved before while the field shows the one typed, as for any refused value.
+- **Met on the way:** the browser scripts leave their tab open, and each tab holds one of the 5
+  WebSocket connections the server allows per IP (429 to the sixth); the regression runner now
+  closes the tabs before each script.
 
 ### After piece 3: three issues found on the way (2026-09-16)
 

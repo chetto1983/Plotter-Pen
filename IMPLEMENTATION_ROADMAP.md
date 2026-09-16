@@ -42,7 +42,8 @@ internal/
     │   └── optimizer.go      # Nearest-neighbor ordering
     │
     ├── cam/
-    │   ├── chain.go          # Contour chaining for milling
+    │   ├── chain.go          # Contour chaining for milling, gaps closed on request
+    │   ├── open.go           # Open contours: where they are and the closing gap that closes them
     │   ├── profile.go        # Profile cut: offset rings, depth passes, J/L/A program
     │   ├── drill.go          # Drilling: round holes in a diameter range, G83-like pecks as J/L/WAIT
     │   └── holes.go          # Round holes: circles and closed contours within 0.02 mm of a circle
@@ -79,8 +80,8 @@ tools/s7sim/                  # S7-1500 OPC UA simulator (Python, not part of Co
 | PLC Extractor | `internal/service/plc/extractor.go` | Done | J/L/A/WAIT with Z-axis |
 | G-Code Gen | `pkg/gcode/generator.go` | Unused | G0/G1/G2/G3 and M30; no current endpoint uses it (used by the CAM removed in `7ad8c8f`) |
 | Clipper2 | `pkg/clipper/adapter.go` | Done | On go-clipper2 v1.3.0: single-path offsets, concentric pockets, `MergeContours` (even-odd merge), `OffsetContours` (merged set offset with 5 µm arcs) and `Inside` (which rings enclose which); the profile uses the last three |
-| Contour Chaining | `internal/service/cam/chain.go` | Done | Joins primitives into closed contours (ends within 0.01 mm, arcs split at 5 µm, no joint where three or more ends meet), naming the primitives of each closed contour; used by the profile and the drilling |
-| Profile Cut | `internal/service/cam/profile.go` | Done | `POST /api/cam/profile`: closed contours offset by the tool radius (outside or inside), each ring after the rings inside it and then the nearest one, conventional or climb, warnings for contours the tool cannot reach, passes from the top of the piece (work Z, the bed, + thickness) down by the step-down (at least 0.001 mm, at most 1000 passes) to the overcut below the bed or a depth below the top entered along `L` ramps at the ramp angle, rings fitted at 0.01 mm into `L`/`A` with the arc's middle input point as `I`/`J`. Launched from the operation selector of the PLC output panel; tried on `tools/s7sim` only |
+| Contour Chaining | `internal/service/cam/chain.go` | Done | Joins primitives into closed contours (ends within 0.01 mm, arcs split at 5 µm, no joint where three or more ends meet), naming the primitives of each contour; with a closing gap up to 1 mm the chains left open are joined too, keeping every point, and each open chain gets the closing gap that closes it; used by the profile and the drilling |
+| Profile Cut | `internal/service/cam/profile.go` | Done | `POST /api/cam/profile`: closed contours offset by the tool radius (outside or inside), each ring after the rings inside it and then the nearest one, conventional or climb, warnings for contours the tool cannot reach, open contours reported with the gap that closes them and cut once closed (only open contours: 422), passes from the top of the piece (work Z, the bed, + thickness) down by the step-down (at least 0.001 mm, at most 1000 passes) to the overcut below the bed or a depth below the top entered along `L` ramps at the ramp angle, rings fitted at 0.01 mm into `L`/`A` with the arc's middle input point as `I`/`J`. Launched from the operation selector of the PLC output panel; tried on `tools/s7sim` only |
 | Drilling | `internal/service/cam/drill.go`, `holes.go` | Done | `POST /api/cam/drill`: the round holes with a diameter in the requested range (1 µm tolerance, one hole per centre within 0.01 mm), circles or closed contours of arcs, polygons or lines whose vertices and side middles lie within 0.02 mm of a circle, while closed contours of hole width that are not round come back as `warnings`; nearest hole first from X 0 Y 0 (`plc.OptimizeOrder`) then 2-opt on the route, rapid to safe Z over each hole and to the retract plane above the piece, then pecks through the piece or to a depth at the plunge speed with a rapid out to the retract plane and back to 0.254 mm above the last peck (G83 with G98 written as `J`/`L`), optional dwell and drill point compensation. Launched from the operation selector of the PLC output panel; tried on `tools/s7sim` only |
 
 ### OPC UA (Complete)
@@ -98,6 +99,7 @@ tools/s7sim/                  # S7-1500 OPC UA simulator (Python, not part of Co
 | Camera on the tool | `src/plc/PLCSimulator3D.js` | Done | A toolbar button keeps the view on the tool; a pan lets it go |
 | The tool drawn | `src/plc/toolShapes.js` | Done | Turned profiles through three.js LatheGeometry, from the kind chosen in the library |
 | Details out of reach | `internal/service/cam/profile.go` | Done | Measured to 0.01 mm, named in the panel and marked in the drawing |
+| Open contours | `internal/service/cam/open.go`, `src/app/CAMOperationManager.js` | Done | Listed and marked, closed on request up to 1 mm |
 | Transfer | `internal/service/opcua/transfer.go` | Done | Chunked async with ACK |
 | WebSocket | `internal/handler/opcua_ws.go` | Done | Real-time position streaming |
 | Simulator | `tools/s7sim/s7sim.py` | Done | S7-1500 OPC UA simulator for transfer tests |
@@ -131,7 +133,7 @@ decisions behind it, is in `docs/HANDOFF.md` ("Next milestone: the whole job").
 | 2 | The job: model and API — done 2026-09-16 | `internal/persistence/db.go`, `internal/handler/cam_job.go` |
 | 3 | The job in the panel — done 2026-09-16 | `src/app/JobManager.js`, `src/app/CAMOperationManager.js`, `src/app/LayerManager.js`, `src/ui/components/SidebarRight.js` |
 | 4 | Sending in sequence — done 2026-09-16 | `src/app/JobRunner.js`, `src/app/PLCOutputManager.js` |
-| 5 | Open contours, closed with help | `internal/service/cam/chain.go` |
+| 5 | Open contours, closed with help — done 2026-09-16 | `internal/service/cam/chain.go`, `internal/service/cam/open.go`, `src/app/CAMOperationManager.js` |
 | 6 | Errors in Italian | `src/app/` where the messages are shown |
 
 ## Critical Values
