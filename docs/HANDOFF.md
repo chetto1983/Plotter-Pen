@@ -420,7 +420,7 @@ MSYS_NO_PATHCONV=1 docker run --rm -v "D:/Plotter-Pen:/src:ro" -w /src -e GOFLAG
 go test -tags=s7sim -run S7Sim -v ./internal/service/opcua/
 ```
 
-Hooks: pre-commit runs gofmt, vet, golangci-lint on changed lines and the 600-line cap on new files. Pre-push runs build, compilation of the `integration`/`s7sim` tests, deadcode and eslint.
+Hooks: pre-commit runs gofmt, vet, golangci-lint on the whole packages the commit touches (`scripts/lint-staged.sh`, no `--new-from-rev`) and the 600-line cap on new files. Pre-push runs build, compilation of the `integration`/`s7sim` tests, deadcode and eslint.
 
 ## Known issues, not fixed
 
