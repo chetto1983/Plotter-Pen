@@ -39,6 +39,7 @@ One piece at a time: a short design approved first, then TDD, then a check on th
 | — | Work area: the selection, or what the visible layers hold | Done 2026-09-16 |
 | — | Profile cut on the line, beside outside and inside | Done 2026-09-16 |
 | — | The piece of material shown in the 3D view | Done 2026-09-16 |
+| — | The 3D camera follows the tool, without changing the angle | Done 2026-09-16 |
 
 Measured on `dxf/L28YO-tree-of-life-wall-spiritual-art.dxf`:
 
@@ -523,6 +524,34 @@ where it goes through into the bed.
 - **Met on the way, not a change of this piece:** a thickness that puts the top of the piece above
   the safe Z is refused by the profile request, as it should be, and then the panel shows the
   error and no program.
+
+### The camera that follows the tool (2026-09-16)
+
+Asked for right after the piece: "la camera che si sposta con l'utensile". On a large drawing the
+tool ran out of the view and the simulation had to be chased by hand.
+
+- **What follows** (`PLCSimulator3D.setFollowTool`, `followStep`): the orbit controls of this app
+  are hand-rolled — the camera is placed from `radius`, `theta` and `phi` around a `target`
+  (`updateCameraFromControls`). Following therefore moves the target, not the camera: the angle
+  and the distance stay as the user set them, so orbiting and zooming keep working while it
+  follows. `PerspectiveCamera` needs nothing else; `updateProjectionMatrix` matters only when
+  fov, aspect, near or far change, and none of them do here.
+- **How it moves:** `setToolPosition` takes the target a fifth of the way to the tool
+  (`FOLLOW_STEP = 0.2`) instead of jumping, so a rapid does not throw the scene about, and it
+  draws one frame, not two. Switching it on arrives at the tool at once. Measured lag while the
+  program runs: about 5 mm in a view 350 mm deep, so the tool stays in the middle of the screen.
+- **Who turns it off:** a pan, with the right button or with two fingers, is the user aiming the
+  view, so the tool stops carrying it and the button goes dark. The choice is remembered in
+  `localStorage` under `plc3dFollowTool`, like the collapsed parameters, and it starts off.
+- **Where it is:** a crosshair button in the 3D toolbar beside Zoom Extent, lit while it follows
+  (`.cad-3d-btn.active`).
+- **Checked:** `npm run lint`, `npm run build`, and headless Chrome (software WebGL) on a local
+  server with a temporary database and the simulator: it starts off with the view 55 mm from the
+  tool, switching it on lands exactly on the tool while `theta`, `phi` and `radius` stay to the
+  9th decimal and the camera itself moves 55 mm, it stays 5 mm behind a tool that moves 12 mm
+  while the program runs, a right-button drag (real mouse events through the debugger) lets go
+  and the button goes dark, and the choice comes back when the page is loaded again. No page
+  errors.
 
 ## Environment
 
