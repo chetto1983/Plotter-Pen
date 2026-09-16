@@ -208,6 +208,46 @@ func TestProfile_OutsideSquareOnePass(t *testing.T) {
 // Passes go down by the step-down from the top of the piece, work Z + thickness, the last one
 // exactly at the bottom of the cut, and each ring is plunged again at every level without leaving
 // the cut.
+func TestProfile_OnTheLineFollowsTheDrawnContour(t *testing.T) {
+	widths := map[string]float64{}
+	for _, side := range []string{SideOutside, SideOn, SideInside} {
+		c := cuts(t, mustProfile(t, request(side, 4, squareP(0, 0, 20, 20))))
+		if len(c) != 1 {
+			t.Fatalf("%s: got %d cuts, want one", side, len(c))
+		}
+		widths[side] = width(c[0].path)
+	}
+	if math.Abs(widths[SideOn]-20) > 0.02 {
+		t.Errorf("on the line the cut is %.3f mm wide, want the drawn 20", widths[SideOn])
+	}
+	if math.Abs(widths[SideOutside]-24) > 0.02 || math.Abs(widths[SideInside]-16) > 0.02 {
+		t.Errorf("the offsets moved: outside %.3f (want 24), inside %.3f (want 16)",
+			widths[SideOutside], widths[SideInside])
+	}
+}
+
+func TestProfile_OnTheLineCutsWhatTheToolCannotEnter(t *testing.T) {
+	small := squareP(0, 0, 2, 2)
+	if _, err := Profile(request(SideInside, 6, small)); err == nil {
+		t.Fatal("a 6 mm tool must not fit inside a 2 mm square")
+	}
+
+	res, err := Profile(request(SideOn, 6, small))
+	if err != nil {
+		t.Fatalf("Profile on the line: %v", err)
+	}
+	if len(res.Warnings) > 0 {
+		t.Fatalf("warnings %q: on the line no contour is offset away", res.Warnings)
+	}
+	c := cuts(t, parse(t, res.Output))
+	if len(c) != 1 {
+		t.Fatalf("got %d cuts, want one", len(c))
+	}
+	if w := width(c[0].path); math.Abs(w-2) > 0.02 {
+		t.Errorf("the cut is %.3f mm wide, want the drawn 2", w)
+	}
+}
+
 func TestProfile_StepsDownFromTheTopOfThePiece(t *testing.T) {
 	req := request("outside", 2, squareP(0, 0, 20, 20))
 	req.WorkZ, req.Thickness, req.Overcut, req.SafeZ, req.StepDown, req.WaitTime = 1, 1, 0.2, 7, 0.5, 300
@@ -434,6 +474,8 @@ func TestProfile_DirectionFollowsSideAndCutting(t *testing.T) {
 		{"outside", "climb", false, true},
 		{"inside", "conventional", false, true},
 		{"inside", "climb", true, false},
+		{"on", "conventional", true, false},
+		{"on", "climb", false, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.side+" "+tt.direction, func(t *testing.T) {
@@ -457,8 +499,11 @@ func TestProfile_DirectionFollowsSideAndCutting(t *testing.T) {
 			}
 			// the hole is a circle: the sampled arcs must stay on its offset, on the right side
 			r := 8.0 - 1
-			if tt.side == "inside" {
+			switch tt.side {
+			case "inside":
 				r = 8 + 1
+			case "on":
+				r = 8
 			}
 			for _, p := range hole {
 				if d := p.Distance(geom.Point{X: 20, Y: 20}); math.Abs(d-r) > 0.016 {

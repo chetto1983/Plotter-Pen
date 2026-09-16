@@ -64,7 +64,7 @@ export class SidebarRight {
                 <span class="cam-op-input"><input type="number" id="camToolDiameter" min="0.1" max="50" step="0.1"><span>mm</span><button type="button" class="cam-op-tools" data-diameter="toolDiameter" title="Libreria utensili">&#9881;</button></span>
               </label>
               <label class="cam-op-field">Lato
-                <select id="camSide"><option value="outside">Esterno</option><option value="inside">Interno</option></select>
+                <select id="camSide"><option value="outside">Esterno</option><option value="inside">Interno</option><option value="on">Sulla linea</option></select>
               </label>
               <label class="cam-op-field">Verso
                 <select id="camDirection"><option value="conventional">Discorde</option><option value="climb">Concorde</option></select>

@@ -33,6 +33,7 @@ const (
 const (
 	SideOutside         = "outside"
 	SideInside          = "inside"
+	SideOn              = "on"
 	CuttingConventional = "conventional"
 	CuttingClimb        = "climb"
 )
@@ -44,7 +45,8 @@ type ProfileRequest struct {
 	plc.ExtractRequest
 	Stock
 	ToolDiameter float64 `json:"toolDiameter"`
-	// Side is SideOutside to keep what the contours enclose, SideInside to cut it away.
+	// Side is SideOutside to keep what the contours enclose, SideInside to cut it away, SideOn to
+	// run the centre of the tool along the contours themselves.
 	Side string `json:"side"`
 	// Direction is CuttingConventional (the default when empty) or CuttingClimb.
 	Direction   string  `json:"direction,omitempty"`
@@ -61,8 +63,8 @@ type ProfileResponse struct {
 }
 
 // Profile returns the PLC program that cuts around the closed contours of the drawing, one radius
-// away on the chosen side, going down by the step-down from the top of the piece to the bottom of
-// the cut.
+// away on the chosen side or along the contours themselves, going down by the step-down from the
+// top of the piece to the bottom of the cut.
 //
 // A ring is cut after the rings inside it, so every part stays attached to the stock until its
 // own outline is cut, and the tool moves to the nearest ring it may cut next. The tool enters
@@ -87,16 +89,26 @@ func Profile(req ProfileRequest) (ProfileResponse, error) {
 		return ProfileResponse{}, errors.New("nothing to cut: the drawing has no closed contours")
 	}
 
-	delta := req.ToolDiameter / 2
-	if req.Side == SideInside {
-		delta = -delta
+	var rings []geom.Path
+	var warnings []string
+	if req.Side == SideOn {
+		// The centre of the tool follows the drawing: there is no offset to take, so no contour
+		// can be lost in one and none has to fit the tool. The contours are cut as drawn, each
+		// one whole even where another crosses it, which is what a line to follow means.
+		rings = orderRings(contours.Closed, req.Side, req.Direction)
+	} else {
+		delta := req.ToolDiameter / 2
+		if req.Side == SideInside {
+			delta = -delta
+		}
+		material := clipper.MergeContours(contours.Closed)
+		offset := clipper.OffsetContours(material, delta)
+		if len(offset) == 0 {
+			return ProfileResponse{}, fmt.Errorf("a %.3f mm tool does not fit inside any contour", req.ToolDiameter)
+		}
+		rings = orderRings(offset, req.Side, req.Direction)
+		warnings = unreachedContours(material, offset, req.Side, req.ToolDiameter)
 	}
-	material := clipper.MergeContours(contours.Closed)
-	offset := clipper.OffsetContours(material, delta)
-	if len(offset) == 0 {
-		return ProfileResponse{}, fmt.Errorf("a %.3f mm tool does not fit inside any contour", req.ToolDiameter)
-	}
-	rings := orderRings(offset, req.Side, req.Direction)
 
 	g := plcgen.NewGenerator()
 	levels := req.levels()
@@ -128,7 +140,7 @@ func Profile(req ProfileRequest) (ProfileResponse, error) {
 
 	return ProfileResponse{
 		ExtractResponse: response(g.Lines()),
-		Warnings:        unreachedContours(material, offset, req.Side, req.ToolDiameter),
+		Warnings:        warnings,
 	}, nil
 }
 
@@ -239,7 +251,8 @@ func (req ProfileRequest) validate() error {
 		}
 	}
 	check(req.ToolDiameter > 0, "tool diameter must be positive")
-	check(req.Side == SideOutside || req.Side == SideInside, fmt.Sprintf("side must be %q or %q", SideOutside, SideInside))
+	check(req.Side == SideOutside || req.Side == SideInside || req.Side == SideOn,
+		fmt.Sprintf("side must be %q, %q or %q", SideOutside, SideInside, SideOn))
 	check(req.Direction == "" || req.Direction == CuttingConventional || req.Direction == CuttingClimb,
 		fmt.Sprintf("direction must be %q or %q", CuttingConventional, CuttingClimb))
 	req.Stock.validate(check, req.WorkZ, req.SafeZ)

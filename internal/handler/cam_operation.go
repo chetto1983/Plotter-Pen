@@ -36,8 +36,8 @@ func (h *PersistenceHandler) SaveCAMOperation(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("operation must be one of %q", camOperations)})
 		return
 	}
-	if req.Side != cam.SideOutside && req.Side != cam.SideInside {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("side must be %q or %q", cam.SideOutside, cam.SideInside)})
+	if req.Side != cam.SideOutside && req.Side != cam.SideInside && req.Side != cam.SideOn {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("side must be %q, %q or %q", cam.SideOutside, cam.SideInside, cam.SideOn)})
 		return
 	}
 	if req.Direction != cam.CuttingConventional && req.Direction != cam.CuttingClimb {

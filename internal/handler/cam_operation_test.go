@@ -69,6 +69,23 @@ func TestCAMOperation_SavesAndLoads(t *testing.T) {
 	}
 }
 
+// A profile cut on the line is a choice like the other two sides, and is saved as such.
+func TestCAMOperation_SavesTheProfileOnTheLine(t *testing.T) {
+	r, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	w := camOperationRequest(r, http.MethodPost, `{"operation": "profile", "thickness": 1.6, "overcut": 0.2,
+		"toolDiameter": 2, "side": "on", "direction": "conventional", "profileThrough": true, "profileDepth": 1,
+		"drillDiameter": 1, "minHoleDiameter": 0.4, "maxHoleDiameter": 1.2, "peckDepth": 0, "tipAngle": 118, "tipThrough": false,
+		"drillThrough": true, "drillDepth": 1}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("save: status %d, body %s", w.Code, w.Body.String())
+	}
+	if got := loadCAMOperation(t, r); got.Side != "on" {
+		t.Fatalf("loaded side %q, want %q", got.Side, "on")
+	}
+}
+
 // Numbers are checked when the program is generated, where the error shows in the PLC output; a
 // choice outside the known ones is refused and nothing is saved.
 func TestCAMOperation_RejectsUnknownChoices(t *testing.T) {
