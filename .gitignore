@@ -32,8 +32,11 @@ Desktop.ini
 *.tmp
 *.temp
 .cache/
-*CLAUDE*
-*database*
+# Kept local on purpose; narrow patterns, because core.ignorecase makes a broad one
+# swallow any source file whose name happens to contain the word.
+CLAUDE.md
+*.db
+*.db-journal
 
 # Go CAM engine binaries (build with: cd server/cam-engine && .\build.ps1)
 *.exe
@@ -46,7 +49,10 @@ src/_deprecated/
 /Example/*
 .claude/settings.local.json
 database.*
-*DXF*
+# Drawings, not the code that reads them: *DXF* used to hide dxf.go and dxf_test.go too.
+/dxf/
+*.dxf
+*.DXF
 
 .playwright-mcp/*
 
