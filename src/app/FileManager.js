@@ -161,6 +161,8 @@ export class FileManager {
         this.app.state.pushState();
       }
       this.app.primitives = primitives;
+      // each entity names its DXF layer: make those layers of the drawing
+      this.app.layerManager?.adoptPrimitiveLayers();
 
       // Note: Backend provides result.plcCommands, but these are based on the original DXF coordinates
       // (normalized to positive quadrant 1,1). We will translate the primitives to center them,

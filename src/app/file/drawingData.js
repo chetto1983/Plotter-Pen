@@ -43,6 +43,8 @@ export function applyDrawingData(app, data) {
   if (Array.isArray(data.primitives)) {
     const primitivesJson = JSON.stringify(data.primitives);
     app.primitives = app.state.deserializePrimitives(primitivesJson);
+    // a drawing file carries no layers, only the ids on its primitives
+    app.layerManager?.adoptPrimitiveLayers();
   } else {
     throw new Error("Primitives deve essere un array");
   }

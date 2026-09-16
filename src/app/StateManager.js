@@ -156,6 +156,7 @@ export class StateManager {
     const primitivesData = data.primitives || data; // Fallback for legacy state (just primitive array)
     this.app.primitives = this.deserializePrimitives(primitivesData);
     this.app.selectedPrimitives.clear();
+    this.app.layerManager?.adoptPrimitiveLayers();
 
     // Restore View/Settings if requested
     if (restoreView) {

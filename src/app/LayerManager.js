@@ -294,6 +294,32 @@ export class LayerManager {
     }
 
     /**
+     * Give a layer to every layer id the primitives carry and the drawing lacks. An imported DXF
+     * names the layer of each entity, and a drawing saved before this existed kept those names on
+     * its primitives only: a layer the manager does not hold cannot be listed, hidden or chosen for
+     * a step of the job. Only missing layers are added: nothing the drawing had goes away.
+     * @returns {boolean} - Whether a layer was added
+     */
+    adoptPrimitiveLayers() {
+        let added = false;
+        for (const prim of this.app.primitives) {
+            const layerId = prim.layerId;
+            if (!layerId || this.layers.has(layerId)) continue;
+            const order = this.layers.size;
+            this.layers.set(layerId, {
+                ...DEFAULT_LAYER,
+                id: layerId,
+                name: layerId,
+                color: this.generateColor(order),
+                order
+            });
+            added = true;
+        }
+        if (added) this.notifyChange();
+        return added;
+    }
+
+    /**
      * Get the default layer ID
      * @returns {string}
      */

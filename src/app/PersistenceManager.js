@@ -60,6 +60,9 @@ export class PersistenceManager {
                     this.app.state.restoreState(result.data, true);
                 }
 
+                // Both loads end here: the layers the primitives name, before anything reads them
+                this.app.layerManager?.adoptPrimitiveLayers();
+
                 // Update managers
                 if (this.app.snapManager) {
                     this.app.snapManager.setPrimitives(this.app.primitives);
