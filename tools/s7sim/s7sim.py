@@ -2,9 +2,9 @@
 """
 Siemens S7-1500 OPC UA simulator for Plotter-Pen (no security, no certificates).
 
-Emulates the "Comm" server interface of the PLC:
-  * chunked transfer handshake (PointArr / TriggerWrite / Trigger_read_done / End_Of_File)
-  * program execution after End_Of_File: J / L / A / WAIT commands move Pos X/Y/Z
+Emulates the "Com" server interface of the PLC:
+  * chunked transfer handshake (Point / TriggerWrite / ReadDone / EndOfFile)
+  * program execution after EndOfFile: J / L / A / WAIT commands move Pos X/Y/Z
   * the S7 quirk that matters for the Go client: a Write whose DataValue carries a
     StatusCode or timestamps is rejected with Bad_WriteNotSupported (0x80730000)
 
@@ -19,10 +19,10 @@ Run as a container (standalone, not part of docker compose):
     # from the plotter-pen container the endpoint is opc.tcp://host.docker.internal:4840
 
 Node IDs match the production PLC config (ns=4):
-    PointArr          ns=4;i=12   STRING[20]
+    Point             ns=4;i=12   STRING[20]
     TriggerWrite      ns=4;i=43   BOOL
-    Trigger_read_done ns=4;i=54   BOOL
-    End_Of_File       ns=4;i=65   BOOL
+    ReadDone          ns=4;i=54   BOOL
+    EndOfFile         ns=4;i=65   BOOL
     Pos.X/Y/Z         ns=4;i=79/80/81  REAL
 """
 
@@ -37,14 +37,14 @@ from asyncua.server.internal_session import InternalSession
 
 log = logging.getLogger("s7sim")
 
-COMM_NS_INDEX = 4  # the real PLC exposes the Comm interface at ns=4
+COMM_NS_INDEX = 4  # the real PLC exposes the Com interface at ns=4
 CHUNK_SIZE = 20
 TRIGGER_NODEID = ua.NodeId(43, COMM_NS_INDEX)
 EOF_NODEID = ua.NodeId(65, COMM_NS_INDEX)
 MOTION_TICK_S = 0.05  # position update period while executing
 JUMP_SPEED = 200.0  # rapid move speed (mm/s) used for J when V is lower
 
-# Client writes to TriggerWrite / End_Of_File, queued in write order so no edge is ever missed
+# Client writes to TriggerWrite / EndOfFile, queued in write order so no edge is ever missed
 plc_events: asyncio.Queue[tuple[str, bool]] = asyncio.Queue()
 
 # Command format produced by pkg/plc/generator.go
@@ -151,7 +151,7 @@ class Machine:
 
 
 async def plc_program(server: Server, nodes: dict, machine: Machine) -> None:
-    """The PLC cycle: ack every TriggerWrite rising edge, run the program on End_Of_File."""
+    """The PLC cycle: ack every TriggerWrite rising edge, run the program on EndOfFile."""
     trigger, read_done, eof, point_arr = nodes["trigger"], nodes["read_done"], nodes["eof"], nodes["point_arr"]
     assert trigger.nodeid == TRIGGER_NODEID and eof.nodeid == EOF_NODEID
 
@@ -172,16 +172,16 @@ async def plc_program(server: Server, nodes: dict, machine: Machine) -> None:
             got = [s for s in data if s]
             program.extend(got)
             chunks += 1
-            log.info("PLC: chunk #%d received (%d lines) -> Trigger_read_done=TRUE", chunks, len(got))
+            log.info("PLC: chunk #%d received (%d lines) -> ReadDone=TRUE", chunks, len(got))
             await set_bool(read_done, True)
         elif kind == "eof" and rising:
-            log.info("PLC: End_Of_File=TRUE -> transfer complete: %d chunks, %d lines", chunks, len(program))
+            log.info("PLC: EndOfFile=TRUE -> transfer complete: %d chunks, %d lines", chunks, len(program))
             if running and not running.done():
                 running.cancel()
             running = asyncio.create_task(machine.run_program(program))
             program, chunks = [], 0
         elif kind == "eof" and not value:
-            # client reset End_Of_File: a new transfer is starting
+            # client reset EndOfFile: a new transfer is starting
             if running and not running.done():
                 log.info("PLC: new transfer started, aborting running program")
                 running.cancel()
@@ -189,21 +189,24 @@ async def plc_program(server: Server, nodes: dict, machine: Machine) -> None:
 
 
 async def build_address_space(server: Server) -> dict:
-    # Default server has ns 0 and 1; register until the Comm interface lands on ns=4 like the PLC
-    uris = ["http://www.siemens.com/simatic-s7-opcua", "http://s7sim/filler", "http://Comm"]
+    # Default server has ns 0 and 1; register until the Com interface lands on ns=4 like the PLC
+    uris = ["http://opcfoundation.org/UA/DI/", "http://www.siemens.com/simatic-s7-opcua", "http://Com"]
     idx = None
     for uri in uris:
         idx = await server.register_namespace(uri)
-    assert idx == COMM_NS_INDEX, f"Comm namespace landed on ns={idx}, expected {COMM_NS_INDEX}"
+    assert idx == COMM_NS_INDEX, f"Com namespace landed on ns={idx}, expected {COMM_NS_INDEX}"
 
     def nid(i: int) -> ua.NodeId:
         return ua.NodeId(i, idx)
 
-    comm = await server.nodes.objects.add_object(nid(1), "Comm")
-    point_arr = await comm.add_variable(nid(12), "PointArr", [""] * CHUNK_SIZE, ua.VariantType.String)
+    # Names and numbers as read from the PLC at 192.168.0.1 on 2026-09-16:
+    # Objects/ServerInterfaces/Com, with Point, TriggerWrite, ReadDone, EndOfFile and Pos.
+    interfaces = await server.nodes.objects.add_object(ua.NodeId("ServerInterfaces", 3), "ServerInterfaces")
+    comm = await interfaces.add_object(nid(1), "Com")
+    point_arr = await comm.add_variable(nid(12), "Point", [""] * CHUNK_SIZE, ua.VariantType.String)
     trigger = await comm.add_variable(nid(43), "TriggerWrite", False, ua.VariantType.Boolean)
-    read_done = await comm.add_variable(nid(54), "Trigger_read_done", False, ua.VariantType.Boolean)
-    eof = await comm.add_variable(nid(65), "End_Of_File", False, ua.VariantType.Boolean)
+    read_done = await comm.add_variable(nid(54), "ReadDone", False, ua.VariantType.Boolean)
+    eof = await comm.add_variable(nid(65), "EndOfFile", False, ua.VariantType.Boolean)
     pos_obj = await comm.add_object(nid(78), "Pos")
     pos = [
         await pos_obj.add_variable(nid(79 + i), name, 0.0, ua.VariantType.Float) for i, name in enumerate("XYZ")
@@ -226,7 +229,7 @@ async def main(port: int, speed_factor: float) -> None:
 
     async with server:
         log.info("S7-1500 simulator listening on opc.tcp://0.0.0.0:%d  (security: None, auth: anonymous)", port)
-        log.info("Comm nodes: PointArr ns=4;i=12  TriggerWrite ns=4;i=43  Trigger_read_done ns=4;i=54  End_Of_File ns=4;i=65")
+        log.info("Com nodes: Point ns=4;i=12  TriggerWrite ns=4;i=43  ReadDone ns=4;i=54  EndOfFile ns=4;i=65")
         await plc_program(server, nodes, machine)
 
 
