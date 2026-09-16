@@ -2,6 +2,7 @@ package opcua
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -30,9 +31,22 @@ const (
 	TransferCancelled
 )
 
+// resetTimeout bounds the write that lowers the trigger after a chunk the PLC did not
+// acknowledge: it runs even when the transfer's own context is already over.
+const resetTimeout = 2 * time.Second
+
+// TransferNodes is what a chunked transfer reads and writes on the PLC; *Client provides it.
+type TransferNodes interface {
+	WriteBoolNode(ctx context.Context, nodeIDStr string, value bool) error
+	ReadBoolNode(ctx context.Context, nodeIDStr string) (bool, error)
+	WriteStringArray(ctx context.Context, nodeIDStr string, data []string) error
+}
+
+var _ TransferNodes = (*Client)(nil)
+
 // ChunkedTransfer handles async chunked data transfer to PLC
 type ChunkedTransfer struct {
-	client       *Client
+	client       TransferNodes
 	config       Config
 	state        TransferState
 	stopCh       chan struct{}
@@ -43,7 +57,7 @@ type ChunkedTransfer struct {
 }
 
 // NewChunkedTransfer creates a new chunked transfer service
-func NewChunkedTransfer(client *Client, cfg Config) *ChunkedTransfer {
+func NewChunkedTransfer(client TransferNodes, cfg Config) *ChunkedTransfer {
 	if cfg.ChunkSize <= 0 {
 		cfg.ChunkSize = 20
 	}
@@ -169,7 +183,11 @@ func (t *ChunkedTransfer) sendChunk(ctx context.Context, data []string, chunkIdx
 
 	// 3. Wait for Trigger_Read_Done = TRUE
 	if err := t.waitForAck(ctx); err != nil {
-		return fmt.Errorf("ack timeout on chunk %d: %w", chunkIdx, err)
+		ackErr := fmt.Errorf("ack timeout on chunk %d: %w", chunkIdx, err)
+		if resetErr := t.lowerTrigger(ctx); resetErr != nil {
+			return errors.Join(ackErr, resetErr)
+		}
+		return ackErr
 	}
 
 	// 4. Reset ReadDone = FALSE to prevent race condition on next chunk
@@ -182,6 +200,17 @@ func (t *ChunkedTransfer) sendChunk(ctx context.Context, data []string, chunkIdx
 		return fmt.Errorf("failed to reset trigger: %w", err)
 	}
 
+	return nil
+}
+
+// lowerTrigger puts TriggerWrite back to FALSE after a chunk the PLC did not acknowledge:
+// left TRUE, the PLC would see a pending chunk until the next transfer resets it.
+func (t *ChunkedTransfer) lowerTrigger(ctx context.Context) error {
+	resetCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), resetTimeout)
+	defer cancel()
+	if err := t.client.WriteBoolNode(resetCtx, t.config.TriggerWriteNode, false); err != nil {
+		return fmt.Errorf("failed to reset trigger: %w", err)
+	}
 	return nil
 }
 
