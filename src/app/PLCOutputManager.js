@@ -446,6 +446,18 @@ export class PLCOutputManager {
    * Draw the tool the active operation cuts with: the kind chosen in the library and its
    * diameter, or the pen, which has neither
    */
+  /**
+   * Mark in the drawing the details the tool cannot reach, by the primitives the server names
+   */
+  markUnreached(unreached) {
+    const ids = new Set((unreached ?? []).flatMap((detail) => detail.primitiveIds ?? []));
+    const marked = ids.size === 0 ? new Set() : new Set(this.app.primitives.filter((p) => ids.has(p.id)));
+    // Nothing to redraw when it was empty and stays empty
+    if (marked.size === 0 && this.app.unreachedPrimitives.size === 0) return;
+    this.app.unreachedPrimitives = marked;
+    this.app.render();
+  }
+
   updateTool() {
     const op = this.operation.operation;
     if (op.operation === 'pen') this.simulator3D?.setTool('pen', 2);
@@ -526,6 +538,7 @@ export class PLCOutputManager {
     if (area.primitives.length === 0) {
       // Everything is hidden, or nothing selected can be cut: no stale program may stay around
       this.clearOutput("Nessun comando: niente da lavorare nell'area");
+      this.markUnreached(null);
       this.operation.showReport();
       this.app.ui.updateStatus("Nessuna primitiva nell'area di lavoro");
       return;
@@ -548,11 +561,13 @@ export class PLCOutputManager {
       if (!response.ok) {
         // A program that does not match the parameters must not stay around to be sent
         this.clearOutput("Nessun comando: vedi il messaggio sopra");
+        this.markUnreached(null);
         this.operation.showReport({ error: result.error || `HTTP ${response.status}` });
         this.app.ui.updateStatus(`${label}: programma non generato`);
         return;
       }
-      this.operation.showReport({ warnings: result.warnings });
+      this.operation.showReport({ warnings: result.warnings, unreached: result.unreached });
+      this.markUnreached(result.unreached);
 
       // Map commands back to source primitives for UI highlighting
       const primMap = new Map(this.app.primitives.map(p => [p.id, p]));
@@ -576,6 +591,7 @@ export class PLCOutputManager {
     } catch (err) {
       if (run !== this._extractRun) return;
       this.clearOutput("Nessun comando: vedi il messaggio sopra");
+      this.markUnreached(null);
       this.operation.showReport({ error: err.message });
       this.app.ui.updateStatus(`Errore estrazione PLC: ${err.message}`);
     }

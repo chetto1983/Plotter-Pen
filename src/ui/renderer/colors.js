@@ -14,6 +14,8 @@ export const COLORS = {
   // Primitives - bright white/cyan for contrast against blue grid
   primitive: '#ffffff',
   primitiveSelected: '#00ffff',
+  // What the CAM could not cut with the tool in the panel
+  primitiveUnreached: '#ff9800',
   primitiveHovered: '#ffff00',
   primitivePreview: 'rgba(255, 255, 255, 0.6)',
 

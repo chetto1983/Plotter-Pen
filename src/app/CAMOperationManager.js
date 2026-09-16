@@ -261,6 +261,19 @@ export class CAMOperationManager {
   /**
    * Say what the operation works on: the selection, or what the visible layers hold
    */
+  /**
+   * What is not cut and what tool would cut it: the narrowest detail decides, since a tool that
+   * fits it fits the others too
+   */
+  unreachedSummary(count, unreached) {
+    const label = `${count} ${count === 1 ? 'dettaglio non raggiungibile' : 'dettagli non raggiungibili'} con Ø${this.operation.toolDiameter} mm`;
+    const widths = (unreached ?? []).map((d) => d.width);
+    if (widths.length === 0) return `${label}: non vengono tagliati`;
+    const narrowest = Math.min(...widths);
+    if (!(narrowest > 0)) return `${label}: per qualcuno non basta nessuna fresa`;
+    return `${label}: serve Ø ${String(narrowest).replace('.', ',')} mm o meno`;
+  }
+
   showArea({ scope, count, total } = {}) {
     const box = document.getElementById('camOperationArea');
     if (!box) return;
@@ -280,7 +293,7 @@ export class CAMOperationManager {
     box.hidden = false;
   }
 
-  showReport({ error, warnings } = {}) {
+  showReport({ error, warnings, unreached } = {}) {
     const box = document.getElementById('camOperationMessage');
     if (!box) return;
     box.replaceChildren();
@@ -294,7 +307,7 @@ export class CAMOperationManager {
       const summary = document.createElement('summary');
       summary.textContent = this.operation.operation === 'drill'
         ? `${warnings.length} contorni non tondi non forati: usare Profilo`
-        : `${warnings.length} contorni non raggiungibili con Ø${this.operation.toolDiameter} mm: non vengono tagliati`;
+        : this.unreachedSummary(warnings.length, unreached);
       const list = document.createElement('ul');
       for (const w of warnings) {
         const item = document.createElement('li');

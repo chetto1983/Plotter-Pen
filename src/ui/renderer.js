@@ -222,7 +222,7 @@ export class CanvasRenderer {
    * Main render function
    * Optimized with Draw Caching
    */
-  render(primitives = [], selection = null, preview = null, hovered = null, highlighted = null, layerColors = {}) {
+  render(primitives = [], selection = null, preview = null, hovered = null, highlighted = null, layerColors = {}, unreached = null) {
     // Check if view changed (pan/zoom)
     const currentViewState = `${this.view.zoom.toFixed(5)},${this.view.panX.toFixed(2)},${this.view.panY.toFixed(2)}`;
     if (this.lastViewState !== currentViewState) {
@@ -251,10 +251,10 @@ export class CanvasRenderer {
     this.ctx.drawImage(this.cacheCanvas, 0, 0);
 
     // 2. Draw Dynamic Layer (overlays)
-    this.drawDynamic(preview, hovered, highlighted, selection);
+    this.drawDynamic(preview, hovered, highlighted, selection, unreached);
   }
 
-  drawDynamic(preview, hovered, highlighted, selection) {
+  drawDynamic(preview, hovered, highlighted, selection, unreached = null) {
     const selectedSet = selection instanceof Set ? selection : (selection ? new Set([selection]) : new Set());
 
     this.withViewContext((ctx, scale) => {
@@ -264,6 +264,13 @@ export class CanvasRenderer {
       ctx.rect(0, 0, this.workspace.width, this.workspace.height);
       ctx.clip();
 
+      // Under everything else: what the CAM could not cut is a property of the drawing, not a
+      // gesture of the user, so a hover or a selection still shows over it
+      if (unreached) {
+        for (const primitive of unreached) {
+          this.primitiveRenderer.drawUnreached(ctx, primitive, scale);
+        }
+      }
       if (preview) {
         this.primitiveRenderer.drawPreview(ctx, preview, scale);
       }

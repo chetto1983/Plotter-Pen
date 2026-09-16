@@ -417,6 +417,21 @@ export class PrimitiveRenderer {
   }
 
   /**
+   * Draw a primitive the tool cannot reach: it stays in the drawing but is not cut
+   */
+  drawUnreached(ctx, primitive, scale) {
+    if (!primitive) return;
+
+    ctx.save();
+    ctx.strokeStyle = COLORS.primitiveUnreached;
+    ctx.lineWidth = (this.renderer.lineWidth + 3) / scale;
+    ctx.setLineDash([6 / scale, 4 / scale]);
+
+    this.drawPrimitive(ctx, primitive, scale);
+    ctx.restore();
+  }
+
+  /**
    * Draw highlighted primitive from PLC command selection
    */
   drawHighlightedPrimitive(primitive) {

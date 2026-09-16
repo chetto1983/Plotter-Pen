@@ -29,6 +29,8 @@ export class CADApplication {
         this.selectedPrimitives = new Set();
         this.hoveredPrimitive = null;
         this.highlightedPrimitive = null;
+        // Primitives the CAM could not cut with the tool in the panel, marked until it changes
+        this.unreachedPrimitives = new Set();
         this.plcCommands = [];
 
         // Managers
@@ -494,7 +496,8 @@ export class CADApplication {
             preview,
             this.hoveredPrimitive,
             this.highlightedPrimitive,
-            layerSettings
+            layerSettings,
+            this.unreachedPrimitives
         );
 
         // Draw snap indicator if available
