@@ -384,12 +384,15 @@ and chosen from a combo box, and for a connection test before saving.
   - Against the PLC at 192.168.0.1, with the user's authorisation (writes allowed, the PLC has
     no mechanics attached): the seven variables listed from the live connection, the position
     read, and a program of 25 lines transferred in chunks addressed only by name, in 0.24 s.
-- **Not verified on the machine:** the `Prova connessione` button. While testing, the PLC
-  started refusing every new session with `EOF`, including to an independent client and with a
-  freshly generated certificate, while the session the container already held kept working. It
-  is a limit of concurrent sessions or secure channels on the S7 server, not the app: the same
-  endpoint works against the simulator, and the app's own connect fails the same way from the
-  same process. It clears when the open channels time out.
+- **On the machine, through the rebuilt container:** `GET /variables` answers eight entries,
+  and `POST /test` connects and lists the same eight. The PLC keeps `Pos` as a **variable**
+  carrying its members, so the list has both the structure (`ServerInterfaces/Com/Pos`,
+  `ns=4;i=78`) and `Pos/X`, `Pos/Y`, `Pos/Z`: this is what the walk into variables is for.
+- **Sessions of the S7 server are few.** While testing, the PLC began refusing every new
+  session with `EOF`, including to an independent client and with a freshly generated
+  certificate, while the session the container already held kept working. Closing the extra
+  clients cleared it. It is a limit of concurrent sessions or secure channels, not the app:
+  each connection attempt costs one, so leave the machine a channel free.
 
 ## Environment
 
