@@ -40,6 +40,7 @@ One piece at a time: a short design approved first, then TDD, then a check on th
 | — | Profile cut on the line, beside outside and inside | Done 2026-09-16 |
 | — | The piece of material shown in the 3D view | Done 2026-09-16 |
 | — | The 3D camera follows the tool, without changing the angle | Done 2026-09-16 |
+| — | The tool that is cutting drawn as itself, from the library kind | Done 2026-09-16 |
 
 Measured on `dxf/L28YO-tree-of-life-wall-spiritual-art.dxf`:
 
@@ -552,6 +553,40 @@ tool ran out of the view and the simulation had to be chased by hand.
   while the program runs, a right-button drag (real mouse events through the debugger) lets go
   and the button goes dark, and the choice comes back when the page is loaded again. No page
   errors.
+
+### The tool that is cutting, drawn (2026-09-16)
+
+"Adesso e sempre la penna": the 3D view built one mesh at startup, `createDefaultTool(6, 30)`, a
+cone and a cylinder at a fixed 6 mm, whatever the operation and whatever the tool.
+
+- **What was reused, and what was not** (the user asked to look first): there is no npm package
+  that gives CNC tool meshes — searched twice; the one relevant project, rudra496/cnc, is a
+  Next.js application with its tool geometry inside, not a library, and the rest of the field is
+  academic papers and commercial CAD. What does the job is already installed: three.js 0.186 has
+  `LatheGeometry`, which spins a 2D profile round an axis — which is how these tools are made on a
+  real lathe. So the only thing written here is the half-section of each kind.
+- **The profiles** (`src/plc/toolShapes.js`): endmill flat at the bottom, ball nose with a
+  hemisphere of its own radius sampled in 12 steps, V-bit with a 90° point, drill with its real
+  point angle (the `tipAngle` of the panel, 118° by default), pen as a thin barrel with a small
+  cone. Every profile starts at the tip, on the axis, because the tip is where the PLC position
+  is. The shank above is a dark cylinder, as before.
+- **Which tool** (`CAMOperation.ToolType` and `DrillType`, new columns with defaults `endmill`
+  and `drill`): the tool library hands the kind over with the diameter, so choosing "V-Bit 90°"
+  shows a V point and choosing a ball nose shows the round tip. The kind is drawn, never cut
+  with: a body that does not carry it keeps the default instead of being refused, while a kind
+  nobody knows is still a 400. `PLCOutputManager.updateTool` picks the kind and the diameter of
+  the active operation — the drilling has its own, the pen is always a pen.
+- **Rebuilt only when it changes** (`PLCSimulator3D.setTool`): same kind, diameter and angle, no
+  work; otherwise the old mesh is taken out of the scene, its geometry and materials given back,
+  and the new one keeps the position the tool had. `createDefaultTool` is gone with it.
+- **Checked:** TDD on the Go side (the singleton and a database from before the columns come up
+  with the defaults; the kind chosen travels and is saved; `toolType: "laser"` is refused), then
+  `go vet`, `go test ./...`, `make quality` (exit 0), `npm run lint`, `npm run build`, and
+  headless Chrome (software WebGL): the profile draws a flat 2 mm endmill (profile (0,0) (1,0)
+  (1,6)), the V-bit from the library draws (0,0) (3,3) (3,18) and `GET /api/cam/operation` holds
+  `toolType: "vbit"`, the mesh it replaced is really disposed, the drilling draws its point at
+  118° (0.300 mm to the full diameter), a ball nose saved from the window draws 14 points all on
+  its sphere, and the pen is a pen again. No page errors.
 
 ## Environment
 
