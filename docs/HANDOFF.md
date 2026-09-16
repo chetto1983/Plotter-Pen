@@ -5,17 +5,16 @@ router for wood and PCB, with the CAM inside Plotter-Pen (no external CAD/CAM).
 
 ## Where things stand
 
-- `origin/main` carries the job in the database; nothing is waiting to be pushed.
+- `origin/main` carries the job in the panel; nothing is waiting to be pushed.
 - The Compose container on port 41880 runs it and is healthy. The database in the
   `plotter-pen_plotter-data` volume was backed up before every rebuild of the day, the last as
-  `plotter.db.bak-2026-09-16-before-job-api`.
+  `plotter.db.bak-2026-09-16-before-job-panel`.
 - The CAM list of "cosa manca" is finished: DXF bulges, round holes, the tool library, the work
   area, the profile on the line, the piece and the tool in the 3D view, the camera that follows
   the tool, and the details out of reach. Each piece has its own section below.
-- The milestone "the whole job" is under way: piece 1 (the speeds in the tool) and piece 2 (the
-  job in the database and its API) are done. Piece 3, the job in the panel, is next and needs its
-  short design first — and it starts with the layers of a DXF, which the app does not register
-  (see "Piece 2" below).
+- The milestone "the whole job" is under way: pieces 1 to 3 are done — the speeds in the tool,
+  the job in the database, and the job in the panel, with the layers of a DXF now layers of the
+  app. Piece 4, sending the steps in sequence, is next and needs its short design first.
 - The OPC UA side addresses the PLC by the names of its variables, lists them from the machine and
   tests a connection before it is saved; a program of 25 lines was transferred to the machine at
   192.168.0.1 by name alone.
@@ -48,7 +47,7 @@ app must never send the next program without an explicit confirmation.
 |---|-------|----------------|
 | 1 | Speeds in the tool — **done 2026-09-16** | `Tool` gains feed, plunge and step-down; the operation reads them from the tool it was given. Migration, API, library window, panel. |
 | 2 | The job: model and API — **done 2026-09-16** | The ordered steps (operation, tool, parameters, layer) in the database, `GET/POST /api/cam/job`. The program of a step is generated with the endpoints that already exist. |
-| 3 | The job in the panel | The steps in the Output PLC panel: add, remove, reorder, duplicate; the active step is edited as the panel does today. |
+| 3 | The job in the panel — **done 2026-09-16** | The steps in the Output PLC panel: add, remove, reorder, duplicate; the active step is edited as the panel does today. |
 | 4 | Sending in sequence | Transfer a step, the operator runs it, confirms, the app asks for the tool change and goes on. Never a transfer without a confirmation, because nothing on the machine says the cut is over. |
 | 5 | Open contours, closed with help | Where the contour opens and an offer to close it within a tolerance, instead of today's flat refusal (`a profile needs closed contours`). |
 | 6 | Errors in Italian | The messages of the API where the user reads them; English stays in the logs. |
@@ -143,6 +142,60 @@ no list of named jobs, and so no job that points at layers the open drawing does
   the empty job, a save of two steps read back with their `false` values, a wrong side refused as
   `step 2` with the job kept, a body without steps refused, an empty save, and the operation still
   answering its 22 flat keys. No page to check: the piece has no interface.
+
+### Piece 3: the job in the panel (2026-09-16)
+
+The panel **is** the job (decided with the user): the list of the steps sits at the top of the
+Output PLC panel, there is always at least one, and the tabs and parameters below edit the active
+step, whose program and 3D view are the ones shown.
+
+- **The layers of a DXF, first.** An imported entity carried the name of its DXF layer as
+  `layerId`, but no layer was ever made for it: the layer panel showed "Layer 0" alone, a DXF layer
+  could not be hidden, and none could be chosen for a step. Seen in the browser before the fix: 8
+  primitives on CONTORNO and FORI, one layer in the app. `LayerManager.adoptPrimitiveLayers()` now
+  makes a layer, named as its id, for every id the primitives carry and the drawing lacks. It runs
+  after a DXF import and after a restore (undo and redo, the autosaved session, a drawing file or a
+  saved drawing), so the drawing already in the container gets its layers without a reimport. It
+  only adds: nothing the drawing had goes away. An undo brings the layers back as they were, since
+  its snapshot holds them.
+- **The job** (`src/app/JobManager.js`): the steps, the active one (remembered in the browser as
+  `camActiveStep`), and the whole list saved to `/api/cam/job` 300 ms after a change, with the
+  saves chained so the last change is the last to arrive. A job the server returns empty — a
+  database from before the job — gets one step made from `/api/cam/operation`, saved at once; that
+  endpoint is read for nothing else and the panel no longer writes it. A job that cannot be read is
+  left alone, and nothing the panel does is saved until it is: saving the defaults over it would
+  lose it.
+- **The list**: a row per step (number, operation, layer, diameter), **+** with a menu (Foratura,
+  Profilo, Penna), duplicate, up, down and remove, which is disabled on the last step. A new step
+  copies the parameters of the active one — the same piece — on the whole drawing; a drilling goes
+  before the first profile. Buttons rather than dragging, for the touch panel.
+- **The layer of a step** (`camArea(app, layer)`): "Tutto il disegno" works as the single
+  operation did — the selection, or else the visible layers. A layer works on its primitives,
+  whatever is selected. A hidden layer is still never cut, and a layer the drawing lacks cuts
+  nothing either; the area line says which (`Area: livello FORI — nascosto, niente da tagliare`,
+  `— non è nel disegno`) and the choice keeps showing the missing layer as `(assente)`.
+- **What did not change**: `CAMOperationManager` still draws and edits the parameters, now those
+  of `job.step`; `operation.change(...)`, which the tool library uses, edits the active step.
+  Sending to the PLC sends the program on screen, the active step's: the sequence is piece 4.
+- **Checked**, in headless Chrome against the simulator, with the drawings made in the app's own
+  CAD (layers created as the layer panel does, primitives added on the active one) and a small
+  two-layer DXF for the import:
+  - the DXF layers, 8 checks: an import brings FORI and CONTORNO and the panel lists them; hiding
+    FORI leaves 4 of 8 primitives in the area; a session saved with primitives on a layer it lacks
+    gets it back on reload, and it can be hidden; a drawing file gets its layers; an undo finds the
+    layers of what it brings back. Seven of them failed before the fix.
+  - the job, 23 checks: the first step comes from the saved operation; the choice of layer lists
+    the drawing's layers; a drilling added goes before the profile and becomes active; the drilling
+    on FORI asks for the 4 holes only and the profile on CONTORNO for the outline only (read from
+    the request the page sends, since the commands of a profile name no primitive); the selection
+    does not change a step on a layer; a parameter changes the active step alone and
+    `/api/cam/operation` stays as it was; a copy goes after its step and moves up; the tool library
+    gives its tool to the active step; a reload keeps the steps, the active one and its program; a
+    hidden layer and a missing one give no program and say why; the whole drawing takes all of it,
+    or the selection; removing makes the next step active and the last step stays; no page errors.
+  - the layout at 1440 × 900 and 1024 × 768, with the menu open inside the panel.
+  - the checks of the earlier pieces, pointed at the job where they read the operation.
+  - `npm run lint` and `npm run build` with no warnings.
 
 ## CAM plan
 
@@ -779,6 +832,14 @@ go test -tags=s7sim -run S7Sim -v ./internal/service/opcua/
 Hooks: pre-commit runs gofmt, vet, golangci-lint on the whole packages the commit touches (`scripts/lint-staged.sh`, no `--new-from-rev`) and the 600-line cap on new files. Pre-push runs build, compilation of the `integration`/`s7sim` tests, deadcode and eslint.
 
 ## Known issues, not fixed
+
+- **Two layers with the same name** cannot be told apart in the layer choice of a step, nor in the
+  layer panel: `createLayer` accepts a name already taken. A step keeps the id, so it cuts the
+  right one; only the choice is ambiguous.
+- **`StateManager.restoreStateAsync`** and its worker path have no caller; the session loads
+  through `PersistenceManager.loadState`. Left as it was.
+- **The container tries to open a browser** at every start (`Failed to open browser: exec:
+  "xdg-open"` in its log): Compose does not set `OPEN_BROWSER=false`. Harmless.
 
 - **Dependency advisory:** `govulncheck` reports GO-2026-5932 on `golang.org/x/crypto`, whose `openpgp` package is unmaintained. Nothing here imports it (0 vulnerabilities reachable or imported); the module arrives as an indirect requirement of Gin through `validator/v10` and `x/crypto/sha3`, and the advisory has no fixed version. It stays until Gin stops requiring it.
 - **Interface export:** `docs/interface.xml` is the export of the current PLC program, kept as a reference only: the app reads the names from the machine at every connection, because the program can change.

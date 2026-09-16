@@ -110,7 +110,7 @@ tools/s7sim/                  # S7-1500 OPC UA simulator (Python, not part of Co
 | Drawing | Done | Saved designs CRUD |
 | Tool | Done | Tool library |
 | PLCSimulationSettings | Done | Speed, Z heights (work Z: paper for the pen, bed for the router and the drill), wait; profile step-down, plunge speed and ramp angle; drilling retract clearance |
-| CAMOperation | Done | Singleton: the operation the PLC output shows (pen, profile or drill), the piece (thickness, overcut), through or depth for each operation and the parameters of the profile and of the drilling (`GET/POST /api/cam/operation`) |
+| CAMOperation | Done | Singleton: the operation the PLC output showed before the job (pen, profile or drill, the piece and the parameters, `GET/POST /api/cam/operation`); the panel now reads it only to make the first step of an empty job |
 | JobStep | Done | The steps of the one job, in order: layer and the parameters of an operation, shared with CAMOperation through `CAMParams` (`GET/POST /api/cam/job`) |
 | OPCUAConfig | Done | Multi-PLC with auth |
 | MachineConfig | Model only | Table and default seed; no API since commit `7ad8c8f` |
@@ -129,7 +129,7 @@ decisions behind it, is in `docs/HANDOFF.md` ("Next milestone: the whole job").
 | --- | --- | --- |
 | 1 | Speeds in the tool — done 2026-09-16 | `internal/persistence/db.go`, `src/app/toolCatalog.js`, `src/app/ToolLibraryManager.js` |
 | 2 | The job: model and API — done 2026-09-16 | `internal/persistence/db.go`, `internal/handler/cam_job.go` |
-| 3 | The job in the panel | `src/app/CAMOperationManager.js`, `src/ui/components/SidebarRight.js` |
+| 3 | The job in the panel — done 2026-09-16 | `src/app/JobManager.js`, `src/app/CAMOperationManager.js`, `src/app/LayerManager.js`, `src/ui/components/SidebarRight.js` |
 | 4 | Sending in sequence | `src/app/PLCOutputManager.js`, `internal/handler/opcua.go` |
 | 5 | Open contours, closed with help | `internal/service/cam/chain.go` |
 | 6 | Errors in Italian | `src/app/` where the messages are shown |
