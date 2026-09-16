@@ -120,6 +120,9 @@ export class SidebarRight {
               <label class="cam-op-field">Verso
                 <select id="camDirection"><option value="conventional">Discorde</option><option value="climb">Concorde</option></select>
               </label>
+              <label class="cam-op-field" title="Chiude i contorni dove gli estremi distano fino a questa larghezza; 0 unisce solo quelli che si toccano">Chiudi aperture
+                <span class="cam-op-input"><input type="number" id="camCloseGap" min="0" max="1" step="0.01"><span>mm</span></span>
+              </label>
             </div>
             <div class="cam-op-params" data-operation="drill" hidden>
               <label class="cam-op-field">Punta Ø

@@ -437,7 +437,8 @@ export class PLCOutputManager {
   }
 
   /**
-   * Mark in the drawing the details the tool cannot reach, by the primitives the server names
+   * Mark in the drawing the details the tool cannot reach and the open contours, by the primitives
+   * the server names
    */
   markUnreached(unreached) {
     const ids = new Set((unreached ?? []).flatMap((detail) => detail.primitiveIds ?? []));
@@ -557,15 +558,16 @@ export class PLCOutputManager {
       if (run !== this._extractRun) return;
 
       if (error) {
-        // A program that does not match the parameters must not stay around to be sent
+        // A program that does not match the parameters must not stay around to be sent. A drawing
+        // with only open contours still shows where they are and what closes them
         this.clearOutput("Nessun comando: vedi il messaggio sopra");
-        this.markUnreached(null);
-        this.operation.showReport({ error });
+        this.markUnreached(result.open);
+        this.operation.showReport({ error, open: result.open });
         this.app.ui.updateStatus(`${label}: programma non generato`);
         return;
       }
-      this.operation.showReport({ warnings: result.warnings, unreached: result.unreached });
-      this.markUnreached(result.unreached);
+      this.operation.showReport({ warnings: result.warnings, unreached: result.unreached, open: result.open });
+      this.markUnreached([...(result.unreached ?? []), ...(result.open ?? [])]);
 
       // Map commands back to source primitives for UI highlighting
       const primMap = new Map(this.app.primitives.map(p => [p.id, p]));
@@ -598,7 +600,8 @@ export class PLCOutputManager {
   /**
    * The program of a step of the job, without showing it: the active step's for the panel, any
    * step's for the run of the job. The area must hold something to cut.
-   * @returns {Promise<{error?: string, result?: object}>} the server's error, or its answer
+   * @returns {Promise<{error?: string, result: object}>} the server's answer, and its error when it
+   * refused the request
    */
   async generate(step, area = camArea(this.app, step.layer)) {
     const primitives = area.primitives.map((p) => this.primitiveToRequest(p));
@@ -609,7 +612,7 @@ export class PLCOutputManager {
       body: JSON.stringify(body)
     });
     const result = await response.json().catch(() => ({}));
-    if (!response.ok) return { error: result.error || `HTTP ${response.status}` };
+    if (!response.ok) return { error: result.error || `HTTP ${response.status}`, result };
     return { result };
   }
 

@@ -20,6 +20,7 @@ const OPERATION_DEFAULTS = {
   direction: 'conventional',
   profileThrough: true,
   profileDepth: 1,
+  closeGap: 0,
   drillDiameter: 1,
   drillType: 'drill',
   drillId: 0,
@@ -36,6 +37,7 @@ const NUMBER_INPUTS = {
   thickness: 'camThickness',
   overcut: 'camOvercut',
   toolDiameter: 'camToolDiameter',
+  closeGap: 'camCloseGap',
   drillDiameter: 'camDrillDiameter',
   minHoleDiameter: 'camMinHoleDiameter',
   maxHoleDiameter: 'camMaxHoleDiameter',
@@ -44,6 +46,9 @@ const NUMBER_INPUTS = {
 };
 
 const LABELS = { pen: 'Penna', profile: 'Profilo', drill: 'Foratura' };
+
+// A number as the panel writes it, with a decimal comma
+const comma = (value) => String(value).replace('.', ',');
 
 // Remembered in the browser, like plcPanelCollapsed
 const PARAMS_COLLAPSED_KEY = 'camParamsCollapsed';
@@ -201,15 +206,15 @@ export class CAMOperationManager {
    */
   summary() {
     const op = this.operation;
-    const mm = (value) => String(value).replace('.', ',');
     const cut = this.cutKeys();
-    const piece = `${mm(op.thickness)} mm ${op[cut.through] ? 'passante' : `prof. ${mm(op[cut.depth])}`}`;
+    const piece = `${comma(op.thickness)} mm ${op[cut.through] ? 'passante' : `prof. ${comma(op[cut.depth])}`}`;
     if (op.operation === 'drill') {
-      return `Ø${mm(op.drillDiameter)} · fori ${mm(op.minHoleDiameter)}–${mm(op.maxHoleDiameter)} · ${piece}`;
+      return `Ø${comma(op.drillDiameter)} · fori ${comma(op.minHoleDiameter)}–${comma(op.maxHoleDiameter)} · ${piece}`;
     }
     // the side and the direction as their selects name them, set above
     const chosen = (id) => document.getElementById(id)?.selectedOptions[0]?.textContent ?? '';
-    return `Ø${mm(op.toolDiameter)} · ${chosen('camSide')} · ${chosen('camDirection')} · ${piece}`;
+    const gaps = op.closeGap > 0 ? ` · chiude ${comma(op.closeGap)} mm` : '';
+    return `Ø${comma(op.toolDiameter)} · ${chosen('camSide')} · ${chosen('camDirection')} · ${piece}${gaps}`;
   }
 
   /**
@@ -248,7 +253,7 @@ export class CAMOperationManager {
         body: {
           ...common,
           ...piece,
-          toolDiameter: op.toolDiameter, side: op.side, direction: op.direction,
+          toolDiameter: op.toolDiameter, side: op.side, direction: op.direction, closeGap: op.closeGap,
           stepDown: speeds.stepDown, plungeSpeed: speeds.plunge, rampAngle: settings.rampAngle
         }
       };
@@ -278,7 +283,28 @@ export class CAMOperationManager {
     if (widths.length === 0) return `${label}: non vengono tagliati`;
     const narrowest = Math.min(...widths);
     if (!(narrowest > 0)) return `${label}: per qualcuno non basta nessuna fresa`;
-    return `${label}: serve Ø ${String(narrowest).replace('.', ',')} mm o meno`;
+    return `${label}: serve Ø ${comma(narrowest)} mm o meno`;
+  }
+
+  openSummary(open) {
+    const label = open.length === 1 ? '1 contorno aperto non tagliato' : `${open.length} contorni aperti non tagliati`;
+    if (open.some((c) => c.gap > 0)) return label;
+    return `${label}: nessuna apertura fino a 1 mm ${open.length === 1 ? 'lo' : 'li'} chiude`;
+  }
+
+  // An open contour in words: where it runs and what closes it
+  openLine(c) {
+    const mm = (value) => comma(value.toFixed(3));
+    const fix = c.gap > 0 ? `chiudendo aperture fino a ${comma(c.gap)} mm si chiude` : 'è una linea aperta';
+    return `Contorno aperto da (${mm(c.startX)}; ${mm(c.startY)}) a (${mm(c.endX)}; ${mm(c.endY)}): non tagliato, ${fix}`;
+  }
+
+  /**
+   * The closing gap to offer for the open contours: the widest of those that close one, which the
+   * server gives in the 0.01 mm steps of the field; 0 when none closes any
+   */
+  closeGapFor(open) {
+    return Math.max(0, ...open.map((c) => c.gap));
   }
 
   /**
@@ -310,34 +336,58 @@ export class CAMOperationManager {
 
   /**
    * Show what the generation reported above the commands: nothing, an error, or the warnings of the
-   * profile (contours the tool cannot reach) or of the drilling (hole-sized contours that are not round)
-   * @param {{error?: string, warnings?: string[], unreached?: object[]}} report
+   * profile (contours the tool cannot reach, open contours) or of the drilling (hole-sized contours
+   * that are not round). Open contours come with a button that sets the closing gap closing them,
+   * also when they are all the drawing has and nothing was generated.
+   * @param {{error?: string, warnings?: string[], unreached?: object[], open?: object[]}} report
    */
-  showReport({ error, warnings, unreached } = {}) {
+  showReport({ error, warnings = [], unreached = [], open = [] } = {}) {
     const box = document.getElementById('camOperationMessage');
     if (!box) return;
     box.replaceChildren();
     box.className = 'cam-op-message';
+    // the server lists the warnings of the open contours last, one each: they are said from their details
+    const others = warnings.slice(0, Math.max(0, warnings.length - open.length));
+    const lines = [...others, ...open.map((c) => this.openLine(c))];
+    const summaries = [];
+    if (others.length > 0) {
+      summaries.push(this.operation.operation === 'drill'
+        ? `${others.length} contorni non tondi non forati: usare Profilo`
+        : this.unreachedSummary(others.length, unreached));
+    }
+    if (open.length > 0) summaries.push(this.openSummary(open));
+
     if (error) {
       box.classList.add('error');
-      box.textContent = `${this.label}: programma non generato. ${error}`;
-    } else if (warnings && warnings.length > 0) {
+      box.append(`${this.label}: programma non generato. ${open.length > 0 ? 'Nel disegno non c\'è nessun contorno chiuso.' : error}`);
+    } else if (lines.length > 0) {
       box.classList.add('warning');
+    }
+    if (lines.length > 0) {
       const details = document.createElement('details');
       const summary = document.createElement('summary');
-      summary.textContent = this.operation.operation === 'drill'
-        ? `${warnings.length} contorni non tondi non forati: usare Profilo`
-        : this.unreachedSummary(warnings.length, unreached);
+      summary.textContent = summaries.join(' · ');
       const list = document.createElement('ul');
-      for (const w of warnings) {
+      for (const line of lines) {
         const item = document.createElement('li');
-        item.textContent = w;
+        item.textContent = line;
         list.appendChild(item);
       }
       details.append(summary, list);
       box.appendChild(details);
     }
-    box.hidden = !error && !(warnings && warnings.length > 0);
+    const gap = this.closeGapFor(open);
+    if (gap > this.operation.closeGap) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'cam-op-close';
+      button.id = 'camCloseGaps';
+      button.textContent = `Chiudi aperture fino a ${comma(gap)} mm`;
+      button.title = 'Unisce gli estremi dei contorni aperti che distano fino a questa larghezza';
+      button.addEventListener('click', () => this.change({ closeGap: gap }));
+      box.appendChild(button);
+    }
+    box.hidden = !error && lines.length === 0;
   }
 }
 

@@ -388,7 +388,7 @@
     color: var(--accent);
 }
 
-/* three columns keep the command list tall: the piece takes one row, the profile one, the drilling two */
+/* three columns keep the command list tall: the piece takes one row, the profile and the drilling two */
 .cam-op-params {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -514,6 +514,24 @@
 
 .cam-op-message summary {
     cursor: pointer;
+}
+
+/* sets the closing gap that closes the open contours */
+.cam-op-close {
+    display: block;
+    min-height: 32px;
+    margin-top: 6px;
+    padding: 4px 10px;
+    background: var(--bg-input);
+    border: 1px solid currentColor;
+    border-radius: 6px;
+    color: inherit;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.cam-op-close:hover {
+    background: var(--bg-hover);
 }
 
 .cam-op-message ul {
