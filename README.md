@@ -53,6 +53,8 @@ docker compose up --build
 
 OPC UA connections are stored in the SQLite database and managed from the web UI or through `/api/opcua/config` and `/api/opcua/plcs` (several PLCs, one active). Each configuration holds the endpoint, namespace, trigger/reset/data/end-of-file nodes, position nodes, chunk size and ACK timeout, security mode and policy, certificates and credentials. A default configuration is seeded into an empty database.
 
+A node is written either as a node ID (`ns=4;i=12`) or as the path of browse names of the PLC variable (`ServerInterfaces/Com/Point`), which the app resolves on the server it connects to. The names are the default because the numbers behind them change with the PLC program, while the same names fit the machine and the simulator.
+
 `opcua_config.json` in the repository root is not read by the server.
 
 `POST /api/opcua/certificates/generate` writes `client.pem`, `client.der` and `client.key` under `certs/`. Its optional `outputDir` must be a relative path within that directory (for example, `certs/machine`); paths and symlinks that escape it are rejected. New certificate directories use mode `0700`, and generated files use `0600` on Unix. Status and download endpoints still refer to `certs/client.*`. Local `OPCUA_CERT_PATH` and `OPCUA_KEY_PATH` settings can select other directories for automatic certificate loading and generation.

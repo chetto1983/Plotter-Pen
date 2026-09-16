@@ -33,6 +33,7 @@ One piece at a time: a short design approved first, then TDD, then a check on th
 | 7 | Piece thickness: work Z is the bed, cuts through or to a depth (`internal/service/cam/stock.go`) | Done 2026-09-14 |
 | — | LWPOLYLINE/POLYLINE bulges in the DXF import, with a new DXF reader | Done 2026-09-15 |
 | — | Drilling of round holes drawn as arcs, polygons or lines (`internal/service/cam/holes.go`) | Done 2026-09-15 |
+| — | OPC UA nodes addressed by the names of the PLC variables (`internal/service/opcua/nodes.go`) | Done 2026-09-16 |
 
 Measured on `dxf/L28YO-tree-of-life-wall-spiritual-art.dxf`:
 
@@ -69,7 +70,7 @@ Measured on `dxf/L28YO-tree-of-life-wall-spiritual-art.dxf`:
 - **Endpoint:** `POST /api/cam/profile`, with the same response shape as `/api/plc/extract` (`commands`, `output`, `count`), so the existing output list, 3D simulation and send can show it. The UI is a later piece: reuse the shell of the CAM removed in `7ad8c8f` (handler, UI, tests), not its geometry.
 - **Simulator test:** an `s7sim`-tagged Go test.
   - It generates the profile of a test shape and sends it only to `S7SIM_ENDPOINT` (default `opc.tcp://127.0.0.1:4840`), never to the active PLC in the database.
-  - It checks End_Of_File and that the final Pos X/Y/Z equals the last command.
+  - It checks EndOfFile and that the final Pos X/Y/Z equals the last command.
 
 ### Piece 4 as built (2026-09-14)
 
@@ -172,7 +173,7 @@ The user asked for the interface and chose: one active operation, on the whole d
   - The error texts come from the API in English, after an Italian prefix.
   - The operation works on the whole drawing only.
   - Firefox 78 is left to the Babel build and was not measured.
-  - A fresh database has the real PLC (192.168.0.1) as the active configuration, with node IDs that the simulator refuses (`StatusBadUserAccessDenied` on End_Of_File). For a browser check, point it at the simulator with the node IDs of `connectS7Sim` before opening a page.
+  - A fresh database has the real PLC (192.168.0.1) as the active configuration. For a browser check, point it at the simulator before opening a page; since 2026-09-16 the nodes are addressed by name and the same names fit both.
 
 ### Piece 7: piece thickness (2026-09-14)
 
@@ -281,6 +282,64 @@ Second sub-piece: drilling found circles only. The user chose to drill everythin
     - no page errors.
 - **Limits:** a shape made of pieces that `cam.Chain` cannot close (a gap over 0.01 mm, three ends at one point) is neither drilled nor warned. The warning list, when opened, pushes the command list down as the profile one does.
 
+### The PLC variables by name (2026-09-16)
+
+The user asked to simplify the node configuration with the names of the variables. The nodes
+were twelve hand-written node IDs (`ns=4;i=93`…), and the numbers behind them change with the
+PLC program: what the app really needs is the names.
+
+- **Addresses** (`internal/service/opcua/nodes.go`): a node field takes either a node ID, as
+  before, or a path of browse names such as `ServerInterfaces/Com/Point`. The prefix decides
+  (`ns=`, `nsu=`, `i=`, `s=`, `g=`, `b=`): `ua.ParseNodeID` accepts anything else as a string
+  node ID of namespace 0 and would swallow a path.
+- **Resolution:** the path is followed from the Objects folder with `Node.References` of
+  gopcua, one browse per name, matching the browse name and ignoring its namespace index,
+  which is what changes from server to server. The result is cached per connection
+  (`nodeCache`, cleared on connect and disconnect) and resolved before taking the client
+  lock, because browsing takes the read lock itself. Errors name the step: `node address
+  "ServerInterfaces/Com/PointArr": Com has no "PointArr", only Point, TriggerWrite, …`.
+- **Existing databases:** at load, a node still carrying the node ID the app shipped with is
+  replaced by the name of the variable it was meant to reach (`namedNodes`). A node ID
+  somebody chose is left alone.
+- **What the PLC really exposes**, read from 192.168.0.1 on 2026-09-16 (browse and read only):
+
+  ```
+  Objects/ServerInterfaces (ns=3)/Com (ns=4;i=1)
+      Point        ns=4;i=12   String[20]
+      TriggerWrite ns=4;i=43   Bool
+      ReadDone     ns=4;i=54   Bool
+      EndOfFile    ns=4;i=65   Bool
+      Pos/X,Y,Z    ns=4;i=79,80,81   Float
+  ```
+
+  `docs/OPC Ua Interface.xml` is an older export: it says `Comm`, `PointArr`,
+  `Trigger_read_done`, `End_Of_File` with `i=93/12/23/34`, names and numbers that are not on
+  the machine any more. **The defaults the app shipped with pointed at nodes the PLC does not
+  have** (`ns=4;i=93`), so the names also repair them. `tools/s7sim` already used the true
+  numbers and now carries the true names too, under `ServerInterfaces/Com`.
+- **Connecting to the PLC:** it offers only `Basic256Sha256` with `Sign` or `SignAndEncrypt`,
+  no `None` endpoint, and it accepted a self-signed client certificate carrying the
+  application URI `urn:plotter-pen-client` — the one `internal/service/opcua/cert.go`
+  generates. Anonymous user token.
+- **Checked:**
+  - Go tests on the resolver with a stub server: a node ID passes untouched and browses
+    nothing, the PLC tree and a server with the same names on other numbers both resolve, a
+    nested object, spaces around the names, an unknown name, an empty address, a malformed
+    node ID, and the cache (one browse per name, again after `clear`).
+  - `go test -tags=s7sim -run S7Sim`: five tests including `TestNamedNodes_S7Sim`, a whole
+    chunked transfer configured with names only.
+  - Race detector in the golang container on `internal/handler` and `internal/service/opcua`.
+  - Read-only session against the PLC: all seven names resolved and read (`Point` empty,
+    the three booleans false, Pos 0/0/0). No write, no trigger.
+  - Headless Chrome on a local server with the simulator as the active PLC: the settings
+    window opens with every node written as a name, the labels read Point/ReadDone/EndOfFile,
+    the hint explains both ways, the app connects and reads the position, no page errors.
+  - Migration: a database saved with the old node IDs comes back up with the names; a node ID
+    of somebody's own (`ns=7;i=1000`) is kept.
+- **Limits:** the names are resolved on the server the app is connected to, so a wrong name is
+  found only at connection time, not while typing it. The app never writes the migrated names
+  back to the database on its own: they are saved the first time the window is saved.
+
 ## Environment
 
 - **Containers:** `plotter-pen` (Compose, host port 41880) and `plotter-pen-s7sim` (standalone simulator, host port 4840).
@@ -316,6 +375,7 @@ Hooks: pre-commit runs gofmt, vet, golangci-lint on changed lines and the 600-li
 - **Arc through point:** `arcAuxPoint` in `internal/service/plc/extractor.go` returns the arc centre when an arc has neither `throughPoint` nor `sweep`.
 - **Import cache:** `SmartImportCached` keys the cache on the content only and returns the cached object without copying it.
 - **Unused configuration:** `ServerConfig.OPCUAConfig` (`OPCUA_CONFIG`) is not used by anything.
+- **Stale interface export:** `docs/OPC Ua Interface.xml` no longer matches the machine (see the node names of 2026-09-16). It is kept as a record of the older program.
 ## Working rules to keep
 
 - Never send to the real PLC, and never run real-PLC/integration tests, without explicit authorisation. Use the simulator.
