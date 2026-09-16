@@ -35,6 +35,7 @@ One piece at a time: a short design approved first, then TDD, then a check on th
 | — | Drilling of round holes drawn as arcs, polygons or lines (`internal/service/cam/holes.go`) | Done 2026-09-15 |
 | — | OPC UA nodes addressed by the names of the PLC variables (`internal/service/opcua/nodes.go`) | Done 2026-09-16 |
 | — | Variables read from the PLC, chosen from a combo box, with a connection test | Done 2026-09-16 |
+| — | Tool library opened from the CAM panel, its diameter into the operation | Done 2026-09-16 |
 
 Measured on `dxf/L28YO-tree-of-life-wall-spiritual-art.dxf`:
 
@@ -393,6 +394,34 @@ and chosen from a combo box, and for a connection test before saving.
   certificate, while the session the container already held kept working. Closing the extra
   clients cleared it. It is a limit of concurrent sessions or secure channels, not the app:
   each connection attempt costs one, so leave the machine a channel free.
+
+### The tool library, from the CAM panel (2026-09-16)
+
+The window `Libreria Utensili` and the `/api/tools` endpoints already existed, but nothing
+opened the window and nothing read the list: the diameters of the profile and of the drilling
+were typed by hand every time. This wires what was there.
+
+- **Where it is opened** (`src/ui/components/SidebarRight.js`): a small gear beside the
+  diameter it fills, inside the field itself — one in `Fresa Ø` of the profile, one in
+  `Punta Ø` of the drilling. The button carries the parameter it belongs to
+  (`data-diameter="toolDiameter"` or `"drillDiameter"`), and that is the only thing the
+  library needs to know about the panel.
+- **What it does** (`src/app/ToolLibraryManager.js`, 189 lines): lists the saved tools with
+  their kind and diameter, fills the form when one is chosen, saves a change, starts a new one
+  (`Nuovo`, which the window was missing), deletes, and hands the diameter to the operation
+  that asked for it through `CAMOperationManager.change`, so the value is shown, the output is
+  regenerated and the operation is saved like any other change of the panel.
+- **What was left alone:** the shape of the tools in the database. The library shows what the
+  `Tool` model already holds — name, kind, diameter — and adds no field. `ListTools` answers
+  with a bare array, unlike the rest of the API, and the manager accepts both shapes.
+- **The `Tipo` menu** was missing `pen` and `drill`, two of the five kinds the seeded tools
+  already use, so a seeded pen could not be saved back without changing its kind.
+- **Checked:** `npm run lint`, `npm run build`, and headless Chrome on a local server with a
+  temporary database and the simulator as the active PLC: the window opens from the profile
+  with the four seeded tools, choosing one fills the form, `Usa` writes 6 mm into `Fresa Ø`
+  and `GET /api/cam/operation` comes back with it; from the drilling, `Nuovo` saves a 2 mm
+  drill that `GET /api/tools` then holds, `Usa` writes it into `Punta Ø` only (the profile
+  keeps its 6), a rename is saved, `Elimina` takes it away, and there are no page errors.
 
 ## Environment
 
