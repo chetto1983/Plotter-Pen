@@ -288,7 +288,7 @@ export class PLCConfigManager {
             positionXNode: formData.get('positionXNode')?.trim() || "",
             positionYNode: formData.get('positionYNode')?.trim() || "",
             positionZNode: formData.get('positionZNode')?.trim() || "",
-            // Chunked transfer nodes (Db_Punti)
+            // Chunked transfer nodes (Com)
             pointArrayNode: pointArr,
             triggerWriteNode: triggerWrite,
             readDoneNode: formData.get('readDoneNode')?.trim() || "",
@@ -330,7 +330,7 @@ export class PLCConfigManager {
         event.preventDefault();
         const payload = this.readForm();
         if (!payload?.endpoint || !payload?.pointArrayNode) {
-            this.showStatus("Campi obbligatori mancanti (Endpoint, PointArr).", "error");
+            this.showStatus("Campi obbligatori mancanti (Endpoint, Point).", "error");
             return;
         }
 

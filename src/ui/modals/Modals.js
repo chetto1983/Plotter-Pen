@@ -154,41 +154,42 @@ export class Modals {
         </fieldset>
         <!-- Position Nodes Section -->
         <fieldset class="cad-fieldset"><legend>Nodi Posizione (Lettura)</legend>
+        <p class="cad-fieldset-hint">Ogni nodo si scrive col nome della variabile sul PLC (ServerInterfaces/Com/Pos/X) oppure col NodeID (ns=4;i=79).</p>
         <div class="cad-modal-cols-3">
           <div class="cad-input-row">
             <label for="positionXNode">Pos.X</label>
-            <input type="text" id="positionXNode" name="positionXNode" placeholder="ns=4;i=80" class="cad-modal-input" />
+            <input type="text" id="positionXNode" name="positionXNode" placeholder="ServerInterfaces/Com/Pos/X" class="cad-modal-input" />
           </div>
           <div class="cad-input-row">
             <label for="positionYNode">Pos.Y</label>
-            <input type="text" id="positionYNode" name="positionYNode" placeholder="ns=4;i=81" class="cad-modal-input" />
+            <input type="text" id="positionYNode" name="positionYNode" placeholder="ServerInterfaces/Com/Pos/Y" class="cad-modal-input" />
           </div>
           <div class="cad-input-row">
             <label for="positionZNode">Pos.Z</label>
-            <input type="text" id="positionZNode" name="positionZNode" placeholder="ns=4;i=82" class="cad-modal-input" />
+            <input type="text" id="positionZNode" name="positionZNode" placeholder="ServerInterfaces/Com/Pos/Z" class="cad-modal-input" />
           </div>
         </div>
         </fieldset>
         <!-- Chunked Transfer Nodes Section -->
-        <fieldset class="cad-fieldset"><legend>Nodi Trasferimento Chunk (Db_Punti)</legend>
+        <fieldset class="cad-fieldset"><legend>Nodi Trasferimento Chunk (Com)</legend>
         <div class="cad-modal-cols-2">
           <div class="cad-input-row">
-            <label for="pointArrayNode">PointArr (String[20])</label>
-            <input type="text" id="pointArrayNode" name="pointArrayNode" required placeholder="ns=4;i=93" class="cad-modal-input" />
+            <label for="pointArrayNode">Point (String[20])</label>
+            <input type="text" id="pointArrayNode" name="pointArrayNode" required placeholder="ServerInterfaces/Com/Point" class="cad-modal-input" />
           </div>
           <div class="cad-input-row">
             <label for="triggerWriteNode">TriggerWrite</label>
-            <input type="text" id="triggerWriteNode" name="triggerWriteNode" placeholder="ns=4;i=12" class="cad-modal-input" />
+            <input type="text" id="triggerWriteNode" name="triggerWriteNode" placeholder="ServerInterfaces/Com/TriggerWrite" class="cad-modal-input" />
           </div>
         </div>
         <div class="cad-modal-cols-2">
           <div class="cad-input-row">
-            <label for="readDoneNode">Trigger_read_done</label>
-            <input type="text" id="readDoneNode" name="readDoneNode" placeholder="ns=4;i=23" class="cad-modal-input" />
+            <label for="readDoneNode">ReadDone</label>
+            <input type="text" id="readDoneNode" name="readDoneNode" placeholder="ServerInterfaces/Com/ReadDone" class="cad-modal-input" />
           </div>
           <div class="cad-input-row">
-            <label for="endOfFileNode">End_Of_File</label>
-            <input type="text" id="endOfFileNode" name="endOfFileNode" placeholder="ns=4;i=34" class="cad-modal-input" />
+            <label for="endOfFileNode">EndOfFile</label>
+            <input type="text" id="endOfFileNode" name="endOfFileNode" placeholder="ServerInterfaces/Com/EndOfFile" class="cad-modal-input" />
           </div>
         </div>
         <div class="cad-modal-cols-2">

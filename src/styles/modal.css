@@ -123,6 +123,13 @@
     letter-spacing: 0.8px;
 }
 
+/* Note under a fieldset legend */
+.cad-fieldset-hint {
+    margin: 0;
+    font-size: 11px;
+    color: var(--muted);
+}
+
 /* Input row with label above */
 .cad-input-row {
     display: flex;
