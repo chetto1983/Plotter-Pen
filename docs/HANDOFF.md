@@ -38,6 +38,7 @@ One piece at a time: a short design approved first, then TDD, then a check on th
 | — | Tool library opened from the CAM panel, its diameter into the operation | Done 2026-09-16 |
 | — | Work area: the selection, or what the visible layers hold | Done 2026-09-16 |
 | — | Profile cut on the line, beside outside and inside | Done 2026-09-16 |
+| — | The piece of material shown in the 3D view | Done 2026-09-16 |
 
 Measured on `dxf/L28YO-tree-of-life-wall-spiritual-art.dxf`:
 
@@ -495,6 +496,33 @@ is what an engraving or a traced path needs, where the drawing already is the to
   saved, the collapsed summary reads `Ø2 · Sulla linea · Discorde · 1,6 mm passante`, and there
   are no page errors.
 - **Not measured:** the race detector, since nothing concurrent changed.
+
+### The piece in the 3D view (2026-09-16)
+
+The 3D view showed the grid, the work area, the tool and the path: the thickness of the piece
+lived only in the parameters, so there was no way to see where the tool enters the material and
+where it goes through into the bed.
+
+- **The block** (`PLCSimulator3D.setStock` / `clearStock`): a box from the bed (`workZ`) up by the
+  thickness, transparent at 0.25 and out of the depth buffer so the path inside stays visible,
+  with its edges drawn so it reads when it is nearly edge-on. Every call replaces the previous
+  one and gives its geometry and materials back, and `dispose` clears it with the rest.
+- **Where it stands** (`src/app/camStock.js`): over the work area — the same `camArea` the program
+  uses — with 5 mm of material round it. The user chose this over the whole 600 x 600 bed: it is
+  the piece actually being cut, and it does not bury the grid.
+- **It follows the drawing, not the program** (`PLCOutputManager.updateStock`): the piece is set
+  from the work area, the operation and the bed, before the program is generated, so a request
+  the server refuses — drilling a drawing with no round holes, say — leaves the piece where it
+  is instead of making it disappear. The pen has no piece at all: it draws on the surface.
+- **Checked:** `npm run lint`, `npm run build`, and headless Chrome (software WebGL) on a local
+  server with a temporary database and the simulator: a 20 mm square gives a 30 x 30 block 1.6 mm
+  thick centred on the drawing and resting on the bed, transparent and outlined; changing the
+  thickness to 3 rebuilds it at the right height and the old geometry is really disposed
+  (`geometry.dispose` spied) with no growth in the scene; the pen leaves the scene without it;
+  the drilling shows it again even though its program is refused. No page errors.
+- **Met on the way, not a change of this piece:** a thickness that puts the top of the piece above
+  the safe Z is refused by the profile request, as it should be, and then the panel shows the
+  error and no program.
 
 ## Environment
 

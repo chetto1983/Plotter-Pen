@@ -93,6 +93,7 @@ tools/s7sim/                  # S7-1500 OPC UA simulator (Python, not part of Co
 | Tool library | `src/app/ToolLibraryManager.js` | Done | Opened from the diameter of the profile or of the drilling, fills it from `/api/tools` |
 | Work area | `src/app/camArea.js` | Done | The selection, or the visible layers; hidden geometry is never cut |
 | Profile on the line | `internal/service/cam/profile.go` | Done | `side: "on"` runs the tool centre along the drawing, with no offset |
+| Piece in the 3D view | `src/app/camStock.js` | Done | A transparent block over the work area, from the bed up by the thickness |
 | Transfer | `internal/service/opcua/transfer.go` | Done | Chunked async with ACK |
 | WebSocket | `internal/handler/opcua_ws.go` | Done | Real-time position streaming |
 | Simulator | `tools/s7sim/s7sim.py` | Done | S7-1500 OPC UA simulator for transfer tests |
