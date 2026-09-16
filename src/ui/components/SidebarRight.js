@@ -42,6 +42,8 @@ export class SidebarRight {
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
               </button>
             </div>
+            <!-- What the operation works on: the selection, or the visible layers -->
+            <div class="cam-op-area" id="camOperationArea" hidden></div>
             <!-- While the parameters are collapsed: one line with their values, touched to open them -->
             <button type="button" class="cam-op-summary" id="camParamsSummary" title="Mostra parametri" hidden></button>
             <!-- The piece on the bed; Passante and Profondità belong to the active operation -->

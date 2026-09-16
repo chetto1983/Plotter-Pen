@@ -2,6 +2,7 @@ import { PLCSimulator3D } from '../plc/PLCSimulator3D.js';
 import { PLC3DAnimator } from '../plc/PLC3DAnimator.js';
 import { getPLCSettingsFromUI, setPLCSettingsToUI, getPLCSettingsFromModal, setPLCSettingsToModal } from './plcSettingsUtils.js';
 import { CAMOperationManager } from './CAMOperationManager.js';
+import { camArea, visibleLayerKey } from './camArea.js';
 
 export class PLCOutputManager {
   constructor(app) {
@@ -12,6 +13,7 @@ export class PLCOutputManager {
     this._is3DInitialized = false;
     this._saveTimeout = null;
     this._extractRun = 0;
+    this._visibleLayers = null;
   }
 
   /**
@@ -39,6 +41,11 @@ export class PLCOutputManager {
 
     // Initialize collapsible PLC panel
     this.initCollapsiblePLCPanel();
+
+    // The work area follows the selection and the layers that are shown
+    document.addEventListener('selectionChanged', () => this.refreshPLCOutput());
+    this._visibleLayers = visibleLayerKey(this.app);
+    document.addEventListener('layersChanged', () => this.onLayersChanged());
 
     // Load saved settings and operation from database
     await Promise.all([this.loadSimulationSettings(), this.operation.init()]);
@@ -447,21 +454,39 @@ export class PLCOutputManager {
   }
 
   /**
-   * Generate the program of the active operation (pen, profile or drilling) for the whole drawing
+   * A layer shown or hidden changes the work area; its name or its colour does not
+   */
+  onLayersChanged() {
+    const visible = visibleLayerKey(this.app);
+    if (visible === this._visibleLayers) return;
+    this._visibleLayers = visible;
+    this.refreshPLCOutput();
+  }
+
+  /**
+   * Generate the program of the active operation (pen, profile or drilling) for the work area
    */
   async extractPLC() {
     // Extractions can answer out of order; only the latest one started may show its commands
     const run = ++this._extractRun;
     if (this.app.primitives.length === 0) {
+      this.operation.showArea({ total: 0 });
       this.app.ui.updateStatus("Nessuna primitiva da estrarre");
       return;
     }
 
+    const area = camArea(this.app);
+    this.operation.showArea({ scope: area.scope, count: area.primitives.length, total: area.total });
+    if (area.primitives.length === 0) {
+      // Everything is hidden, or nothing selected can be cut: no stale program may stay around
+      this.clearOutput("Nessun comando: niente da lavorare nell'area");
+      this.operation.showReport();
+      this.app.ui.updateStatus("Nessuna primitiva nell'area di lavoro");
+      return;
+    }
+
     // Convert primitives to API format
-    const supportedTypes = new Set(["line", "arc", "circle", "rectangle", "polygon", "polyline"]);
-    const primitives = this.app.primitives
-      .filter((p) => supportedTypes.has(p.type))
-      .map((p) => this.primitiveToRequest(p));
+    const primitives = area.primitives.map((p) => this.primitiveToRequest(p));
     const label = this.operation.label;
     const { url, body } = this.operation.request(primitives, getPLCSettingsFromUI());
 

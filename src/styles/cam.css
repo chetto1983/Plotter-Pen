@@ -115,6 +115,17 @@
     gap: 6px;
 }
 
+/* What the operation works on, under the tabs */
+.cam-op-area {
+    padding: 2px 2px 4px;
+    font-size: 11px;
+    color: var(--muted);
+}
+
+.cam-op-area.selection {
+    color: var(--accent);
+}
+
 .cam-op-params[hidden],
 .cam-op-field[hidden],
 .cam-op-toggle[hidden],

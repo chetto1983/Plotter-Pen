@@ -256,6 +256,28 @@ export class CAMOperationManager {
    * profile (contours the tool cannot reach) or of the drilling (hole-sized contours that are not round)
    * @param {{error?: string, warnings?: string[]}} report
    */
+  /**
+   * Say what the operation works on: the selection, or what the visible layers hold
+   */
+  showArea({ scope, count, total } = {}) {
+    const box = document.getElementById('camOperationArea');
+    if (!box) return;
+    box.className = 'cam-op-area';
+    if (total === 0) {
+      box.hidden = true;
+      return;
+    }
+    if (scope === 'selection') {
+      box.classList.add('selection');
+      box.textContent = `Area: selezione — ${count} di ${total} primitive`;
+    } else if (count < total) {
+      box.textContent = `Area: livelli visibili — ${count} di ${total} primitive`;
+    } else {
+      box.textContent = `Area: tutto il disegno — ${total} primitive`;
+    }
+    box.hidden = false;
+  }
+
   showReport({ error, warnings } = {}) {
     const box = document.getElementById('camOperationMessage');
     if (!box) return;
