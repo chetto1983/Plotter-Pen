@@ -193,7 +193,7 @@ export class LayerPanel {
       const name = await modal.prompt({
         title: 'Nuovo Livello',
         message: 'Inserisci il nome del nuovo livello:',
-        defaultValue: `Layer ${this.layerManager.layers.size}`,
+        defaultValue: this.layerManager.nextLayerName(),
         confirmText: 'Crea',
         cancelText: 'Annulla'
       });

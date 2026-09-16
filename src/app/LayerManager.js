@@ -84,7 +84,7 @@ export class LayerManager {
 
         const layer = {
             id,
-            name: name || `Layer ${order}`,
+            name: name ? this.uniqueName(name) : this.nextLayerName(),
             color: color || this.generateColor(order),
             visible: true,
             locked: false,
@@ -141,7 +141,7 @@ export class LayerManager {
         const layer = this.layers.get(layerId);
         if (!layer) return false;
 
-        layer.name = newName.trim() || layer.name;
+        layer.name = this.uniqueName(newName.trim() || layer.name, layerId);
         this.notifyChange();
         return true;
     }
@@ -309,7 +309,7 @@ export class LayerManager {
             this.layers.set(layerId, {
                 ...DEFAULT_LAYER,
                 id: layerId,
-                name: layerId,
+                name: this.uniqueName(layerId),
                 color: this.generateColor(order),
                 order
             });
@@ -317,6 +317,39 @@ export class LayerManager {
         }
         if (added) this.notifyChange();
         return added;
+    }
+
+    /**
+     * A name no other layer has: a taken one gets " (2)", " (3)"… — the first free number, a
+     * suffix it already has counting as one, so "FORI (2)" taken gives "FORI (3)", not
+     * "FORI (2) (2)". Two layers of one name could not be told apart in the layer panel, nor in the
+     * layer choice of a step of the job; the id of the layer never changes, so what is on it stays.
+     * @param {string} name - The name asked for
+     * @param {string} [exceptId] - The layer being renamed, which may keep its own name
+     * @returns {string}
+     */
+    uniqueName(name, exceptId) {
+        const taken = new Set();
+        for (const layer of this.layers.values()) {
+            if (layer.id !== exceptId) taken.add(layer.name);
+        }
+        if (!taken.has(name)) return name;
+        const base = name.replace(/ \(\d+\)$/, '');
+        let n = 2;
+        while (taken.has(`${base} (${n})`)) n++;
+        return `${base} (${n})`;
+    }
+
+    /**
+     * The first "Layer N" no layer has, from the number of layers on: the name a new layer is
+     * offered or given when none is asked for
+     * @returns {string}
+     */
+    nextLayerName() {
+        const taken = new Set([...this.layers.values()].map((layer) => layer.name));
+        let n = this.layers.size;
+        while (taken.has(`Layer ${n}`)) n++;
+        return `Layer ${n}`;
     }
 
     /**
@@ -385,9 +418,10 @@ export class LayerManager {
             return;
         }
 
+        // A session saved before names were unique may hold one twice: the later layer gets a suffix
         this.layers.clear();
         for (const layer of layersData) {
-            this.layers.set(layer.id, { ...layer });
+            this.layers.set(layer.id, { ...layer, name: this.uniqueName(layer.name) });
         }
 
         // Restore active layer if it exists
