@@ -5,13 +5,15 @@ router for wood and PCB, with the CAM inside Plotter-Pen (no external CAD/CAM).
 
 ## Where things stand
 
-- `origin/main` is `53bc28d`; nothing is waiting to be pushed.
+- `origin/main` carries the speeds in the tool; nothing is waiting to be pushed.
 - The Compose container on port 41880 runs it and is healthy. The database in the
   `plotter-pen_plotter-data` volume was backed up before every rebuild of the day, the last as
-  `plotter.db.bak-2026-09-16-before-narrow-details`.
+  `plotter.db.bak-2026-09-16-before-tool-speeds`.
 - The CAM list of "cosa manca" is finished: DXF bulges, round holes, the tool library, the work
   area, the profile on the line, the piece and the tool in the 3D view, the camera that follows
   the tool, and the details out of reach. Each piece has its own section below.
+- The milestone "the whole job" has started: piece 1, the speeds in the tool, is done. Piece 2,
+  the job in the database, is next and needs its short design first.
 - The OPC UA side addresses the PLC by the names of its variables, lists them from the machine and
   tests a connection before it is saved; a program of 25 lines was transferred to the machine at
   192.168.0.1 by name alone.
@@ -42,7 +44,7 @@ app must never send the next program without an explicit confirmation.
 
 | # | Piece | What it holds |
 |---|-------|----------------|
-| 1 | Speeds in the tool | `Tool` gains feed, plunge and step-down; the operation reads them from the tool it was given. Migration, API, library window, panel. |
+| 1 | Speeds in the tool — **done 2026-09-16** | `Tool` gains feed, plunge and step-down; the operation reads them from the tool it was given. Migration, API, library window, panel. |
 | 2 | The job: model and API | `Job` and its ordered steps (operation, tool, parameters, layer) in the database, `GET/POST /api/cam/job`. The program of a step is generated with the endpoints that already exist. |
 | 3 | The job in the panel | The steps in the Output PLC panel: add, remove, reorder, duplicate; the active step is edited as the panel does today. |
 | 4 | Sending in sequence | Transfer a step, the operator runs it, confirms, the app asks for the tool change and goes on. Never a transfer without a confirmation, because nothing on the machine says the cut is over. |
@@ -51,6 +53,53 @@ app must never send the next program without an explicit confirmation.
 
 Each piece keeps the rhythm of the others: a short design approved first, then TDD, then the
 checks, then commit, push and the container.
+
+### Piece 1: speeds in the tool (2026-09-16)
+
+A cutter and a drill do not cut at the same speed, but the app had one feed, one plunge and one
+step-down for everything, in the PLC settings. Now a tool of the library carries its own, and the
+settings are what a tool without them falls back on.
+
+- **The tool** (`Tool` in `internal/persistence/db.go`): `Feed` and `Plunge` in mm/s, like `V`,
+  and `StepDown` in mm. 0 is "no value of its own": the global setting applies. The columns
+  default to 0, so the tools of an existing database migrate to the global speeds and nothing
+  they cut changes (`TestInitDB_ExistingToolsTakeTheGlobalSpeeds`).
+- **The operation** (`CAMOperation`): `ToolID` for the profile and `DrillID` for the drilling, 0
+  when no tool of the library was given. The operation keeps the **link**, not a copy of the
+  speeds: a tool changed in the library changes every program that uses it. The table uses
+  `AUTOINCREMENT`, so the id of a deleted tool is never given to a new one; an operation left
+  with a deleted tool finds nothing and cuts at the global speeds.
+- **The API**: `POST /api/tools` takes `feed`, `plunge` and `stepDown`, all optional. `PUT
+  /api/tools/:id` reads them as pointers, because there 0 is a value — the way back to the global
+  setting — and must be told apart from a field the request does not carry. A negative speed is a
+  400 on both, and so is a negative `toolId` or `drillId` on `PUT /api/cam/operation`.
+- **Where the speeds are resolved** (`src/app/toolCatalog.js`): the list of tools is kept in one
+  place, read by the library window and by the CAM panel, which loads it before its first
+  generation. `speedsFor(toolId, settings)` gives the tool's value where it has one and the
+  global one elsewhere, field by field. `CAMOperationManager.request()` sends the result, so the
+  CAM endpoints did not change: they already took the speeds in the request. The profile uses all
+  three; the drilling uses its tool's feed and plunge; the pen has no tool of the library and
+  stays on the settings.
+- **The library window** (`ToolLibraryManager.js`, `Modals.js`): a "Velocità di taglio" row with
+  Avanzamento, Discesa and Passata; an empty field reads "globale" and saves 0. The list shows
+  the feed of the tools that have one. Saving or deleting a tool regenerates the program on
+  screen. "Usa Utensile Selezionato" now gives the operation the tool itself — diameter, kind and
+  id — and refuses a tool still being typed in: "Scegli un utensile dalla lista: uno nuovo va
+  salvato prima.", since an unsaved tool has no id to link to.
+- **Layout**: the three fields did not fit — a number field is wider than a third of the column
+  by itself, and `1fr` does not shrink below it. The row uses `minmax(0, 1fr)`, the window is
+  560 px wide instead of 520 so the labels stay on one line, and on a narrow screen the fields
+  stay aligned when a label wraps.
+- **Checked:** TDD on the Go side (a tool keeps its speeds, a tool without them has 0, an update
+  sets and clears them, negative values are refused, the operation remembers both tools, old
+  databases migrate), then `go vet`, `go test ./...`, `make quality`, `npm run lint`, `npm run
+  build` with no warnings, and headless Chrome against the simulator, 13 checks: the program's `V`
+  values and Z levels follow the tool (feed 37, plunge 4, step-down 0.8 → three levels instead of
+  four), a tool edited in the library changes the program, an emptied feed goes back to the
+  global one and is stored as 0, the pen stays on the settings, the drilling plunges at its own
+  tool's speed, a deleted tool leaves the global speeds, an unsaved tool cannot be given. The
+  three fields measured inside the window at 1440 and at 560 px wide. The earlier checks of the
+  library and of the tool drawn in 3D still pass. No page errors.
 
 ## CAM plan
 

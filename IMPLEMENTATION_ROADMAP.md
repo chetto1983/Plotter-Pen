@@ -125,7 +125,7 @@ decisions behind it, is in `docs/HANDOFF.md` ("Next milestone: the whole job").
 
 | # | Piece | Where |
 | --- | --- | --- |
-| 1 | Speeds in the tool | `internal/persistence/db.go`, `src/app/ToolLibraryManager.js` |
+| 1 | Speeds in the tool — done 2026-09-16 | `internal/persistence/db.go`, `src/app/toolCatalog.js`, `src/app/ToolLibraryManager.js` |
 | 2 | The job: model and API | `internal/persistence/db.go`, `internal/handler/cam_job.go` |
 | 3 | The job in the panel | `src/app/CAMOperationManager.js`, `src/ui/components/SidebarRight.js` |
 | 4 | Sending in sequence | `src/app/PLCOutputManager.js`, `internal/handler/opcua.go` |
