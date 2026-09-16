@@ -10,6 +10,7 @@ import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { BRANDING_CSS, injectBranding } from '../lib/branding.js';
 import { ViewCubeHelper } from './ViewCubeHelper.js';
 import { PrimitiveRenderer3D } from './PrimitiveRenderer3D.js';
+import { toolMesh } from './toolShapes.js';
 
 // How much of the way to the tool the camera goes at every step while it follows it
 const FOLLOW_STEP = 0.2;
@@ -107,7 +108,8 @@ export class PLCSimulator3D {
         this.liveTrailLine = null;
 
         // Tool mesh
-        this.toolMesh = this.createDefaultTool(6, 30);
+        this.tool = { kind: 'pen', diameter: 2, tipAngle: 118 };
+        this.toolMesh = toolMesh(this.tool.kind, this.tool.diameter, this.tool.tipAngle);
         this.scene.add(this.toolMesh);
 
         // Grid references (will be created in fitToView)
@@ -239,42 +241,33 @@ export class PLCSimulator3D {
         }
     }
 
-    createDefaultTool(diameter, height) {
-        const group = new THREE.Group();
-        const radius = diameter / 2;
-        const tipHeight = height * 0.25;
-        const bodyHeight = height * 0.6;
-        const holderHeight = height * 0.15;
+    /**
+     * Draw the tool that is cutting. The mesh is rebuilt only when the kind, the diameter or the
+     * point angle change, and the old one is given back; the tool keeps the position it had.
+     * @param {string} kind pen, endmill, ballnose, vbit or drill
+     * @param {number} diameter in mm
+     * @param {number} tipAngle the whole angle of a drill point, in degrees
+     */
+    setTool(kind, diameter, tipAngle = 118) {
+        const same = this.tool.kind === kind && this.tool.diameter === diameter && this.tool.tipAngle === tipAngle;
+        if (same || !(diameter > 0)) return;
+        this.tool = { kind, diameter, tipAngle };
 
-        // Cone tip - BLUE
-        // ConeGeometry: tip at +Y, base at -Y (centered at origin)
-        // We want tip pointing DOWN (-Z) with tip point at local Z=0
-        const tipGeom = new THREE.ConeGeometry(radius, tipHeight, 32);
-        const tipMat = new THREE.MeshPhongMaterial({ color: 0x2266ff, shininess: 100 });
-        const tip = new THREE.Mesh(tipGeom, tipMat);
-        // Shift geometry so tip vertex is at local origin
-        tipGeom.translate(0, -tipHeight / 2, 0);
-        // Rotate -90° around X to point tip down (-Z), base goes to +Z
-        tip.rotation.x = -Math.PI / 2;
-        group.add(tip);
+        const position = this.toolMesh.position.clone();
+        this.scene.remove(this.toolMesh);
+        this.disposeTool(this.toolMesh);
+        this.toolMesh = toolMesh(kind, diameter, tipAngle);
+        this.toolMesh.position.copy(position);
+        this.scene.add(this.toolMesh);
+        this.renderFrame();
+    }
 
-        // Cylinder body - SILVER/GRAY (above the tip)
-        const bodyGeom = new THREE.CylinderGeometry(radius, radius, bodyHeight, 32);
-        const bodyMat = new THREE.MeshPhongMaterial({ color: 0xaaaaaa, shininess: 80 });
-        const body = new THREE.Mesh(bodyGeom, bodyMat);
-        body.rotation.x = -Math.PI / 2;
-        body.position.z = tipHeight + bodyHeight / 2;
-        group.add(body);
-
-        // Holder cylinder - DARK
-        const holderGeom = new THREE.CylinderGeometry(radius * 1.5, radius * 1.5, holderHeight, 32);
-        const holderMat = new THREE.MeshPhongMaterial({ color: 0x333333 });
-        const holder = new THREE.Mesh(holderGeom, holderMat);
-        holder.rotation.x = -Math.PI / 2;
-        holder.position.z = tipHeight + bodyHeight + holderHeight / 2;
-        group.add(holder);
-
-        return group;
+    /** Give back the geometry and the materials of a tool mesh */
+    disposeTool(group) {
+        group.traverse((object) => {
+            object.geometry?.dispose();
+            object.material?.dispose();
+        });
     }
 
     /**
@@ -1010,6 +1003,7 @@ export class PLCSimulator3D {
 
         this.clearTrail();
         this.clearStock();
+        if (this.toolMesh) this.disposeTool(this.toolMesh);
 
         // Dispose LineMaterials
         this.rapidMaterial?.dispose();

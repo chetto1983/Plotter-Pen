@@ -326,8 +326,8 @@ func TestInitDB_CreatesCAMOperationWithDefaults(t *testing.T) {
 		t.Fatalf("load: %v", err)
 	}
 	want := CAMOperation{ID: 1, Operation: "pen", Thickness: 1.6, Overcut: 0.2,
-		ToolDiameter: 2, Side: "outside", Direction: "conventional", ProfileThrough: true, ProfileDepth: 1,
-		DrillDiameter: 1, MinHoleDiameter: 0.4, MaxHoleDiameter: 1.2, PeckDepth: 0, TipAngle: 118, TipThrough: false,
+		ToolDiameter: 2, ToolType: "endmill", Side: "outside", Direction: "conventional", ProfileThrough: true, ProfileDepth: 1,
+		DrillDiameter: 1, DrillType: "drill", MinHoleDiameter: 0.4, MaxHoleDiameter: 1.2, PeckDepth: 0, TipAngle: 118, TipThrough: false,
 		DrillThrough: true, DrillDepth: 1}
 	got.UpdatedAt = want.UpdatedAt
 	if got != want {
@@ -382,8 +382,8 @@ func TestInitDB_ExistingCAMOperationGetsThePieceDefaults(t *testing.T) {
 		t.Fatalf("load: %v", err)
 	}
 	want := CAMOperation{ID: 1, Operation: "drill", Thickness: 1.6, Overcut: 0.2,
-		ToolDiameter: 3, Side: "inside", Direction: "climb", ProfileThrough: true, ProfileDepth: 1,
-		DrillDiameter: 0.8, MinHoleDiameter: 0.5, MaxHoleDiameter: 0.9, PeckDepth: 0.4, TipAngle: 130, TipThrough: true,
+		ToolDiameter: 3, ToolType: "endmill", Side: "inside", Direction: "climb", ProfileThrough: true, ProfileDepth: 1,
+		DrillDiameter: 0.8, DrillType: "drill", MinHoleDiameter: 0.5, MaxHoleDiameter: 0.9, PeckDepth: 0.4, TipAngle: 130, TipThrough: true,
 		DrillThrough: true, DrillDepth: 1}
 	got.UpdatedAt = want.UpdatedAt
 	if got != want {

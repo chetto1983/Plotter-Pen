@@ -49,8 +49,9 @@ func TestCAMOperation_SavesAndLoads(t *testing.T) {
 	}
 
 	got := loadCAMOperation(t, r)
+	// the body carries no kind of tool, so the defaults stand: they are drawn, never cut with
 	want := persistence.CAMOperation{ID: 1, Operation: "drill", Thickness: 18, Overcut: 0.5,
-		ToolDiameter: 3, Side: "inside", Direction: "climb", ProfileThrough: false, ProfileDepth: 4,
+		ToolDiameter: 3, ToolType: "endmill", DrillType: "drill", Side: "inside", Direction: "climb", ProfileThrough: false, ProfileDepth: 4,
 		DrillDiameter: 0.8, MinHoleDiameter: 0.5, MaxHoleDiameter: 0.9, PeckDepth: 0.6, TipAngle: 130, TipThrough: true,
 		DrillThrough: false, DrillDepth: 12}
 	got.UpdatedAt = want.UpdatedAt
@@ -86,6 +87,23 @@ func TestCAMOperation_SavesTheProfileOnTheLine(t *testing.T) {
 	}
 }
 
+// The kind of tool chosen in the library travels with its diameter, so the 3D view can draw it.
+func TestCAMOperation_SavesTheKindOfTool(t *testing.T) {
+	r, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	w := camOperationRequest(r, http.MethodPost, `{"operation": "profile", "thickness": 1.6, "overcut": 0.2,
+		"toolDiameter": 6, "toolType": "vbit", "side": "outside", "direction": "conventional", "profileThrough": true, "profileDepth": 1,
+		"drillDiameter": 2, "drillType": "ballnose", "minHoleDiameter": 0.4, "maxHoleDiameter": 1.2, "peckDepth": 0, "tipAngle": 118,
+		"tipThrough": false, "drillThrough": true, "drillDepth": 1}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("save: status %d, body %s", w.Code, w.Body.String())
+	}
+	if got := loadCAMOperation(t, r); got.ToolType != "vbit" || got.DrillType != "ballnose" {
+		t.Fatalf("loaded tool %q and drill %q, want %q and %q", got.ToolType, got.DrillType, "vbit", "ballnose")
+	}
+}
+
 // Numbers are checked when the program is generated, where the error shows in the PLC output; a
 // choice outside the known ones is refused and nothing is saved.
 func TestCAMOperation_RejectsUnknownChoices(t *testing.T) {
@@ -96,7 +114,10 @@ func TestCAMOperation_RejectsUnknownChoices(t *testing.T) {
 		"drillDiameter": 1, "minHoleDiameter": 0.4, "maxHoleDiameter": 1.2, "peckDepth": 0, "tipAngle": 118, "tipThrough": false,
 		"drillThrough": true, "drillDepth": 1}
 
-	for field, value := range map[string]string{"operation": "pocket", "side": "left", "direction": "down"} {
+	valid["toolType"] = "endmill"
+	valid["drillType"] = "drill"
+	for field, value := range map[string]string{"operation": "pocket", "side": "left", "direction": "down",
+		"toolType": "laser", "drillType": "saw"} {
 		body := maps.Clone(valid)
 		body[field] = value
 		raw, _ := json.Marshal(body)

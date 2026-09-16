@@ -13,6 +13,9 @@ import (
 // camOperations are the operations whose program the PLC output can show.
 var camOperations = []string{"pen", "profile", "drill"}
 
+// toolKinds are the kinds of tool the library holds, as the 3D view draws them.
+var toolKinds = []string{"pen", "endmill", "ballnose", "vbit", "drill"}
+
 // GetCAMOperation handles GET /api/cam/operation: the operation shown in the PLC output and the
 // parameters of the profile and of the drilling.
 func (h *PersistenceHandler) GetCAMOperation(c *gin.Context) {
@@ -40,6 +43,20 @@ func (h *PersistenceHandler) SaveCAMOperation(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("side must be %q, %q or %q", cam.SideOutside, cam.SideInside, cam.SideOn)})
 		return
 	}
+	// The kind of tool is only drawn, never cut with: a body that does not carry it keeps the
+	// default rather than being refused. A kind nobody knows is still a mistake.
+	if req.ToolType == "" {
+		req.ToolType = "endmill"
+	}
+	if req.DrillType == "" {
+		req.DrillType = "drill"
+	}
+	for name, kind := range map[string]string{"toolType": req.ToolType, "drillType": req.DrillType} {
+		if !slices.Contains(toolKinds, kind) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("%s must be one of %q", name, toolKinds)})
+			return
+		}
+	}
 	if req.Direction != cam.CuttingConventional && req.Direction != cam.CuttingClimb {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("direction must be %q or %q", cam.CuttingConventional, cam.CuttingClimb)})
 		return
@@ -51,11 +68,13 @@ func (h *PersistenceHandler) SaveCAMOperation(c *gin.Context) {
 		"thickness":         req.Thickness,
 		"overcut":           req.Overcut,
 		"tool_diameter":     req.ToolDiameter,
+		"tool_type":         req.ToolType,
 		"side":              req.Side,
 		"direction":         req.Direction,
 		"profile_through":   req.ProfileThrough,
 		"profile_depth":     req.ProfileDepth,
 		"drill_diameter":    req.DrillDiameter,
+		"drill_type":        req.DrillType,
 		"min_hole_diameter": req.MinHoleDiameter,
 		"max_hole_diameter": req.MaxHoleDiameter,
 		"peck_depth":        req.PeckDepth,

@@ -61,16 +61,20 @@ type PLCSimulationSettings struct {
 // drilling. Each cuts through the piece, Overcut into the bed, or goes its depth below the top of
 // the piece. The PLC never receives the diameters, so they live apart from PLCSimulationSettings.
 type CAMOperation struct {
-	ID              int64     `gorm:"primaryKey;check:id = 1" json:"id"`
-	Operation       string    `gorm:"default:'pen'" json:"operation"`
-	Thickness       float64   `gorm:"default:1.6" json:"thickness"`
-	Overcut         float64   `gorm:"default:0.2" json:"overcut"`
-	ToolDiameter    float64   `gorm:"default:2" json:"toolDiameter"`
+	ID           int64   `gorm:"primaryKey;check:id = 1" json:"id"`
+	Operation    string  `gorm:"default:'pen'" json:"operation"`
+	Thickness    float64 `gorm:"default:1.6" json:"thickness"`
+	Overcut      float64 `gorm:"default:0.2" json:"overcut"`
+	ToolDiameter float64 `gorm:"default:2" json:"toolDiameter"`
+	// ToolType and DrillType are the kind of tool chosen in the library, so the 3D view can draw
+	// the tool that is cutting; the program does not depend on them.
+	ToolType        string    `gorm:"default:'endmill'" json:"toolType"`
 	Side            string    `gorm:"default:'outside'" json:"side"`
 	Direction       string    `gorm:"default:'conventional'" json:"direction"`
 	ProfileThrough  bool      `gorm:"default:true" json:"profileThrough"`
 	ProfileDepth    float64   `gorm:"default:1" json:"profileDepth"`
 	DrillDiameter   float64   `gorm:"default:1" json:"drillDiameter"`
+	DrillType       string    `gorm:"default:'drill'" json:"drillType"`
 	MinHoleDiameter float64   `gorm:"default:0.4" json:"minHoleDiameter"`
 	MaxHoleDiameter float64   `gorm:"default:1.2" json:"maxHoleDiameter"`
 	PeckDepth       float64   `gorm:"default:0" json:"peckDepth"`
@@ -236,11 +240,13 @@ func initSingletons(db *gorm.DB) {
 			Thickness:       1.6,
 			Overcut:         0.2,
 			ToolDiameter:    2,
+			ToolType:        "endmill",
 			Side:            "outside",
 			Direction:       "conventional",
 			ProfileThrough:  true,
 			ProfileDepth:    1,
 			DrillDiameter:   1,
+			DrillType:       "drill",
 			MinHoleDiameter: 0.4,
 			MaxHoleDiameter: 1.2,
 			TipAngle:        118,

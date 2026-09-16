@@ -442,6 +442,17 @@ export class PLCOutputManager {
    * this.operation.operation is the state of the CAM panel, which holds the operation and the
    * thickness.
    */
+  /**
+   * Draw the tool the active operation cuts with: the kind chosen in the library and its
+   * diameter, or the pen, which has neither
+   */
+  updateTool() {
+    const op = this.operation.operation;
+    if (op.operation === 'pen') this.simulator3D?.setTool('pen', 2);
+    else if (op.operation === 'drill') this.simulator3D?.setTool(op.drillType, op.drillDiameter, op.tipAngle);
+    else this.simulator3D?.setTool(op.toolType, op.toolDiameter);
+  }
+
   updateStock(primitives) {
     this.simulator3D?.setStock(stockOf(primitives, this.operation.operation, getPLCSettingsFromUI().workZ));
   }
@@ -451,6 +462,7 @@ export class PLCOutputManager {
    */
   update3DSimulation() {
     this.updateStock(camArea(this.app).primitives);
+    this.updateTool();
     if (!this.animator3D || !this.app.plcOutput || this.app.plcOutput.length === 0) return;
 
     // Draw CAD primitives on 3D work surface
@@ -502,6 +514,7 @@ export class PLCOutputManager {
     if (this.app.primitives.length === 0) {
       this.operation.showArea({ total: 0 });
       this.updateStock([]);
+      this.updateTool();
       this.app.ui.updateStatus("Nessuna primitiva da estrarre");
       return;
     }
@@ -509,6 +522,7 @@ export class PLCOutputManager {
     const area = camArea(this.app);
     this.operation.showArea({ scope: area.scope, count: area.primitives.length, total: area.total });
     this.updateStock(area.primitives);
+    this.updateTool();
     if (area.primitives.length === 0) {
       // Everything is hidden, or nothing selected can be cut: no stale program may stay around
       this.clearOutput("Nessun comando: niente da lavorare nell'area");

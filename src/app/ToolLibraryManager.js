@@ -176,7 +176,9 @@ export class ToolLibraryManager {
       this.showListMessage('Pannello CAM non pronto.');
       return;
     }
-    operation.change({ [this.target]: tool.diameter });
+    // the kind travels with the diameter, so the 3D view draws the tool that is cutting
+    const kind = this.target === 'drillDiameter' ? 'drillType' : 'toolType';
+    operation.change({ [this.target]: tool.diameter, [kind]: tool.type });
     this.close();
   }
 
