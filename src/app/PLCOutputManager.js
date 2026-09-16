@@ -437,16 +437,6 @@ export class PLCOutputManager {
   }
 
   /**
-   * Show the piece the given work area is cut out of. It follows the drawing and the operation,
-   * not the program: a request the server refuses leaves the piece where it is.
-   * this.operation.operation is the state of the CAM panel, which holds the operation and the
-   * thickness.
-   */
-  /**
-   * Draw the tool the active operation cuts with: the kind chosen in the library and its
-   * diameter, or the pen, which has neither
-   */
-  /**
    * Mark in the drawing the details the tool cannot reach, by the primitives the server names
    */
   markUnreached(unreached) {
@@ -458,6 +448,10 @@ export class PLCOutputManager {
     this.app.render();
   }
 
+  /**
+   * Draw the tool the active operation cuts with: the kind chosen in the library and its
+   * diameter, or the pen, which has neither
+   */
   updateTool() {
     const op = this.operation.operation;
     if (op.operation === 'pen') this.simulator3D?.setTool('pen', 2);
@@ -465,6 +459,12 @@ export class PLCOutputManager {
     else this.simulator3D?.setTool(op.toolType, op.toolDiameter);
   }
 
+  /**
+   * Show the piece the given work area is cut out of. It follows the drawing and the operation,
+   * not the program: a request the server refuses leaves the piece where it is.
+   * this.operation.operation is the active step of the job, which holds the operation and the
+   * thickness.
+   */
   updateStock(primitives) {
     this.simulator3D?.setStock(stockOf(primitives, this.operation.operation, getPLCSettingsFromUI().workZ));
   }
@@ -473,7 +473,7 @@ export class PLCOutputManager {
    * Update 3D simulation with current PLC output
    */
   update3DSimulation() {
-    this.updateStock(camArea(this.app).primitives);
+    this.updateStock(this.workArea().primitives);
     this.updateTool();
     if (!this.animator3D || !this.app.plcOutput || this.app.plcOutput.length === 0) return;
 
@@ -482,9 +482,14 @@ export class PLCOutputManager {
       this.simulator3D.drawPrimitivesOnSurface(this.app.primitives);
     }
 
-    this.updateStock(camArea(this.app).primitives);
+    this.updateStock(this.workArea().primitives);
 
     this.animator3D.load(this.app.plcOutput);
+  }
+
+  // What the active step of the job works on
+  workArea() {
+    return camArea(this.app, this.operation.operation.layer);
   }
 
   refreshPLCOutput() {
@@ -531,12 +536,13 @@ export class PLCOutputManager {
       return;
     }
 
-    const area = camArea(this.app);
-    this.operation.showArea({ scope: area.scope, count: area.primitives.length, total: area.total });
+    const area = this.workArea();
+    this.operation.showArea({ scope: area.scope, count: area.primitives.length, total: area.total, layer: area.layer });
     this.updateStock(area.primitives);
     this.updateTool();
     if (area.primitives.length === 0) {
-      // Everything is hidden, or nothing selected can be cut: no stale program may stay around
+      // Everything is hidden, the layer of the step is hidden or gone, or nothing selected can be
+      // cut: no stale program may stay around
       this.clearOutput("Nessun comando: niente da lavorare nell'area");
       this.markUnreached(null);
       this.operation.showReport();

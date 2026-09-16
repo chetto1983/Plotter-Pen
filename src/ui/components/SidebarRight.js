@@ -30,8 +30,42 @@ export class SidebarRight {
            </div>
         </div>
         <div class="cad-panel-body-collapsible" id="plcPanelBody">
-          <!-- Operation whose program the output shows (CAMOperationManager) -->
+          <!-- The job and the operation of its active step (JobManager, CAMOperationManager) -->
           <div class="cam-op" id="camOperation">
+            <div class="cam-job" id="camJob">
+              <div class="cam-job-bar">
+                <span class="cam-job-title">Lavoro</span>
+                <div class="cam-job-actions">
+                  <div class="cam-job-add">
+                    <button type="button" class="cam-job-btn" id="camJobAdd" title="Aggiungi passo" aria-haspopup="menu" aria-expanded="false">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    </button>
+                    <div class="cam-job-menu" id="camJobMenu" role="menu" hidden>
+                      <button type="button" role="menuitem" data-operation="drill">Foratura</button>
+                      <button type="button" role="menuitem" data-operation="profile">Profilo</button>
+                      <button type="button" role="menuitem" data-operation="pen">Penna</button>
+                    </div>
+                  </div>
+                  <button type="button" class="cam-job-btn" id="camJobDuplicate" title="Duplica passo">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                  </button>
+                  <button type="button" class="cam-job-btn" id="camJobUp" title="Sposta su">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>
+                  </button>
+                  <button type="button" class="cam-job-btn" id="camJobDown" title="Sposta giù">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                  </button>
+                  <button type="button" class="cam-job-btn cam-job-remove" id="camJobRemove" title="Elimina passo">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                </div>
+              </div>
+              <!-- One row per step, in cutting order; the active one is edited below -->
+              <ol class="cam-job-steps" id="camJobSteps" aria-label="Passi del lavoro"></ol>
+            </div>
+            <label class="cam-op-field cam-op-layer">Livello
+              <select id="camStepLayer"></select>
+            </label>
             <div class="cam-op-bar">
               <div class="cam-op-tabs" role="radiogroup" aria-label="Operazione">
                 <button type="button" class="cam-op-tab" role="radio" data-operation="pen">Penna</button>

@@ -1,12 +1,13 @@
 /**
  * CAM Operation Manager
  * The operation whose program the PLC output shows (pen plot, profile or drilling), the piece the
- * profile and the drilling cut and their parameters, kept in the database (/api/cam/operation)
- * like the PLC settings.
+ * profile and the drilling cut and their parameters. They are those of the active step of the job
+ * (JobManager), which keeps them in the database (/api/cam/job).
  */
+import { JobManager } from './JobManager.js';
 import { loadTools, speedsFor } from './toolCatalog.js';
 
-// Same defaults as the CAMOperation columns
+// Same defaults as the CAMParams columns
 const OPERATION_DEFAULTS = {
   operation: 'pen',
   thickness: 1.6,
@@ -49,15 +50,32 @@ const PARAMS_COLLAPSED_KEY = 'camParamsCollapsed';
 export class CAMOperationManager {
   constructor(app) {
     this.app = app;
-    this.operation = { ...OPERATION_DEFAULTS };
+    this.job = new JobManager(app, {
+      defaults: OPERATION_DEFAULTS,
+      labels: LABELS,
+      onChange: () => {
+        this.render();
+        this.app.plcOutputManager.refreshPLCOutput();
+      }
+    });
     this.paramsCollapsed = localStorage.getItem(PARAMS_COLLAPSED_KEY) === 'true';
-    this._saveTimeout = null;
   }
 
   /**
-   * Wire the operation tabs and parameter inputs, then load the saved operation
+   * The parameters the panel shows and edits: those of the active step, its layer included
+   */
+  get operation() {
+    return this.job.step;
+  }
+
+  /**
+   * Wire the job, the operation tabs and the parameter inputs, then load the saved job
    */
   async init() {
+    this.job.init();
+    document.getElementById('camStepLayer')?.addEventListener('change', (e) => this.change({ layer: e.target.value }));
+    // the choice of layer and the rows of the steps name the layers
+    document.addEventListener('layersChanged', () => this.job.render());
     document.querySelectorAll('.cam-op-tab').forEach((tab) => {
       tab.addEventListener('click', () => this.change({ operation: tab.dataset.operation }));
     });
@@ -97,50 +115,25 @@ export class CAMOperationManager {
   }
 
   async load() {
-    try {
-      const response = await fetch('/api/cam/operation');
-      if (!response.ok) return;
-      const result = await response.json();
-      if (!result.data) return;
-      for (const key of Object.keys(OPERATION_DEFAULTS)) {
-        if (result.data[key] != null) this.operation[key] = result.data[key];
-      }
-      this.render();
-      // The saved drawing may have been restored and extracted before the operation arrived
-      if (this.app.primitives.length > 0) {
-        this.app.plcOutputManager.extractPLC();
-      }
-    } catch {
-      // Silent fail - the output stays on the pen
+    await this.job.load();
+    this.render();
+    // The saved drawing may have been restored and extracted before the job arrived
+    if (this.app.primitives.length > 0) {
+      this.app.plcOutputManager.extractPLC();
     }
   }
 
   /**
-   * Apply a change from the panel: show it, regenerate the output and save it
+   * Apply a change from the panel to the active step: show it, regenerate the output, save the job
    */
   change(values) {
-    this.operation = { ...this.operation, ...values };
+    this.job.update(values);
     this.render();
     this.app.plcOutputManager.refreshPLCOutput();
-
-    if (this._saveTimeout) clearTimeout(this._saveTimeout);
-    this._saveTimeout = setTimeout(() => this.save(), 300);
-  }
-
-  async save() {
-    try {
-      const response = await fetch('/api/cam/operation', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(this.operation)
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    } catch (err) {
-      this.app.ui.updateStatus(`Errore salvataggio operazione: ${err.message}`);
-    }
   }
 
   render() {
+    this.job.render();
     const op = this.operation;
     document.querySelectorAll('.cam-op-tab').forEach((tab) => {
       const active = tab.dataset.operation === op.operation;
@@ -263,14 +256,6 @@ export class CAMOperationManager {
   }
 
   /**
-   * Show what the generation reported above the commands: nothing, an error, or the warnings of the
-   * profile (contours the tool cannot reach) or of the drilling (hole-sized contours that are not round)
-   * @param {{error?: string, warnings?: string[]}} report
-   */
-  /**
-   * Say what the operation works on: the selection, or what the visible layers hold
-   */
-  /**
    * What is not cut and what tool would cut it: the narrowest detail decides, since a tool that
    * fits it fits the others too
    */
@@ -283,7 +268,11 @@ export class CAMOperationManager {
     return `${label}: serve Ø ${String(narrowest).replace('.', ',')} mm o meno`;
   }
 
-  showArea({ scope, count, total } = {}) {
+  /**
+   * Say what the operation works on: the layer of the step, the selection, or what the visible
+   * layers hold
+   */
+  showArea({ scope, count, total, layer } = {}) {
     const box = document.getElementById('camOperationArea');
     if (!box) return;
     box.className = 'cam-op-area';
@@ -291,7 +280,11 @@ export class CAMOperationManager {
       box.hidden = true;
       return;
     }
-    if (scope === 'selection') {
+    if (scope === 'layer') {
+      const state = layer.missing ? 'non è nel disegno' : layer.hidden ? 'nascosto, niente da tagliare' : `${count} primitive`;
+      box.classList.toggle('empty', layer.missing || layer.hidden);
+      box.textContent = `Area: livello ${layer.name} — ${state}`;
+    } else if (scope === 'selection') {
       box.classList.add('selection');
       box.textContent = `Area: selezione — ${count} di ${total} primitive`;
     } else if (count < total) {
@@ -302,6 +295,11 @@ export class CAMOperationManager {
     box.hidden = false;
   }
 
+  /**
+   * Show what the generation reported above the commands: nothing, an error, or the warnings of the
+   * profile (contours the tool cannot reach) or of the drilling (hole-sized contours that are not round)
+   * @param {{error?: string, warnings?: string[], unreached?: object[]}} report
+   */
   showReport({ error, warnings, unreached } = {}) {
     const box = document.getElementById('camOperationMessage');
     if (!box) return;

@@ -12,6 +12,181 @@
     background: rgba(15, 21, 33, 0.7);
 }
 
+/* The job: its steps in cutting order, and the buttons that change the list */
+.cam-job {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.cam-job-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+}
+
+.cam-job-title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.cam-job-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.cam-job-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 32px;
+    padding: 0;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--muted);
+    cursor: pointer;
+}
+
+.cam-job-btn:hover:not(:disabled) {
+    background: var(--bg-hover);
+    color: var(--fg);
+}
+
+.cam-job-remove:hover:not(:disabled) {
+    border-color: rgba(244, 67, 54, 0.5);
+    color: #ffb4ab;
+}
+
+.cam-job-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.cam-job-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+.cam-job-add {
+    position: relative;
+}
+
+.cam-job-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    min-width: 120px;
+    padding: 4px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.cam-job-menu[hidden] {
+    display: none;
+}
+
+.cam-job-menu button {
+    min-height: 34px;
+    padding: 6px 10px;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: var(--fg);
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.cam-job-menu button:hover {
+    background: var(--bg-hover);
+}
+
+/* A few steps show at once; a long job scrolls, and the commands keep their room */
+.cam-job-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 124px;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    list-style: none;
+}
+
+.cam-job-step {
+    display: grid;
+    grid-template-columns: 18px 64px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    min-height: 32px;
+    padding: 4px 8px;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: var(--muted);
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.cam-job-step:hover {
+    background: var(--bg-hover);
+    color: var(--fg);
+}
+
+.cam-job-step.active {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+    color: var(--fg);
+}
+
+.cam-job-num {
+    font-weight: 600;
+    color: var(--accent);
+}
+
+.cam-job-op {
+    font-weight: 600;
+}
+
+.cam-job-layer {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cam-job-step.missing .cam-job-layer {
+    color: #ffd08a;
+}
+
+.cam-job-tool {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px;
+}
+
+/* the layer of the active step, over the whole width: beside its label, unlike the fields below */
+.cam-op-field.cam-op-layer {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+}
+
+.cam-op-field.cam-op-layer select {
+    flex: 1;
+}
+
 /* the tabs, and the toggle that collapses the parameters */
 .cam-op-bar {
     display: flex;
@@ -124,6 +299,11 @@
 
 .cam-op-area.selection {
     color: var(--accent);
+}
+
+/* the layer of the step is hidden or gone: nothing is cut */
+.cam-op-area.empty {
+    color: #ffd08a;
 }
 
 .cam-op-params[hidden],
