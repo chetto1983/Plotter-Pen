@@ -68,7 +68,7 @@ A node is written either as a node ID (`ns=4;i=12`) or as the path of browse nam
 | `HOST` | Bind address | all interfaces |
 | `DB_PATH` | SQLite database path | plotter_pen.db |
 | `STATIC_DIR` | Folder containing `plotter_pen.html`, `dist/` and `src/` | . |
-| `OPEN_BROWSER` | Open the browser at startup | true |
+| `OPEN_BROWSER` | Open the browser at startup | true (false in the Docker image) |
 | `GIN_MODE` | Gin mode (debug/release) | release |
 | `MAX_PORT_TRIES` | Ports tried when `PORT` is busy | 10 |
 | `BROWSER_DELAY_MS` | Delay before opening the browser | 500 |

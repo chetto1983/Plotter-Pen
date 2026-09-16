@@ -198,6 +198,27 @@ step, whose program and 3D view are the ones shown.
   - the checks of the earlier pieces, pointed at the job where they read the operation.
   - `npm run lint` and `npm run build` with no warnings.
 
+### After piece 3: three issues found on the way (2026-09-16)
+
+- **Layer names are unique.** `createLayer` took a name already in use, so two layers could not be
+  told apart in the layer panel nor in the layer choice of a step. `LayerManager.uniqueName()` now
+  gives a taken name the first free suffix — "FORI (2)", "FORI (3)" — counting a suffix the name
+  already has, so renaming to "FORI (2)" when it is taken gives "FORI (3)", not "FORI (2) (2)". It
+  applies when a layer is created, renamed, adopted from a DXF (its id stays the DXF name, so its
+  primitives stay on it) and loaded from a session that already had a name twice (the later layer
+  is renamed). A layer created without a name, and the name the layer panel offers, take the first
+  free "Layer N" (`nextLayerName()`), no longer the number of layers, which repeated after a
+  deletion. Checked in headless Chrome, 11 checks: before the change 4 failed and the script
+  stopped at the fifth, which needs the new method.
+- **The async restore is gone.** `StateManager.restoreStateAsync`, `restoreStateFromData` and
+  `deserializePrimitivesAsync` had no caller, and the workers `jsonParseWorker.js` and
+  `deserializeWorker.js` were used only by them or by nothing. The session loads through
+  `PersistenceManager.loadState` and `stateLoaderWorker.js`, which stay. The build now carries one
+  worker; the checks that reload the session still pass.
+- **The container no longer tries to open a browser**: `OPEN_BROWSER=false` in the image
+  (`Dockerfile`), so it holds however the image is started, and in both Compose files for anyone
+  reading them. Its log no longer has `Failed to open browser`.
+
 ## CAM plan
 
 One piece at a time: a short design approved first, then TDD, then a check on the tree-of-life DXF.
@@ -819,7 +840,7 @@ on the drawing said which piece of it was left out.
 
 ```bash
 env -u OPCUA_INTEGRATION go test ./...      # all tests; never set OPCUA_INTEGRATION
-make quality                                 # red today because of legacy lint (see below)
+make quality                                 # vet, golangci-lint, deadcode, tests, govulncheck, eslint
 golangci-lint run --new-from-rev=HEAD ./...  # what the pre-commit hook enforces
 
 # Race detector: no 64-bit cgo toolchain on this Windows host, so run it in Docker
@@ -834,16 +855,9 @@ Hooks: pre-commit runs gofmt, vet, golangci-lint on the whole packages the commi
 
 ## Known issues, not fixed
 
-- **Two layers with the same name** cannot be told apart in the layer choice of a step, nor in the
-  layer panel: `createLayer` accepts a name already taken. A step keeps the id, so it cuts the
-  right one; only the choice is ambiguous.
-- **`StateManager.restoreStateAsync`** and its worker path have no caller; the session loads
-  through `PersistenceManager.loadState`. Left as it was.
-- **The container tries to open a browser** at every start (`Failed to open browser: exec:
-  "xdg-open"` in its log): Compose does not set `OPEN_BROWSER=false`. Harmless.
-
 - **Dependency advisory:** `govulncheck` reports GO-2026-5932 on `golang.org/x/crypto`, whose `openpgp` package is unmaintained. Nothing here imports it (0 vulnerabilities reachable or imported); the module arrives as an indirect requirement of Gin through `validator/v10` and `x/crypto/sha3`, and the advisory has no fixed version. It stays until Gin stops requiring it.
 - **Interface export:** `docs/interface.xml` is the export of the current PLC program, kept as a reference only: the app reads the names from the machine at every connection, because the program can change.
+
 ## Working rules to keep
 
 - Never send to the real PLC, and never run real-PLC/integration tests, without explicit authorisation. Use the simulator.
