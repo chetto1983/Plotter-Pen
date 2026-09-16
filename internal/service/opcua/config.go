@@ -31,7 +31,7 @@ type Config struct {
 	AlarmNode    string `json:"alarmNode"`
 	ProgressNode string `json:"progressNode"`
 
-	// Chunked transfer nodes (Db_Punti interface)
+	// Chunked transfer nodes (Com interface)
 	PointArrayNode   string `json:"pointArrayNode"`
 	TriggerWriteNode string `json:"triggerWriteNode"`
 	ReadDoneNode     string `json:"readDoneNode"`
@@ -319,23 +319,24 @@ func (cm *ConfigManager) Merge(override *Config) Config {
 	return base
 }
 
-// defaultConfig returns default OPC UA configuration
-// NodeIDs from OPC Ua Interface.xml: TriggerWrite=12, ReadDone=23, EOF=34, PointArr=93
+// defaultConfig returns default OPC UA configuration.
+// The nodes are addressed by the names of the PLC variables, read from the machine itself:
+// the numbers behind them change with the PLC program, the names do not.
 func defaultConfig() Config {
 	return Config{
 		Endpoint:             "opc.tcp://192.168.0.1:4840",
 		NamespaceID:          4,
-		TriggerNode:          "ns=4;i=12",
-		ResetNode:            "ns=4;i=12",
-		DataNode:             "ns=4;i=93",
+		TriggerNode:          commPath + "TriggerWrite",
+		ResetNode:            commPath + "TriggerWrite",
+		DataNode:             commPath + "Point",
 		DataType:             "string_array",
-		PositionXNode:        "ns=4;i=80",
-		PositionYNode:        "ns=4;i=81",
-		PositionZNode:        "ns=4;i=82",
-		PointArrayNode:       "ns=4;i=93",
-		TriggerWriteNode:     "ns=4;i=12",
-		ReadDoneNode:         "ns=4;i=23",
-		EndOfFileNode:        "ns=4;i=34",
+		PositionXNode:        commPath + "Pos/X",
+		PositionYNode:        commPath + "Pos/Y",
+		PositionZNode:        commPath + "Pos/Z",
+		PointArrayNode:       commPath + "Point",
+		TriggerWriteNode:     commPath + "TriggerWrite",
+		ReadDoneNode:         commPath + "ReadDone",
+		EndOfFileNode:        commPath + "EndOfFile",
 		ChunkSize:            20,
 		AckTimeout:           5000,
 		PollInterval:         100,
@@ -345,9 +346,10 @@ func defaultConfig() Config {
 	}
 }
 
-// dbConfigToConfig converts database model to Config
+// dbConfigToConfig converts database model to Config, with the nodes the app shipped with
+// written as the names of the PLC variables.
 func dbConfigToConfig(db persistence.OPCUAConfig) Config {
-	return Config{
+	return namedNodes(Config{
 		ID:                   db.ID,
 		Name:                 db.Name,
 		IsActive:             db.IsActive,
@@ -378,7 +380,7 @@ func dbConfigToConfig(db persistence.OPCUAConfig) Config {
 		ServerCertFile:       db.ServerCertFile,
 		Username:             db.Username,
 		Password:             db.Password,
-	}
+	})
 }
 
 // configToDBConfig converts Config to database model

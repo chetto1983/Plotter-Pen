@@ -338,24 +338,25 @@ func seedOPCUAConfig(db *gorm.DB) {
 		return // Already has configs
 	}
 
-	// Default config with correct namespace (ns=4) from OPC Ua Interface.xml
-	// XML NodeIDs: TriggerWrite=12, ReadDone=23, EOF=34, PointArr=93, Pos.X=80, Pos.Y=81, Pos.Z=82
+	// Default config with the nodes addressed by the names of the PLC variables, as read from
+	// the machine: the app resolves them on the server it is connected to, so the same
+	// configuration fits the PLC and the simulator whatever numbers they give their nodes.
 	defaultCfg := OPCUAConfig{
 		Name:                 "Siemens S7-1500 Default",
 		IsActive:             true,
 		Endpoint:             "opc.tcp://192.168.0.1:4840",
 		NamespaceID:          4,
-		TriggerNode:          "ns=4;i=12",
-		ResetNode:            "ns=4;i=12",
-		DataNode:             "ns=4;i=93",
+		TriggerNode:          "ServerInterfaces/Com/TriggerWrite",
+		ResetNode:            "ServerInterfaces/Com/TriggerWrite",
+		DataNode:             "ServerInterfaces/Com/Point",
 		DataType:             "string_array",
-		PositionXNode:        "ns=4;i=80",
-		PositionYNode:        "ns=4;i=81",
-		PositionZNode:        "ns=4;i=82",
-		PointArrayNode:       "ns=4;i=93",
-		TriggerWriteNode:     "ns=4;i=12",
-		ReadDoneNode:         "ns=4;i=23",
-		EndOfFileNode:        "ns=4;i=34",
+		PositionXNode:        "ServerInterfaces/Com/Pos/X",
+		PositionYNode:        "ServerInterfaces/Com/Pos/Y",
+		PositionZNode:        "ServerInterfaces/Com/Pos/Z",
+		PointArrayNode:       "ServerInterfaces/Com/Point",
+		TriggerWriteNode:     "ServerInterfaces/Com/TriggerWrite",
+		ReadDoneNode:         "ServerInterfaces/Com/ReadDone",
+		EndOfFileNode:        "ServerInterfaces/Com/EndOfFile",
 		ChunkSize:            20,
 		AckTimeout:           5000,
 		PollInterval:         100,

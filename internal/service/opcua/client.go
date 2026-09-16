@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gopcua/opcua"
+	"github.com/gopcua/opcua/id"
 	"github.com/gopcua/opcua/ua"
 )
 
@@ -29,6 +30,26 @@ type Client struct {
 	stopCh         chan struct{}
 	stopOnce       sync.Once // protects stopCh close
 	onStatusChange func(connected bool)
+	nodes          nodeCache // node IDs resolved from the configured names, per connection
+}
+
+// references browses the children of a node. It gives resolveNodeAddress its view of the
+// server and takes the read lock itself, so it must not be called while holding c.mu.
+func (c *Client) references(ctx context.Context, parent *ua.NodeID) ([]*ua.ReferenceDescription, error) {
+	c.mu.RLock()
+	client, connected := c.client, c.connected.Load()
+	c.mu.RUnlock()
+
+	if !connected || client == nil {
+		return nil, fmt.Errorf("not connected to OPC UA server")
+	}
+	return client.Node(parent).References(ctx, id.HierarchicalReferences, ua.BrowseDirectionForward, ua.NodeClassAll, true)
+}
+
+// nodeID turns a configured address, a node ID or a path of browse names, into a node ID of
+// this server. Call it before taking c.mu: resolving a path browses, which takes the lock.
+func (c *Client) nodeID(ctx context.Context, address string) (*ua.NodeID, error) {
+	return c.nodes.lookup(ctx, c, address)
 }
 
 // NewClient creates a new OPC UA client
@@ -83,6 +104,7 @@ func (c *Client) Connect(ctx context.Context) error {
 
 	c.client = client
 	c.connected.Store(true)
+	c.nodes.clear() // node IDs belong to the server we just left
 	c.stopCh = make(chan struct{})
 	c.stopOnce = sync.Once{}
 
@@ -224,6 +246,7 @@ func (c *Client) Disconnect(ctx context.Context) error {
 	err := c.client.Close(ctx)
 	c.client = nil
 	c.connected.Store(false)
+	c.nodes.clear()
 	return err
 }
 
@@ -269,16 +292,16 @@ func valueOnly(v *ua.Variant) *ua.DataValue {
 
 // WriteData writes data to the configured data node
 func (c *Client) WriteData(ctx context.Context, data any, cfg Config) error {
+	nodeID, err := c.nodeID(ctx, cfg.DataNode)
+	if err != nil {
+		return err
+	}
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if !c.connected.Load() || c.client == nil {
 		return fmt.Errorf("not connected to OPC UA server")
-	}
-
-	nodeID, err := ua.ParseNodeID(cfg.DataNode)
-	if err != nil {
-		return fmt.Errorf("invalid node ID: %w", err)
 	}
 
 	variant, err := c.buildVariant(data, cfg.DataType)
@@ -320,16 +343,16 @@ func (c *Client) WriteReset(ctx context.Context, value bool, cfg Config) error {
 
 // writeBoolNode writes a boolean to a node
 func (c *Client) writeBoolNode(ctx context.Context, nodeStr string, value bool, name string) error {
+	nodeID, err := c.nodeID(ctx, nodeStr)
+	if err != nil {
+		return fmt.Errorf("%s node: %w", name, err)
+	}
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if !c.connected.Load() || c.client == nil {
 		return fmt.Errorf("not connected to OPC UA server")
-	}
-
-	nodeID, err := ua.ParseNodeID(nodeStr)
-	if err != nil {
-		return fmt.Errorf("invalid %s node ID: %w", name, err)
 	}
 
 	req := &ua.WriteRequest{
@@ -447,16 +470,16 @@ func (c *Client) SendWithTrigger(ctx context.Context, data any, cfg Config) erro
 
 // ReadNode reads a value from a node
 func (c *Client) ReadNode(ctx context.Context, nodeIDStr string) (any, error) {
+	nodeID, err := c.nodeID(ctx, nodeIDStr)
+	if err != nil {
+		return nil, err
+	}
+
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
 	if !c.connected.Load() || c.client == nil {
 		return nil, fmt.Errorf("not connected to OPC UA server")
-	}
-
-	nodeID, err := ua.ParseNodeID(nodeIDStr)
-	if err != nil {
-		return nil, fmt.Errorf("invalid node ID: %w", err)
 	}
 
 	req := &ua.ReadRequest{
@@ -489,16 +512,16 @@ func (c *Client) WriteStringArray(ctx context.Context, nodeIDStr string, data []
 
 // writeStringValue preserves the scalar/array variant type and value-only encoding.
 func (c *Client) writeStringValue(ctx context.Context, nodeIDStr string, value any) error {
+	nodeID, err := c.nodeID(ctx, nodeIDStr)
+	if err != nil {
+		return err
+	}
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if !c.connected.Load() || c.client == nil {
 		return fmt.Errorf("not connected to OPC UA server")
-	}
-
-	nodeID, err := ua.ParseNodeID(nodeIDStr)
-	if err != nil {
-		return fmt.Errorf("invalid node ID: %w", err)
 	}
 
 	variant, err := ua.NewVariant(value)
@@ -530,16 +553,16 @@ func (c *Client) writeStringValue(ctx context.Context, nodeIDStr string, value a
 
 // WriteBoolNode writes a boolean value to a node
 func (c *Client) WriteBoolNode(ctx context.Context, nodeIDStr string, value bool) error {
+	nodeID, err := c.nodeID(ctx, nodeIDStr)
+	if err != nil {
+		return err
+	}
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if !c.connected.Load() || c.client == nil {
 		return fmt.Errorf("not connected to OPC UA server")
-	}
-
-	nodeID, err := ua.ParseNodeID(nodeIDStr)
-	if err != nil {
-		return fmt.Errorf("invalid node ID: %w", err)
 	}
 
 	req := &ua.WriteRequest{
@@ -566,16 +589,16 @@ func (c *Client) WriteBoolNode(ctx context.Context, nodeIDStr string, value bool
 
 // ReadBoolNode reads a boolean value from a node
 func (c *Client) ReadBoolNode(ctx context.Context, nodeIDStr string) (bool, error) {
+	nodeID, err := c.nodeID(ctx, nodeIDStr)
+	if err != nil {
+		return false, err
+	}
+
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
 	if !c.connected.Load() || c.client == nil {
 		return false, fmt.Errorf("not connected to OPC UA server")
-	}
-
-	nodeID, err := ua.ParseNodeID(nodeIDStr)
-	if err != nil {
-		return false, fmt.Errorf("invalid node ID: %w", err)
 	}
 
 	req := &ua.ReadRequest{
@@ -603,22 +626,23 @@ func (c *Client) ReadBoolNode(ctx context.Context, nodeIDStr string) (bool, erro
 // BrowseResult represents a browse result node
 type BrowseResult struct {
 	NodeID      string
+	BrowseName  string // the name a node address is written with
 	DisplayName string
 	NodeClass   string
 }
 
 // ReadNodeDataType reads the DataType attribute of a node
 func (c *Client) ReadNodeDataType(ctx context.Context, nodeIDStr string) (*ua.NodeID, error) {
+	nodeID, err := c.nodeID(ctx, nodeIDStr)
+	if err != nil {
+		return nil, err
+	}
+
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
 	if !c.connected.Load() || c.client == nil {
 		return nil, fmt.Errorf("not connected to OPC UA server")
-	}
-
-	nodeID, err := ua.ParseNodeID(nodeIDStr)
-	if err != nil {
-		return nil, fmt.Errorf("invalid node ID: %w", err)
 	}
 
 	req := &ua.ReadRequest{
@@ -656,16 +680,16 @@ func (c *Client) ReadNodeUserAccessLevel(ctx context.Context, nodeIDStr string) 
 
 // Retain checked uint8 decoding: gopcua Node.AccessLevel uses an unchecked assertion.
 func (c *Client) readAccessLevel(ctx context.Context, nodeIDStr string, attribute ua.AttributeID) (uint8, error) {
+	nodeID, err := c.nodeID(ctx, nodeIDStr)
+	if err != nil {
+		return 0, err
+	}
+
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
 	if !c.connected.Load() || c.client == nil {
 		return 0, fmt.Errorf("not connected to OPC UA server")
-	}
-
-	nodeID, err := ua.ParseNodeID(nodeIDStr)
-	if err != nil {
-		return 0, fmt.Errorf("invalid node ID: %w", err)
 	}
 
 	req := &ua.ReadRequest{
@@ -700,44 +724,32 @@ func (c *Client) BrowseNode(ctx context.Context, nodeIDStr string) ([]BrowseResu
 		return nil, fmt.Errorf("not connected to OPC UA server")
 	}
 
-	nodeID, err := ua.ParseNodeID(nodeIDStr)
+	nodeID, err := c.nodeID(ctx, nodeIDStr)
 	if err != nil {
-		return nil, fmt.Errorf("invalid node ID: %w", err)
+		return nil, err
 	}
 
-	req := &ua.BrowseRequest{
-		NodesToBrowse: []*ua.BrowseDescription{
-			{
-				NodeID:          nodeID,
-				BrowseDirection: ua.BrowseDirectionForward,
-				ReferenceTypeID: ua.NewNumericNodeID(0, 33), // HierarchicalReferences
-				IncludeSubtypes: true,
-				NodeClassMask:   0xFF, // All node classes
-				ResultMask:      uint32(ua.BrowseResultMaskAll),
-			},
-		},
-	}
-
-	resp, err := c.client.Browse(ctx, req)
+	refs, err := c.references(ctx, nodeID)
 	if err != nil {
 		return nil, fmt.Errorf("browse failed: %w", err)
 	}
 
-	if len(resp.Results) == 0 {
-		return nil, fmt.Errorf("no browse results")
-	}
-
-	if resp.Results[0].StatusCode != ua.StatusOK {
-		return nil, fmt.Errorf("browse status: %v", resp.Results[0].StatusCode)
-	}
-
 	var results []BrowseResult
-	for _, ref := range resp.Results[0].References {
-		results = append(results, BrowseResult{
-			NodeID:      ref.NodeID.NodeID.String(),
-			DisplayName: ref.DisplayName.Text,
-			NodeClass:   fmt.Sprintf("%d", ref.NodeClass),
-		})
+	for _, ref := range refs {
+		if ref == nil || ref.NodeID == nil || ref.NodeID.NodeID == nil {
+			continue
+		}
+		result := BrowseResult{
+			NodeID:    ref.NodeID.NodeID.String(),
+			NodeClass: fmt.Sprintf("%d", ref.NodeClass),
+		}
+		if ref.BrowseName != nil {
+			result.BrowseName = ref.BrowseName.Name
+		}
+		if ref.DisplayName != nil {
+			result.DisplayName = ref.DisplayName.Text
+		}
+		results = append(results, result)
 	}
 
 	return results, nil

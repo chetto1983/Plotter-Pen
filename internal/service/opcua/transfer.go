@@ -136,7 +136,7 @@ func (t *ChunkedTransfer) runTransfer(ctx context.Context, data []string) {
 		t.reportProgress(chunkIdx+1, totalChunks, len(data), false)
 	}
 
-	// Set End_Of_File = TRUE
+	// Set EndOfFile = TRUE
 	if err := t.client.WriteBoolNode(ctx, t.config.EndOfFileNode, true); err != nil {
 		t.reportError(fmt.Sprintf("failed to set EOF: %v", err), totalChunks, totalChunks, len(data))
 		return
@@ -157,7 +157,7 @@ func (t *ChunkedTransfer) sendChunk(ctx context.Context, data []string, chunkIdx
 	chunk := data[start:end]
 	paddedChunk := padToSize(chunk, t.config.ChunkSize)
 
-	// 1. Write chunk to PointArr
+	// 1. Write chunk to Point
 	if err := t.client.WriteStringArray(ctx, t.config.PointArrayNode, paddedChunk); err != nil {
 		return fmt.Errorf("failed to write chunk %d: %w", chunkIdx, err)
 	}

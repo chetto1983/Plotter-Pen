@@ -27,23 +27,24 @@ func setupValidationTestDB(t *testing.T) *gorm.DB {
 	}
 	db.AutoMigrate(&persistence.OPCUAConfig{})
 
-	// Insert config with correct NodeIDs from OPC Ua Interface.xml
-	// TriggerWrite=12, ReadDone=23, EOF=34, PointArr=93, Pos.X=80, Y=81, Z=82
+	// Insert config with the variables addressed by name, as the app does out of the box.
+	// Read from the PLC on 2026-09-16: Objects/ServerInterfaces/Com, the numbers behind the
+	// names being Point=12, TriggerWrite=43, ReadDone=54, EndOfFile=65, Pos.X/Y/Z=79/80/81.
 	cfg := persistence.OPCUAConfig{
 		Name:             "Test PLC",
 		IsActive:         true,
 		Endpoint:         "opc.tcp://192.168.0.1:4840",
 		NamespaceID:      4,
-		DataNode:         "ns=4;i=93",
-		TriggerNode:      "ns=4;i=12",
-		ResetNode:        "ns=4;i=12",
-		PointArrayNode:   "ns=4;i=93",
-		TriggerWriteNode: "ns=4;i=12",
-		ReadDoneNode:     "ns=4;i=23",
-		EndOfFileNode:    "ns=4;i=34",
-		PositionXNode:    "ns=4;i=80",
-		PositionYNode:    "ns=4;i=81",
-		PositionZNode:    "ns=4;i=82",
+		DataNode:         "ServerInterfaces/Com/Point",
+		TriggerNode:      "ServerInterfaces/Com/TriggerWrite",
+		ResetNode:        "ServerInterfaces/Com/TriggerWrite",
+		PointArrayNode:   "ServerInterfaces/Com/Point",
+		TriggerWriteNode: "ServerInterfaces/Com/TriggerWrite",
+		ReadDoneNode:     "ServerInterfaces/Com/ReadDone",
+		EndOfFileNode:    "ServerInterfaces/Com/EndOfFile",
+		PositionXNode:    "ServerInterfaces/Com/Pos/X",
+		PositionYNode:    "ServerInterfaces/Com/Pos/Y",
+		PositionZNode:    "ServerInterfaces/Com/Pos/Z",
 		ChunkSize:        20,
 		AckTimeout:       5000,
 		PollInterval:     100,
@@ -62,15 +63,15 @@ func TestValidateOPCUANodes(t *testing.T) {
 		t.Skip("Skipping integration test. Use -integration flag or set OPCUA_INTEGRATION=1")
 	}
 
-	// Expected NodeIDs from OPC Ua Interface.xml (ns=4)
+	// The variables the PLC has to expose, by name: the app resolves them on the server.
 	expectedNodes := map[string]string{
-		"PointArr":     "ns=4;i=93",
-		"TriggerWrite": "ns=4;i=12",
-		"ReadDone":     "ns=4;i=23",
-		"EndOfFile":    "ns=4;i=34",
-		"Pos.X":        "ns=4;i=80",
-		"Pos.Y":        "ns=4;i=81",
-		"Pos.Z":        "ns=4;i=82",
+		"Point":        "ServerInterfaces/Com/Point",
+		"TriggerWrite": "ServerInterfaces/Com/TriggerWrite",
+		"ReadDone":     "ServerInterfaces/Com/ReadDone",
+		"EndOfFile":    "ServerInterfaces/Com/EndOfFile",
+		"Pos.X":        "ServerInterfaces/Com/Pos/X",
+		"Pos.Y":        "ServerInterfaces/Com/Pos/Y",
+		"Pos.Z":        "ServerInterfaces/Com/Pos/Z",
 	}
 
 	db := setupValidationTestDB(t)
@@ -130,8 +131,8 @@ func TestValidateChunkedTransferNodes(t *testing.T) {
 	}
 	defer client.Disconnect(ctx)
 
-	// Test 1: Read EndOfFile (should be BOOL) - ns=4;i=34
-	t.Log("Testing EndOfFile node (ns=4;i=34)...")
+	// Test 1: Read EndOfFile (should be BOOL)
+	t.Log("Testing EndOfFile node...")
 	eof, err := client.ReadBoolNode(ctx, cfg.EndOfFileNode)
 	if err != nil {
 		t.Errorf("❌ EndOfFile read failed: %v", err)
@@ -139,8 +140,8 @@ func TestValidateChunkedTransferNodes(t *testing.T) {
 		t.Logf("✓ EndOfFile = %v", eof)
 	}
 
-	// Test 2: Read TriggerWrite (should be BOOL) - ns=4;i=12
-	t.Log("Testing TriggerWrite node (ns=4;i=12)...")
+	// Test 2: Read TriggerWrite (should be BOOL)
+	t.Log("Testing TriggerWrite node...")
 	trigger, err := client.ReadBoolNode(ctx, cfg.TriggerWriteNode)
 	if err != nil {
 		t.Errorf("❌ TriggerWrite read failed: %v", err)
@@ -148,8 +149,8 @@ func TestValidateChunkedTransferNodes(t *testing.T) {
 		t.Logf("✓ TriggerWrite = %v", trigger)
 	}
 
-	// Test 3: Read ReadDone (should be BOOL) - ns=4;i=23
-	t.Log("Testing ReadDone node (ns=4;i=23)...")
+	// Test 3: Read ReadDone (should be BOOL)
+	t.Log("Testing ReadDone node...")
 	done, err := client.ReadBoolNode(ctx, cfg.ReadDoneNode)
 	if err != nil {
 		t.Errorf("❌ ReadDone read failed: %v", err)
@@ -157,8 +158,8 @@ func TestValidateChunkedTransferNodes(t *testing.T) {
 		t.Logf("✓ ReadDone = %v", done)
 	}
 
-	// Test 4: Read Point array (should be String[20]) - ns=4;i=93
-	t.Log("Testing PointArr node (ns=4;i=93)...")
+	// Test 4: Read Point array (should be String[20])
+	t.Log("Testing Point node...")
 	arr, err := client.ReadNode(ctx, cfg.PointArrayNode)
 	if err != nil {
 		t.Errorf("❌ Point array read failed: %v", err)

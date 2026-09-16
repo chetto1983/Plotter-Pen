@@ -15,21 +15,9 @@ import (
 	"plotter-pen/internal/service/plc"
 )
 
-// connectS7Sim connects to tools/s7sim/s7sim.py at S7SIM_ENDPOINT (default
-// opc.tcp://127.0.0.1:4840) with the simulator's node IDs, never the PLC configured in a database.
-func connectS7Sim(ctx context.Context, t *testing.T) (*Client, Config) {
-	t.Helper()
-	endpoint := os.Getenv("S7SIM_ENDPOINT")
-	if endpoint == "" {
-		endpoint = "opc.tcp://127.0.0.1:4840"
-	}
-
-	db := setupTestDB(t)
-	seedTestConfig(db, persistence.OPCUAConfig{
-		Name:             "s7sim",
-		IsActive:         true,
-		Endpoint:         endpoint,
-		NamespaceID:      4,
+// s7simNodeIDs are the node IDs of tools/s7sim/s7sim.py, different from the PLC's on purpose.
+func s7simNodeIDs() persistence.OPCUAConfig {
+	return persistence.OPCUAConfig{
 		PointArrayNode:   "ns=4;i=12",
 		TriggerWriteNode: "ns=4;i=43",
 		ReadDoneNode:     "ns=4;i=54",
@@ -37,12 +25,36 @@ func connectS7Sim(ctx context.Context, t *testing.T) (*Client, Config) {
 		PositionXNode:    "ns=4;i=79",
 		PositionYNode:    "ns=4;i=80",
 		PositionZNode:    "ns=4;i=81",
-		ChunkSize:        20,
-		AckTimeout:       5000,
-		PollInterval:     20,
-		SecurityMode:     "None",
-		SecurityPolicy:   "None",
-	})
+	}
+}
+
+// connectS7Sim connects to tools/s7sim/s7sim.py at S7SIM_ENDPOINT (default
+// opc.tcp://127.0.0.1:4840) with the simulator's node IDs, never the PLC configured in a database.
+func connectS7Sim(ctx context.Context, t *testing.T) (*Client, Config) {
+	t.Helper()
+	return connectS7SimNodes(ctx, t, s7simNodeIDs())
+}
+
+// connectS7SimNodes connects to the simulator with the given node addresses.
+func connectS7SimNodes(ctx context.Context, t *testing.T, nodes persistence.OPCUAConfig) (*Client, Config) {
+	t.Helper()
+	endpoint := os.Getenv("S7SIM_ENDPOINT")
+	if endpoint == "" {
+		endpoint = "opc.tcp://127.0.0.1:4840"
+	}
+
+	nodes.Name = "s7sim"
+	nodes.IsActive = true
+	nodes.Endpoint = endpoint
+	nodes.NamespaceID = 4
+	nodes.ChunkSize = 20
+	nodes.AckTimeout = 5000
+	nodes.PollInterval = 20
+	nodes.SecurityMode = "None"
+	nodes.SecurityPolicy = "None"
+
+	db := setupTestDB(t)
+	seedTestConfig(db, nodes)
 	cm := NewConfigManager(db)
 
 	client := NewClient(cm)
@@ -78,7 +90,7 @@ func sendS7Sim(ctx context.Context, t *testing.T, client *Client, cfg Config, li
 		t.Logf("transfer OK: %d lines in %d chunks, %.2fs", p.TotalLines, p.Total, p.Duration)
 		eof, err := client.ReadBoolNode(ctx, cfg.EndOfFileNode)
 		if err != nil || !eof {
-			t.Fatalf("End_Of_File = %v, err %v; want TRUE", eof, err)
+			t.Fatalf("EndOfFile = %v, err %v; want TRUE", eof, err)
 		}
 		return p
 	case <-ctx.Done():
@@ -187,6 +199,38 @@ func waitForProgramEnd(ctx context.Context, t *testing.T, client *Client, progra
 		case <-ctx.Done():
 			t.Fatalf("program did not end at %+v: position %+v, lowest Z %.3f", want, pos, lowest)
 		case <-time.After(20 * time.Millisecond):
+		}
+	}
+}
+
+// TestNamedNodes_S7Sim addresses the simulator by the names of the PLC variables, as the app
+// is configured out of the box. The simulator numbers the same variables differently from the
+// PLC, so a transfer that arrives here proves the names were resolved on the server.
+func TestNamedNodes_S7Sim(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	client, cfg := connectS7SimNodes(ctx, t, persistence.OPCUAConfig{
+		PointArrayNode:   "ServerInterfaces/Com/Point",
+		TriggerWriteNode: "ServerInterfaces/Com/TriggerWrite",
+		ReadDoneNode:     "ServerInterfaces/Com/ReadDone",
+		EndOfFileNode:    "ServerInterfaces/Com/EndOfFile",
+		PositionXNode:    "ServerInterfaces/Com/Pos/X",
+		PositionYNode:    "ServerInterfaces/Com/Pos/Y",
+		PositionZNode:    "ServerInterfaces/Com/Pos/Z",
+	})
+
+	lines := make([]string, 25)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("L X %.3f, Y %.3f, Z %.3f, V %.3f", float64(i), 0.0, 0.0, 200.0)
+	}
+	if p := sendS7Sim(ctx, t, client, cfg, lines); p.Chunk != 2 || p.Total != 2 {
+		t.Fatalf("transfer done at chunk %d/%d, want 2/2", p.Chunk, p.Total)
+	}
+
+	for _, address := range []string{cfg.PositionXNode, cfg.PositionYNode, cfg.PositionZNode} {
+		if _, err := client.ReadNode(ctx, address); err != nil {
+			t.Errorf("reading %s: %v", address, err)
 		}
 	}
 }
