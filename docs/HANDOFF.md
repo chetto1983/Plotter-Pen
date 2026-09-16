@@ -710,7 +710,7 @@ on the drawing said which piece of it was left out.
 ## Environment
 
 - **Containers:** `plotter-pen` (Compose, host port 41880) and `plotter-pen-s7sim` (standalone simulator, host port 4840).
-- **Active OPC UA configuration** in the Compose database: `opc.tcp://host.docker.internal:4840`, which is the simulator. Check it before any transfer.
+- **Active OPC UA configuration** in the Compose database (read on 2026-09-16): `opc.tcp://192.168.0.1:4840`, the PLC with no mechanics, where reads, browsing, writes and triggers are allowed and physical tests are not. From inside the container the simulator is `opc.tcp://host.docker.internal:4840`. Check it before any transfer.
 - **Automatic PLC connect:** the frontend sends `connect` to the active PLC every time its WebSocket connects (`src/app/UIController.js:600`). Restarting the container makes open tabs reconnect and connect to whatever PLC is active.
 - **Reference DXF:** `dxf/` is gitignored and exists only on this machine. To get the import JSON:
   ```bash
