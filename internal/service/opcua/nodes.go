@@ -2,7 +2,6 @@ package opcua
 
 import (
 	"context"
-	"fmt"
 	"regexp"
 	"slices"
 	"strings"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/gopcua/opcua/id"
 	"github.com/gopcua/opcua/ua"
+	"plotter-pen/internal/i18n"
 )
 
 // nodeSeparator separates the browse names of a node address, as in "ServerInterfaces/Com/Point".
@@ -36,21 +36,21 @@ func resolveNodeAddress(ctx context.Context, browser nodeBrowser, address string
 	if isNodeID(address) {
 		nodeID, err := ua.ParseNodeID(strings.TrimSpace(address))
 		if err != nil {
-			return nil, fmt.Errorf("invalid node ID %q: %w", address, err)
+			return nil, i18n.Errorf("invalid node ID %q: %w", address, err)
 		}
 		return nodeID, nil
 	}
 
 	names := browseNames(address)
 	if len(names) == 0 {
-		return nil, fmt.Errorf("empty node address")
+		return nil, i18n.Errorf("empty node address")
 	}
 
 	node, parent := ua.NewNumericNodeID(0, id.ObjectsFolder), "Objects"
 	for _, name := range names {
 		child, err := childByName(ctx, browser, node, parent, name)
 		if err != nil {
-			return nil, fmt.Errorf("node address %q: %w", address, err)
+			return nil, i18n.Errorf("node address %q: %w", address, err)
 		}
 		node, parent = child, name
 	}
@@ -84,7 +84,7 @@ func browseNames(address string) []string {
 func childByName(ctx context.Context, browser nodeBrowser, parent *ua.NodeID, parentName, name string) (*ua.NodeID, error) {
 	refs, err := browser.references(ctx, parent)
 	if err != nil {
-		return nil, fmt.Errorf("browsing %s failed: %w", parentName, err)
+		return nil, i18n.Errorf("browsing %s failed: %w", parentName, err)
 	}
 
 	var children []string
@@ -99,9 +99,9 @@ func childByName(ctx context.Context, browser nodeBrowser, parent *ua.NodeID, pa
 	}
 
 	if len(children) == 0 {
-		return nil, fmt.Errorf("%s has no %q and no other child", parentName, name)
+		return nil, i18n.Errorf("%s has no %q and no other child", parentName, name)
 	}
-	return nil, fmt.Errorf("%s has no %q, only %s", parentName, name, strings.Join(children, ", "))
+	return nil, i18n.Errorf("%s has no %q, only %s", parentName, name, strings.Join(children, ", "))
 }
 
 // nodeCache holds the node IDs resolved for the current connection: an address costs one
@@ -211,7 +211,7 @@ func interfaceVariables(ctx context.Context, browser nodeBrowser) ([]NodeVariabl
 		}
 		refs, err := browser.references(ctx, node)
 		if err != nil {
-			return fmt.Errorf("browsing %s failed: %w", path, err)
+			return i18n.Errorf("browsing %s failed: %w", path, err)
 		}
 		for _, ref := range refs {
 			if ref == nil || ref.BrowseName == nil || ref.NodeID == nil || ref.NodeID.NodeID == nil {

@@ -12,6 +12,7 @@ import (
 	"github.com/gopcua/opcua"
 	"github.com/gopcua/opcua/id"
 	"github.com/gopcua/opcua/ua"
+	"plotter-pen/internal/i18n"
 )
 
 // Default certificate paths (overridable via OPCUA_CERT_PATH and OPCUA_KEY_PATH env vars)
@@ -67,7 +68,7 @@ func (c *Client) references(ctx context.Context, parent *ua.NodeID) ([]*ua.Refer
 	c.mu.RUnlock()
 
 	if !connected || client == nil {
-		return nil, fmt.Errorf("not connected to OPC UA server")
+		return nil, i18n.Errorf("not connected to OPC UA server")
 	}
 	return client.Node(parent).References(ctx, id.HierarchicalReferences, ua.BrowseDirectionForward, ua.NodeClassAll, true)
 }
@@ -107,7 +108,7 @@ func (c *Client) Connect(ctx context.Context) error {
 
 	endpoints, err := opcua.GetEndpoints(discoverCtx, cfg.Endpoint)
 	if err != nil {
-		return fmt.Errorf("failed to get endpoints: %w", err)
+		return i18n.Errorf("failed to get endpoints: %w", err)
 	}
 
 	// Select best endpoint (prefer Sign over SignAndEncrypt for performance)
@@ -121,11 +122,11 @@ func (c *Client) Connect(ctx context.Context) error {
 
 	client, err := opcua.NewClient(cfg.Endpoint, opts...)
 	if err != nil {
-		return fmt.Errorf("failed to create client: %w", err)
+		return i18n.Errorf("failed to create client: %w", err)
 	}
 
 	if err := client.Connect(ctx); err != nil {
-		return fmt.Errorf("failed to connect: %w", err)
+		return i18n.Errorf("failed to connect: %w", err)
 	}
 
 	c.client = client
@@ -329,12 +330,12 @@ func (c *Client) WriteData(ctx context.Context, data any, cfg Config) error {
 	defer c.mu.Unlock()
 
 	if !c.connected.Load() || c.client == nil {
-		return fmt.Errorf("not connected to OPC UA server")
+		return i18n.Errorf("not connected to OPC UA server")
 	}
 
 	variant, err := c.buildVariant(data, cfg.DataType)
 	if err != nil {
-		return fmt.Errorf("failed to build variant: %w", err)
+		return i18n.Errorf("failed to build variant: %w", err)
 	}
 
 	req := &ua.WriteRequest{
@@ -349,11 +350,11 @@ func (c *Client) WriteData(ctx context.Context, data any, cfg Config) error {
 
 	resp, err := c.client.Write(ctx, req)
 	if err != nil {
-		return fmt.Errorf("write failed: %w", err)
+		return i18n.Errorf("write failed: %w", err)
 	}
 
 	if resp.Results[0] != ua.StatusOK {
-		return fmt.Errorf("write status: %v", resp.Results[0])
+		return i18n.Errorf("write status: %v", resp.Results[0])
 	}
 
 	return nil
@@ -373,14 +374,14 @@ func (c *Client) WriteReset(ctx context.Context, value bool, cfg Config) error {
 func (c *Client) writeBoolNode(ctx context.Context, nodeStr string, value bool, name string) error {
 	nodeID, err := c.nodeID(ctx, nodeStr)
 	if err != nil {
-		return fmt.Errorf("%s node: %w", name, err)
+		return i18n.Errorf("%s node: %w", name, err)
 	}
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if !c.connected.Load() || c.client == nil {
-		return fmt.Errorf("not connected to OPC UA server")
+		return i18n.Errorf("not connected to OPC UA server")
 	}
 
 	req := &ua.WriteRequest{
@@ -395,11 +396,11 @@ func (c *Client) writeBoolNode(ctx context.Context, nodeStr string, value bool, 
 
 	resp, err := c.client.Write(ctx, req)
 	if err != nil {
-		return fmt.Errorf("%s write failed: %w", name, err)
+		return i18n.Errorf("%s write failed: %w", name, err)
 	}
 
 	if resp.Results[0] != ua.StatusOK {
-		return fmt.Errorf("%s write status: %v", name, resp.Results[0])
+		return i18n.Errorf("%s write status: %v", name, resp.Results[0])
 	}
 
 	return nil
@@ -428,7 +429,7 @@ func (c *Client) buildVariant(data any, dataType string) (*ua.Variant, error) {
 		if v, ok := data.(bool); ok {
 			return ua.NewVariant(v)
 		}
-		return nil, fmt.Errorf("cannot convert %T to bool", data)
+		return nil, i18n.Errorf("cannot convert %T to bool", data)
 
 	default:
 		return ua.NewVariant(fmt.Sprintf("%v", data))
@@ -449,7 +450,7 @@ func (c *Client) buildStringArrayVariant(data any) (*ua.Variant, error) {
 		}
 		return ua.NewVariant(arr)
 	default:
-		return nil, fmt.Errorf("cannot convert %T to string array", data)
+		return nil, i18n.Errorf("cannot convert %T to string array", data)
 	}
 }
 
@@ -464,7 +465,7 @@ func (c *Client) buildInt32Variant(data any) (*ua.Variant, error) {
 	case float64:
 		return ua.NewVariant(int32(v))
 	default:
-		return nil, fmt.Errorf("cannot convert %T to int32", data)
+		return nil, i18n.Errorf("cannot convert %T to int32", data)
 	}
 }
 
@@ -477,20 +478,20 @@ func (c *Client) buildFloatVariant(data any) (*ua.Variant, error) {
 	case int:
 		return ua.NewVariant(float32(v))
 	default:
-		return nil, fmt.Errorf("cannot convert %T to float", data)
+		return nil, i18n.Errorf("cannot convert %T to float", data)
 	}
 }
 
 // SendWithTrigger sends data and triggers PLC execution
 func (c *Client) SendWithTrigger(ctx context.Context, data any, cfg Config) error {
 	if err := c.WriteData(ctx, data, cfg); err != nil {
-		return fmt.Errorf("failed to write data: %w", err)
+		return i18n.Errorf("failed to write data: %w", err)
 	}
 
 	time.Sleep(50 * time.Millisecond)
 
 	if err := c.WriteTrigger(ctx, true, cfg); err != nil {
-		return fmt.Errorf("failed to set trigger: %w", err)
+		return i18n.Errorf("failed to set trigger: %w", err)
 	}
 
 	return nil
@@ -507,7 +508,7 @@ func (c *Client) ReadNode(ctx context.Context, nodeIDStr string) (any, error) {
 	defer c.mu.RUnlock()
 
 	if !c.connected.Load() || c.client == nil {
-		return nil, fmt.Errorf("not connected to OPC UA server")
+		return nil, i18n.Errorf("not connected to OPC UA server")
 	}
 
 	req := &ua.ReadRequest{
@@ -518,11 +519,11 @@ func (c *Client) ReadNode(ctx context.Context, nodeIDStr string) (any, error) {
 
 	resp, err := c.client.Read(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("read failed: %w", err)
+		return nil, i18n.Errorf("read failed: %w", err)
 	}
 
 	if resp.Results[0].Status != ua.StatusOK {
-		return nil, fmt.Errorf("read status: %v", resp.Results[0].Status)
+		return nil, i18n.Errorf("read status: %v", resp.Results[0].Status)
 	}
 
 	return resp.Results[0].Value.Value(), nil
@@ -549,12 +550,12 @@ func (c *Client) writeStringValue(ctx context.Context, nodeIDStr string, value a
 	defer c.mu.Unlock()
 
 	if !c.connected.Load() || c.client == nil {
-		return fmt.Errorf("not connected to OPC UA server")
+		return i18n.Errorf("not connected to OPC UA server")
 	}
 
 	variant, err := ua.NewVariant(value)
 	if err != nil {
-		return fmt.Errorf("failed to create variant: %w", err)
+		return i18n.Errorf("failed to build variant: %w", err)
 	}
 
 	req := &ua.WriteRequest{
@@ -569,11 +570,11 @@ func (c *Client) writeStringValue(ctx context.Context, nodeIDStr string, value a
 
 	resp, err := c.client.Write(ctx, req)
 	if err != nil {
-		return fmt.Errorf("write failed: %w", err)
+		return i18n.Errorf("write failed: %w", err)
 	}
 
 	if resp.Results[0] != ua.StatusOK {
-		return fmt.Errorf("write status: %v", resp.Results[0])
+		return i18n.Errorf("write status: %v", resp.Results[0])
 	}
 
 	return nil
@@ -590,7 +591,7 @@ func (c *Client) WriteBoolNode(ctx context.Context, nodeIDStr string, value bool
 	defer c.mu.Unlock()
 
 	if !c.connected.Load() || c.client == nil {
-		return fmt.Errorf("not connected to OPC UA server")
+		return i18n.Errorf("not connected to OPC UA server")
 	}
 
 	req := &ua.WriteRequest{
@@ -605,11 +606,11 @@ func (c *Client) WriteBoolNode(ctx context.Context, nodeIDStr string, value bool
 
 	resp, err := c.client.Write(ctx, req)
 	if err != nil {
-		return fmt.Errorf("write failed: %w", err)
+		return i18n.Errorf("write failed: %w", err)
 	}
 
 	if resp.Results[0] != ua.StatusOK {
-		return fmt.Errorf("write status: %v", resp.Results[0])
+		return i18n.Errorf("write status: %v", resp.Results[0])
 	}
 
 	return nil
@@ -626,7 +627,7 @@ func (c *Client) ReadBoolNode(ctx context.Context, nodeIDStr string) (bool, erro
 	defer c.mu.RUnlock()
 
 	if !c.connected.Load() || c.client == nil {
-		return false, fmt.Errorf("not connected to OPC UA server")
+		return false, i18n.Errorf("not connected to OPC UA server")
 	}
 
 	req := &ua.ReadRequest{
@@ -637,18 +638,18 @@ func (c *Client) ReadBoolNode(ctx context.Context, nodeIDStr string) (bool, erro
 
 	resp, err := c.client.Read(ctx, req)
 	if err != nil {
-		return false, fmt.Errorf("read failed: %w", err)
+		return false, i18n.Errorf("read failed: %w", err)
 	}
 
 	if resp.Results[0].Status != ua.StatusOK {
-		return false, fmt.Errorf("read status: %v", resp.Results[0].Status)
+		return false, i18n.Errorf("read status: %v", resp.Results[0].Status)
 	}
 
 	val := resp.Results[0].Value.Value()
 	if b, ok := val.(bool); ok {
 		return b, nil
 	}
-	return false, fmt.Errorf("expected bool, got %T", val)
+	return false, i18n.Errorf("expected bool, got %T", val)
 }
 
 // BrowseResult represents a browse result node
@@ -670,7 +671,7 @@ func (c *Client) ReadNodeDataType(ctx context.Context, nodeIDStr string) (*ua.No
 	defer c.mu.RUnlock()
 
 	if !c.connected.Load() || c.client == nil {
-		return nil, fmt.Errorf("not connected to OPC UA server")
+		return nil, i18n.Errorf("not connected to OPC UA server")
 	}
 
 	req := &ua.ReadRequest{
@@ -681,16 +682,16 @@ func (c *Client) ReadNodeDataType(ctx context.Context, nodeIDStr string) (*ua.No
 
 	resp, err := c.client.Read(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("read failed: %w", err)
+		return nil, i18n.Errorf("read failed: %w", err)
 	}
 
 	if resp.Results[0].Status != ua.StatusOK {
-		return nil, fmt.Errorf("read status: %v", resp.Results[0].Status)
+		return nil, i18n.Errorf("read status: %v", resp.Results[0].Status)
 	}
 
 	dataType, ok := resp.Results[0].Value.Value().(*ua.NodeID)
 	if !ok {
-		return nil, fmt.Errorf("expected NodeID, got %T", resp.Results[0].Value.Value())
+		return nil, i18n.Errorf("expected NodeID, got %T", resp.Results[0].Value.Value())
 	}
 
 	return dataType, nil
@@ -717,7 +718,7 @@ func (c *Client) readAccessLevel(ctx context.Context, nodeIDStr string, attribut
 	defer c.mu.RUnlock()
 
 	if !c.connected.Load() || c.client == nil {
-		return 0, fmt.Errorf("not connected to OPC UA server")
+		return 0, i18n.Errorf("not connected to OPC UA server")
 	}
 
 	req := &ua.ReadRequest{
@@ -728,16 +729,16 @@ func (c *Client) readAccessLevel(ctx context.Context, nodeIDStr string, attribut
 
 	resp, err := c.client.Read(ctx, req)
 	if err != nil {
-		return 0, fmt.Errorf("read failed: %w", err)
+		return 0, i18n.Errorf("read failed: %w", err)
 	}
 
 	if resp.Results[0].Status != ua.StatusOK {
-		return 0, fmt.Errorf("read status: %v", resp.Results[0].Status)
+		return 0, i18n.Errorf("read status: %v", resp.Results[0].Status)
 	}
 
 	level, ok := resp.Results[0].Value.Value().(uint8)
 	if !ok {
-		return 0, fmt.Errorf("expected uint8, got %T", resp.Results[0].Value.Value())
+		return 0, i18n.Errorf("expected uint8, got %T", resp.Results[0].Value.Value())
 	}
 
 	return level, nil
@@ -749,7 +750,7 @@ func (c *Client) BrowseNode(ctx context.Context, nodeIDStr string) ([]BrowseResu
 	defer c.mu.RUnlock()
 
 	if !c.connected.Load() || c.client == nil {
-		return nil, fmt.Errorf("not connected to OPC UA server")
+		return nil, i18n.Errorf("not connected to OPC UA server")
 	}
 
 	nodeID, err := c.nodeID(ctx, nodeIDStr)
@@ -759,7 +760,7 @@ func (c *Client) BrowseNode(ctx context.Context, nodeIDStr string) ([]BrowseResu
 
 	refs, err := c.references(ctx, nodeID)
 	if err != nil {
-		return nil, fmt.Errorf("browse failed: %w", err)
+		return nil, i18n.Errorf("browse failed: %w", err)
 	}
 
 	var results []BrowseResult

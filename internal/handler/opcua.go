@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	"plotter-pen/internal/i18n"
 	"plotter-pen/internal/service/opcua"
 
 	"github.com/gin-gonic/gin"
@@ -98,14 +100,14 @@ func (h *OpcuaHandler) GetConfig(c *gin.Context) {
 func (h *OpcuaHandler) UpdateConfig(c *gin.Context) {
 	var req opcua.Config
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		badRequest(c, err)
 		return
 	}
 
 	h.configMgr.Update(req)
 
 	if err := h.configMgr.SaveToDB(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save config"})
+		respondError(c, http.StatusInternalServerError, i18n.Errorf("failed to save the connection settings: %w", err))
 		return
 	}
 
@@ -123,7 +125,7 @@ type SendRequest struct {
 func (h *OpcuaHandler) Send(c *gin.Context) {
 	var req SendRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		badRequest(c, err)
 		return
 	}
 
@@ -139,20 +141,14 @@ func (h *OpcuaHandler) Send(c *gin.Context) {
 
 	if !h.client.IsConnected() {
 		if err := h.client.Connect(ctx); err != nil {
-			c.JSON(http.StatusServiceUnavailable, gin.H{
-				"error":   "failed to connect to OPC UA server",
-				"details": err.Error(),
-			})
+			respondError(c, http.StatusServiceUnavailable, i18n.Errorf("failed to connect to the PLC: %w", err))
 			return
 		}
 	}
 
 	// Send data with trigger
 	if err := h.client.SendWithTrigger(ctx, req.Data, cfg); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "failed to send data",
-			"details": err.Error(),
-		})
+		respondError(c, http.StatusInternalServerError, i18n.Errorf("failed to send the data: %w", err))
 		return
 	}
 
@@ -170,10 +166,7 @@ func (h *OpcuaHandler) Connect(c *gin.Context) {
 	defer cancel()
 
 	if err := h.client.Connect(ctx); err != nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error":   "failed to connect",
-			"details": err.Error(),
-		})
+		respondError(c, http.StatusServiceUnavailable, i18n.Errorf("failed to connect to the PLC: %w", err))
 		return
 	}
 
@@ -191,10 +184,7 @@ func (h *OpcuaHandler) Disconnect(c *gin.Context) {
 	h.client.StopPositionPolling()
 
 	if err := h.client.Disconnect(ctx); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "failed to disconnect",
-			"details": err.Error(),
-		})
+		respondError(c, http.StatusInternalServerError, i18n.Errorf("failed to disconnect from the PLC: %w", err))
 		return
 	}
 
@@ -213,9 +203,7 @@ func (h *OpcuaHandler) Status(c *gin.Context) {
 // GetPosition returns current machine position
 func (h *OpcuaHandler) GetPosition(c *gin.Context) {
 	if !h.client.IsConnected() {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "not connected to OPC UA server",
-		})
+		respondError(c, http.StatusServiceUnavailable, i18n.Errorf("not connected to OPC UA server"))
 		return
 	}
 
@@ -224,10 +212,7 @@ func (h *OpcuaHandler) GetPosition(c *gin.Context) {
 
 	pos, err := h.client.ReadPosition(ctx)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "failed to read position",
-			"details": err.Error(),
-		})
+		respondError(c, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -247,7 +232,7 @@ func (h *OpcuaHandler) GetMachineStatus(c *gin.Context) {
 func (h *OpcuaHandler) ListPLCs(c *gin.Context) {
 	configs, err := h.configMgr.ListAll()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondError(c, http.StatusInternalServerError, i18n.Errorf("failed to list the PLCs: %w", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": configs})
@@ -257,16 +242,16 @@ func (h *OpcuaHandler) ListPLCs(c *gin.Context) {
 func (h *OpcuaHandler) CreatePLC(c *gin.Context) {
 	var req opcua.Config
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		badRequest(c, err)
 		return
 	}
 	if req.Name == "" || req.Endpoint == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "name and endpoint are required"})
+		respondError(c, http.StatusBadRequest, i18n.Errorf("name and endpoint are required"))
 		return
 	}
 	created, err := h.configMgr.Create(req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondError(c, http.StatusInternalServerError, i18n.Errorf("failed to save the PLC: %w", err))
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{"data": created})
@@ -276,12 +261,12 @@ func (h *OpcuaHandler) CreatePLC(c *gin.Context) {
 func (h *OpcuaHandler) GetPLC(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		respondError(c, http.StatusBadRequest, i18n.Errorf("invalid id"))
 		return
 	}
 	cfg, err := h.configMgr.GetByID(id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "PLC not found"})
+		respondPLCError(c, err, i18n.Errorf("failed to read PLC %s: %w", c.Param("id"), err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": cfg})
@@ -291,11 +276,15 @@ func (h *OpcuaHandler) GetPLC(c *gin.Context) {
 func (h *OpcuaHandler) DeletePLC(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		respondError(c, http.StatusBadRequest, i18n.Errorf("invalid id"))
 		return
 	}
 	if err := h.configMgr.Delete(id); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "cannot delete active PLC"})
+		if errors.Is(err, opcua.ErrActivePLC) {
+			respondError(c, http.StatusBadRequest, err)
+		} else {
+			respondError(c, http.StatusInternalServerError, i18n.Errorf("failed to delete PLC %s: %w", c.Param("id"), err))
+		}
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
@@ -305,7 +294,7 @@ func (h *OpcuaHandler) DeletePLC(c *gin.Context) {
 func (h *OpcuaHandler) ActivatePLC(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		respondError(c, http.StatusBadRequest, i18n.Errorf("invalid id"))
 		return
 	}
 	// Disconnect current PLC before switching
@@ -317,10 +306,20 @@ func (h *OpcuaHandler) ActivatePLC(c *gin.Context) {
 		cancel()
 	}
 	if err := h.configMgr.SetActive(id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondPLCError(c, err, i18n.Errorf("failed to activate PLC %s: %w", c.Param("id"), err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": h.configMgr.Get()})
+}
+
+// respondPLCError answers a PLC of the list that could not be read or used: a PLC that is not
+// there is a 404 of its own, anything else is the failure given.
+func respondPLCError(c *gin.Context, err, failure error) {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		respondError(c, http.StatusNotFound, i18n.Errorf("PLC %s does not exist", c.Param("id")))
+		return
+	}
+	respondError(c, http.StatusInternalServerError, failure)
 }
 
 // CertRequest represents certificate generation request
@@ -340,16 +339,16 @@ func (h *OpcuaHandler) GenerateCertificate(c *gin.Context) {
 	}
 	dir, err := filepath.Rel(DefaultCertsDir, req.OutputDir)
 	if err != nil || !filepath.IsLocal(dir) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "outputDir must be within certs"})
+		respondError(c, http.StatusBadRequest, i18n.Errorf("the certificate directory must be within certs"))
 		return
 	}
 	if err := os.MkdirAll(DefaultCertsDir, 0700); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondError(c, http.StatusInternalServerError, i18n.Errorf("failed to generate the certificates: %w", err))
 		return
 	}
 	root, err := os.OpenRoot(DefaultCertsDir)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondError(c, http.StatusInternalServerError, i18n.Errorf("failed to generate the certificates: %w", err))
 		return
 	}
 	defer func() {
@@ -360,7 +359,7 @@ func (h *OpcuaHandler) GenerateCertificate(c *gin.Context) {
 	certPath := req.OutputDir + "/client.pem"
 	keyPath := req.OutputDir + "/client.key"
 	if err := opcua.GenerateAndSaveCertInDir(root, dir); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondError(c, http.StatusInternalServerError, i18n.Errorf("failed to generate the certificates: %w", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -368,7 +367,7 @@ func (h *OpcuaHandler) GenerateCertificate(c *gin.Context) {
 		"certFile": certPath,
 		"keyFile":  keyPath,
 		"derFile":  req.OutputDir + "/client.der",
-		"message":  "Certificates generated. Import .der file to PLC trust list.",
+		"message":  i18n.Notef("Certificates generated. Import the .der file into the trusted certificates of the PLC."),
 	})
 }
 
@@ -411,12 +410,12 @@ func (h *OpcuaHandler) DownloadCertificate(c *gin.Context) {
 		filename = "client.der"
 		contentType = "application/x-x509-ca-cert"
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid certificate type"})
+		respondError(c, http.StatusBadRequest, i18n.Errorf("invalid certificate type"))
 		return
 	}
 
 	if !fileExists(filePath) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "certificate not found"})
+		respondError(c, http.StatusNotFound, i18n.Errorf("certificate not found"))
 		return
 	}
 
@@ -444,7 +443,7 @@ func (h *OpcuaHandler) Variables(c *gin.Context) {
 
 	variables, err := h.client.Variables(ctx)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"connected": true, "variables": []opcua.NodeVariable{}, "error": err.Error()})
+		c.JSON(http.StatusOK, gin.H{"connected": true, "variables": []opcua.NodeVariable{}, "error": explain(c, err)})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"connected": true, "endpoint": h.configMgr.Get().Endpoint, "variables": variables})
@@ -457,7 +456,7 @@ func (h *OpcuaHandler) TestConnection(c *gin.Context) {
 	cfg := h.configMgr.Get()
 	if c.Request.ContentLength > 0 {
 		if err := c.ShouldBindJSON(&cfg); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			badRequest(c, err)
 			return
 		}
 	}
@@ -467,7 +466,7 @@ func (h *OpcuaHandler) TestConnection(c *gin.Context) {
 
 	client := h.newClient(cfg)
 	if err := client.Connect(ctx); err != nil {
-		c.JSON(http.StatusOK, gin.H{"connected": false, "endpoint": cfg.Endpoint, "variables": []opcua.NodeVariable{}, "error": err.Error()})
+		c.JSON(http.StatusOK, gin.H{"connected": false, "endpoint": cfg.Endpoint, "variables": []opcua.NodeVariable{}, "error": explain(c, err)})
 		return
 	}
 	defer func() {
@@ -478,7 +477,7 @@ func (h *OpcuaHandler) TestConnection(c *gin.Context) {
 
 	variables, err := client.Variables(ctx)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"connected": true, "endpoint": cfg.Endpoint, "variables": []opcua.NodeVariable{}, "error": err.Error()})
+		c.JSON(http.StatusOK, gin.H{"connected": true, "endpoint": cfg.Endpoint, "variables": []opcua.NodeVariable{}, "error": explain(c, err)})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"connected": true, "endpoint": cfg.Endpoint, "variables": variables})

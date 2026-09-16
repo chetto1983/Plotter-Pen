@@ -5,6 +5,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"plotter-pen/internal/i18n"
 )
 
 // silentPLC keeps the handshake flags of a PLC that never acknowledges a chunk.
@@ -57,15 +59,29 @@ func waitFor(t *testing.T, what string, cond func() bool) {
 
 // A chunk the PLC does not acknowledge leaves the trigger down, whatever ended the wait:
 // a trigger left up would tell the PLC a chunk is pending until the next program resets it.
+// The page reads which chunk failed and why, in Italian.
 func TestChunkedTransfer_UnacknowledgedChunkLowersTheTrigger(t *testing.T) {
 	cases := []struct {
 		name       string
 		ackTimeout int
 		stop       func(transfer *ChunkedTransfer, cancel context.CancelFunc)
+		want       string
 	}{
-		{name: "ack timeout", ackTimeout: 30, stop: func(*ChunkedTransfer, context.CancelFunc) {}},
-		{name: "transfer cancelled", ackTimeout: 5000, stop: func(tr *ChunkedTransfer, _ context.CancelFunc) { tr.Cancel() }},
-		{name: "context cancelled", ackTimeout: 5000, stop: func(_ *ChunkedTransfer, cancel context.CancelFunc) { cancel() }},
+		{
+			name: "ack timeout", ackTimeout: 30,
+			stop: func(*ChunkedTransfer, context.CancelFunc) {},
+			want: "blocco 1 di 1: il PLC non ha confermato entro 30 ms",
+		},
+		{
+			name: "transfer cancelled", ackTimeout: 5000,
+			stop: func(tr *ChunkedTransfer, _ context.CancelFunc) { tr.Cancel() },
+			want: "blocco 1 di 1: trasferimento annullato",
+		},
+		{
+			name: "context cancelled", ackTimeout: 5000,
+			stop: func(_ *ChunkedTransfer, cancel context.CancelFunc) { cancel() },
+			want: "blocco 1 di 1: trasferimento interrotto",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -97,6 +113,12 @@ func TestChunkedTransfer_UnacknowledgedChunkLowersTheTrigger(t *testing.T) {
 			case p := <-failed:
 				if p.Done {
 					t.Errorf("a failed transfer is not done: %+v", p)
+				}
+				if got := i18n.Italian(p.Err); got != tc.want {
+					t.Errorf("the page reads %q, want %q", got, tc.want)
+				}
+				if p.Error != p.Err.Error() {
+					t.Errorf("Error %q is not the English of Err %q", p.Error, p.Err.Error())
 				}
 			case <-time.After(2 * time.Second):
 				t.Fatal("the transfer did not report the failure")

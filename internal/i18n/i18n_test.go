@@ -112,4 +112,5 @@ func TestNote_JSONIsItalian(t *testing.T) {
 	expect(t, "English", n.String(), "test: gap of 0.040 mm at (80.000, 20.000)")
 	expect(t, "formatted", fmt.Sprintf("%q", []Note{n}), `["test: gap of 0.040 mm at (80.000, 20.000)"]`)
 	expect(t, "JSON", string(b), `["prova: apertura di 0,040 mm in (80,000; 20,000)"]`)
+	expect(t, "Italian", n.Italian(), "prova: apertura di 0,040 mm in (80,000; 20,000)")
 }

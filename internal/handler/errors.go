@@ -14,8 +14,14 @@ import (
 // respondError answers with the error in Italian, which the page shows, and hands it to the request
 // log in English.
 func respondError(c *gin.Context, status int, err error) {
+	c.JSON(status, gin.H{"error": explain(c, err)})
+}
+
+// explain hands the error to the request log in English and returns its Italian, for the answers
+// that report a failure beside a 200, such as a connection test that did not connect.
+func explain(c *gin.Context, err error) string {
 	_ = c.Error(err)
-	c.JSON(status, gin.H{"error": i18n.Italian(err)})
+	return i18n.Italian(err)
 }
 
 // badRequest answers a body the server cannot read. The fields the binding found missing or wrong

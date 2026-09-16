@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"plotter-pen/internal/i18n"
 )
 
 // Position represents current machine position
@@ -34,7 +36,7 @@ func (c *Client) ReadPosition(ctx context.Context) (Position, error) {
 	if cfg.PositionXNode != "" {
 		val, err := c.ReadNode(ctx, cfg.PositionXNode)
 		if err != nil {
-			return pos, fmt.Errorf("read X: %w", err)
+			return pos, i18n.Errorf("failed to read the position %s: %w", "X", err)
 		}
 		pos.X = toFloat64(val)
 	}
@@ -43,7 +45,7 @@ func (c *Client) ReadPosition(ctx context.Context) (Position, error) {
 	if cfg.PositionYNode != "" {
 		val, err := c.ReadNode(ctx, cfg.PositionYNode)
 		if err != nil {
-			return pos, fmt.Errorf("read Y: %w", err)
+			return pos, i18n.Errorf("failed to read the position %s: %w", "Y", err)
 		}
 		pos.Y = toFloat64(val)
 	}
@@ -52,7 +54,7 @@ func (c *Client) ReadPosition(ctx context.Context) (Position, error) {
 	if cfg.PositionZNode != "" {
 		val, err := c.ReadNode(ctx, cfg.PositionZNode)
 		if err != nil {
-			return pos, fmt.Errorf("read Z: %w", err)
+			return pos, i18n.Errorf("failed to read the position %s: %w", "Z", err)
 		}
 		pos.Z = toFloat64(val)
 	}

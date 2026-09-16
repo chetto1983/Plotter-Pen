@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"plotter-pen/internal/i18n"
 	"plotter-pen/internal/service/opcua"
 
 	"github.com/gin-gonic/gin"
@@ -99,7 +100,7 @@ func (h *OpcuaHandler) WebSocket(c *gin.Context) {
 	wsConnectionsMu.Lock()
 	if wsConnections[clientIP] >= wsMaxPerIP {
 		wsConnectionsMu.Unlock()
-		c.JSON(http.StatusTooManyRequests, gin.H{"error": "too many WebSocket connections"})
+		respondError(c, http.StatusTooManyRequests, i18n.Errorf("too many WebSocket connections from this address"))
 		return
 	}
 	wsConnections[clientIP]++
@@ -233,6 +234,12 @@ func (wc *WSClient) readPump(h *OpcuaHandler) {
 	}
 }
 
+// wsFailure hands a failure to the log in English and returns the Italian the page shows.
+func wsFailure(err error) string {
+	log.Printf("OPC UA WebSocket: %v", err)
+	return i18n.Italian(err)
+}
+
 // handleMessage processes incoming WebSocket messages
 func (wc *WSClient) handleMessage(h *OpcuaHandler, msg InboundMessage) {
 	switch msg.Type {
@@ -256,7 +263,7 @@ func (wc *WSClient) handleSubscribe(h *OpcuaHandler, data json.RawMessage) {
 	var req opcua.SubscribeRequest
 	if data != nil {
 		if err := json.Unmarshal(data, &req); err != nil {
-			wc.safeSend(opcua.ErrorMessage("invalid subscribe request"))
+			wc.safeSend(opcua.ErrorMessage(i18n.Notef("invalid subscribe request").Italian()))
 			return
 		}
 	}
@@ -270,7 +277,7 @@ func (wc *WSClient) handleSubscribe(h *OpcuaHandler, data json.RawMessage) {
 	// Require concrete client for streaming (type assertion)
 	client, ok := h.client.(*opcua.Client)
 	if !ok {
-		wc.safeSend(opcua.NewWSMessage("error", "streaming not supported with this client type"))
+		wc.safeSend(opcua.ErrorMessage(i18n.Notef("position streaming is not available with this client").Italian()))
 		return
 	}
 
@@ -298,7 +305,7 @@ func (wc *WSClient) handleUnsubscribe() {
 func (wc *WSClient) handleCommand(h *OpcuaHandler, data json.RawMessage) {
 	var req opcua.CommandRequest
 	if err := json.Unmarshal(data, &req); err != nil {
-		wc.send <- opcua.ErrorMessage("invalid command request")
+		wc.send <- opcua.ErrorMessage(i18n.Notef("invalid command request").Italian())
 		return
 	}
 
@@ -308,43 +315,43 @@ func (wc *WSClient) handleCommand(h *OpcuaHandler, data json.RawMessage) {
 	switch req.Action {
 	case "connect":
 		if err := h.client.Connect(ctx); err != nil {
-			wc.send <- opcua.AckMessage("connect", false, err.Error())
+			wc.send <- opcua.AckMessage("connect", false, wsFailure(i18n.Errorf("failed to connect to the PLC: %w", err)))
 		} else {
-			wc.send <- opcua.AckMessage("connect", true, "connected")
+			wc.send <- opcua.AckMessage("connect", true, i18n.Notef("connected").Italian())
 			wc.send <- opcua.StatusMessage(true, h.configMgr.Get().Endpoint)
 		}
 
 	case "disconnect":
 		if err := h.client.Disconnect(ctx); err != nil {
-			wc.send <- opcua.AckMessage("disconnect", false, err.Error())
+			wc.send <- opcua.AckMessage("disconnect", false, wsFailure(i18n.Errorf("failed to disconnect from the PLC: %w", err)))
 		} else {
-			wc.send <- opcua.AckMessage("disconnect", true, "disconnected")
+			wc.send <- opcua.AckMessage("disconnect", true, i18n.Notef("disconnected").Italian())
 			wc.send <- opcua.StatusMessage(false, "")
 		}
 
 	case "send":
 		if len(req.Commands) == 0 {
-			wc.send <- opcua.AckMessage("send", false, "no commands provided")
+			wc.send <- opcua.AckMessage("send", false, i18n.Notef("no commands to send").Italian())
 			return
 		}
 
 		// Auto-connect if needed
 		if !h.client.IsConnected() {
 			if err := h.client.Connect(ctx); err != nil {
-				wc.send <- opcua.AckMessage("send", false, "connection failed: "+err.Error())
+				wc.send <- opcua.AckMessage("send", false, wsFailure(i18n.Errorf("failed to connect to the PLC: %w", err)))
 				return
 			}
 		}
 
 		cfg := h.configMgr.Get()
 		if err := h.client.SendWithTrigger(ctx, req.Commands, cfg); err != nil {
-			wc.send <- opcua.AckMessage("send", false, err.Error())
+			wc.send <- opcua.AckMessage("send", false, wsFailure(i18n.Errorf("failed to send the data: %w", err)))
 		} else {
-			wc.send <- opcua.AckMessage("send", true, "commands sent")
+			wc.send <- opcua.AckMessage("send", true, i18n.Notef("commands sent").Italian())
 		}
 
 	default:
-		wc.send <- opcua.ErrorMessage("unknown action: " + req.Action)
+		wc.send <- opcua.ErrorMessage(i18n.Notef("unknown action: %s", req.Action).Italian())
 	}
 }
 
@@ -377,19 +384,19 @@ type TransferRequest struct {
 func (wc *WSClient) handleTransfer(h *OpcuaHandler, data json.RawMessage) {
 	var req TransferRequest
 	if err := json.Unmarshal(data, &req); err != nil {
-		wc.send <- opcua.ErrorMessage("invalid transfer request")
+		wc.send <- opcua.ErrorMessage(i18n.Notef("invalid transfer request").Italian())
 		return
 	}
 
 	if len(req.Commands) == 0 {
-		wc.send <- opcua.ErrorMessage("no commands to transfer")
+		wc.send <- opcua.ErrorMessage(i18n.Notef("no commands to transfer").Italian())
 		return
 	}
 
 	// Require concrete client for chunked transfer (type assertion)
 	client, ok := h.client.(*opcua.Client)
 	if !ok {
-		wc.send <- opcua.ErrorMessage("chunked transfer not supported with this client type")
+		wc.send <- opcua.ErrorMessage(i18n.Notef("chunked transfer is not available with this client").Italian())
 		return
 	}
 
@@ -397,7 +404,7 @@ func (wc *WSClient) handleTransfer(h *OpcuaHandler, data json.RawMessage) {
 	wc.mu.Lock()
 	if wc.transfer != nil && wc.transfer.IsRunning() {
 		wc.mu.Unlock()
-		wc.send <- opcua.ErrorMessage("transfer already in progress")
+		wc.send <- opcua.ErrorMessage(i18n.Notef("a transfer is already in progress").Italian())
 		return
 	}
 
@@ -408,7 +415,7 @@ func (wc *WSClient) handleTransfer(h *OpcuaHandler, data json.RawMessage) {
 		if err := h.client.Connect(connectCtx); err != nil {
 			cancel()
 			wc.mu.Unlock()
-			wc.send <- opcua.ErrorMessage("connection failed: " + err.Error())
+			wc.send <- opcua.ErrorMessage(wsFailure(i18n.Errorf("failed to connect to the PLC: %w", err)))
 			return
 		}
 		cancel()
@@ -430,7 +437,8 @@ func (wc *WSClient) handleTransfer(h *OpcuaHandler, data json.RawMessage) {
 	// Use safeTrySend to prevent panic on closed channel if client disconnects
 	err := wc.transfer.SendAsync(ctx, req.Commands, func(progress opcua.TransferProgress) {
 		var msg opcua.WSMessage
-		if progress.Error != "" {
+		if progress.Err != nil {
+			progress.Error = wsFailure(progress.Err)
 			msg = opcua.NewWSMessage("transfer_error", progress)
 		} else if progress.Done {
 			msg = opcua.NewWSMessage("transfer_complete", progress)
@@ -441,7 +449,7 @@ func (wc *WSClient) handleTransfer(h *OpcuaHandler, data json.RawMessage) {
 	})
 
 	if err != nil {
-		wc.send <- opcua.ErrorMessage(err.Error())
+		wc.send <- opcua.ErrorMessage(wsFailure(err))
 	}
 }
 
@@ -454,6 +462,6 @@ func (wc *WSClient) handleCancelTransfer() {
 		wc.transfer.Cancel()
 		wc.send <- opcua.NewWSMessage("transfer_cancelled", nil)
 	} else {
-		wc.send <- opcua.ErrorMessage("no transfer in progress")
+		wc.send <- opcua.ErrorMessage(i18n.Notef("no transfer in progress").Italian())
 	}
 }

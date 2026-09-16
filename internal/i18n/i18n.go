@@ -99,8 +99,8 @@ func (e *Error) italian() string {
 	return printer().Sprintf(e.format, args...)
 }
 
-// Note is a message the page shows that is not an error, like a warning: String is the English,
-// the JSON is the Italian.
+// Note is a message the page shows that is not an error, like a warning or the answer to a
+// command: String is the English, Italian and the JSON are the Italian.
 type Note struct{ msg error }
 
 // Notef makes a note as Errorf makes a message.
@@ -109,6 +109,9 @@ func Notef(format string, args ...any) Note {
 }
 
 func (n Note) String() string { return n.msg.Error() }
+
+// Italian says the note in Italian.
+func (n Note) Italian() string { return Italian(n.msg) }
 
 // MarshalJSON writes the Italian.
 func (n Note) MarshalJSON() ([]byte, error) { return json.Marshal(Italian(n.msg)) }

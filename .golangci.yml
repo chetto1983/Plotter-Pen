@@ -33,6 +33,7 @@ linters:
       # Italian words of the messages the tests read, which the English list takes for typos.
       ignore-rules:
         - comando
+        - certificato
 
     dupl:
       # Token threshold: catches a real copy-pasted block without flagging short

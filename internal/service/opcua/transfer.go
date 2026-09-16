@@ -2,21 +2,23 @@ package opcua
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"sync"
 	"time"
+
+	"plotter-pen/internal/i18n"
 )
 
 // TransferProgress represents chunked transfer progress
 type TransferProgress struct {
-	Chunk      int     `json:"chunk"`
-	Total      int     `json:"total"`
-	Percent    int     `json:"percent"`
-	TotalLines int     `json:"totalLines"`
-	Done       bool    `json:"done"`
-	Error      string  `json:"error,omitempty"`
-	Duration   float64 `json:"duration,omitempty"` // seconds
+	Chunk      int  `json:"chunk"`
+	Total      int  `json:"total"`
+	Percent    int  `json:"percent"`
+	TotalLines int  `json:"totalLines"`
+	Done       bool `json:"done"`
+	// Err is why the transfer failed; Error is its English, which the page is given in Italian.
+	Err      error   `json:"-"`
+	Error    string  `json:"error,omitempty"`
+	Duration float64 `json:"duration,omitempty"` // seconds
 }
 
 // TransferState represents current transfer state
@@ -96,7 +98,7 @@ func (t *ChunkedTransfer) SendAsync(ctx context.Context, data []string, progress
 	t.mu.Lock()
 	if t.state == TransferRunning {
 		t.mu.Unlock()
-		return fmt.Errorf("transfer already in progress")
+		return i18n.Errorf("a transfer is already in progress")
 	}
 	t.state = TransferRunning
 	t.stopCh = make(chan struct{})
@@ -118,31 +120,31 @@ func (t *ChunkedTransfer) runTransfer(ctx context.Context, data []string) {
 
 	// Reset flags at start to ensure clean handshake state
 	if err := t.client.WriteBoolNode(ctx, t.config.EndOfFileNode, false); err != nil {
-		t.reportError(fmt.Sprintf("failed to reset EOF: %v", err), 0, totalChunks, len(data))
+		t.reportError(i18n.Errorf("failed to reset %s: %w", "EndOfFile", err), 0, totalChunks, len(data))
 		return
 	}
 	if err := t.client.WriteBoolNode(ctx, t.config.ReadDoneNode, false); err != nil {
-		t.reportError(fmt.Sprintf("failed to reset ReadDone: %v", err), 0, totalChunks, len(data))
+		t.reportError(i18n.Errorf("failed to reset %s: %w", "ReadDone", err), 0, totalChunks, len(data))
 		return
 	}
 	if err := t.client.WriteBoolNode(ctx, t.config.TriggerWriteNode, false); err != nil {
-		t.reportError(fmt.Sprintf("failed to reset TriggerWrite: %v", err), 0, totalChunks, len(data))
+		t.reportError(i18n.Errorf("failed to reset %s: %w", "TriggerWrite", err), 0, totalChunks, len(data))
 		return
 	}
 
 	for chunkIdx := 0; chunkIdx < totalChunks; chunkIdx++ {
 		select {
 		case <-ctx.Done():
-			t.reportError("context cancelled", chunkIdx, totalChunks, len(data))
+			t.reportError(i18n.Errorf("transfer interrupted"), chunkIdx, totalChunks, len(data))
 			return
 		case <-t.stopCh:
-			t.reportError("transfer cancelled", chunkIdx, totalChunks, len(data))
+			t.reportError(i18n.Errorf("transfer cancelled"), chunkIdx, totalChunks, len(data))
 			return
 		default:
 		}
 
-		if err := t.sendChunk(ctx, data, chunkIdx, totalChunks); err != nil {
-			t.reportError(err.Error(), chunkIdx, totalChunks, len(data))
+		if err := t.sendChunk(ctx, data, chunkIdx); err != nil {
+			t.reportError(i18n.Errorf("chunk %d of %d: %w", chunkIdx+1, totalChunks, err), chunkIdx, totalChunks, len(data))
 			return
 		}
 
@@ -152,7 +154,7 @@ func (t *ChunkedTransfer) runTransfer(ctx context.Context, data []string) {
 
 	// Set EndOfFile = TRUE
 	if err := t.client.WriteBoolNode(ctx, t.config.EndOfFileNode, true); err != nil {
-		t.reportError(fmt.Sprintf("failed to set EOF: %v", err), totalChunks, totalChunks, len(data))
+		t.reportError(i18n.Errorf("failed to set %s: %w", "EndOfFile", err), totalChunks, totalChunks, len(data))
 		return
 	}
 
@@ -164,7 +166,7 @@ func (t *ChunkedTransfer) runTransfer(ctx context.Context, data []string) {
 }
 
 // sendChunk sends a single chunk and waits for PLC acknowledgment
-func (t *ChunkedTransfer) sendChunk(ctx context.Context, data []string, chunkIdx, totalChunks int) error {
+func (t *ChunkedTransfer) sendChunk(ctx context.Context, data []string, chunkIdx int) error {
 	start := chunkIdx * t.config.ChunkSize
 	end := min(start+t.config.ChunkSize, len(data))
 
@@ -173,31 +175,30 @@ func (t *ChunkedTransfer) sendChunk(ctx context.Context, data []string, chunkIdx
 
 	// 1. Write chunk to Point
 	if err := t.client.WriteStringArray(ctx, t.config.PointArrayNode, paddedChunk); err != nil {
-		return fmt.Errorf("failed to write chunk %d: %w", chunkIdx, err)
+		return i18n.Errorf("failed to write the lines: %w", err)
 	}
 
 	// 2. Set TriggerWrite = TRUE
 	if err := t.client.WriteBoolNode(ctx, t.config.TriggerWriteNode, true); err != nil {
-		return fmt.Errorf("failed to set trigger: %w", err)
+		return i18n.Errorf("failed to set %s: %w", "TriggerWrite", err)
 	}
 
 	// 3. Wait for Trigger_Read_Done = TRUE
 	if err := t.waitForAck(ctx); err != nil {
-		ackErr := fmt.Errorf("ack timeout on chunk %d: %w", chunkIdx, err)
 		if resetErr := t.lowerTrigger(ctx); resetErr != nil {
-			return errors.Join(ackErr, resetErr)
+			return i18n.Join([]error{err, resetErr})
 		}
-		return ackErr
+		return err
 	}
 
 	// 4. Reset ReadDone = FALSE to prevent race condition on next chunk
 	if err := t.client.WriteBoolNode(ctx, t.config.ReadDoneNode, false); err != nil {
-		return fmt.Errorf("failed to reset ReadDone: %w", err)
+		return i18n.Errorf("failed to reset %s: %w", "ReadDone", err)
 	}
 
 	// 5. Reset TriggerWrite = FALSE
 	if err := t.client.WriteBoolNode(ctx, t.config.TriggerWriteNode, false); err != nil {
-		return fmt.Errorf("failed to reset trigger: %w", err)
+		return i18n.Errorf("failed to reset %s: %w", "TriggerWrite", err)
 	}
 
 	return nil
@@ -209,7 +210,7 @@ func (t *ChunkedTransfer) lowerTrigger(ctx context.Context) error {
 	resetCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), resetTimeout)
 	defer cancel()
 	if err := t.client.WriteBoolNode(resetCtx, t.config.TriggerWriteNode, false); err != nil {
-		return fmt.Errorf("failed to reset trigger: %w", err)
+		return i18n.Errorf("failed to reset %s: %w", "TriggerWrite", err)
 	}
 	return nil
 }
@@ -226,17 +227,17 @@ func (t *ChunkedTransfer) waitForAck(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return i18n.Errorf("transfer interrupted")
 		case <-t.stopCh:
-			return fmt.Errorf("cancelled")
+			return i18n.Errorf("transfer cancelled")
 		case <-ticker.C:
 			if time.Now().After(deadline) {
-				return fmt.Errorf("timeout waiting for PLC ack")
+				return i18n.Errorf("the PLC did not acknowledge within %d ms", t.config.AckTimeout)
 			}
 
 			done, err := t.client.ReadBoolNode(ctx, t.config.ReadDoneNode)
 			if err != nil {
-				return fmt.Errorf("failed to read ack: %w", err)
+				return i18n.Errorf("failed to read the acknowledgement: %w", err)
 			}
 			if done {
 				return nil
@@ -265,7 +266,7 @@ func (t *ChunkedTransfer) reportProgress(chunk, total, totalLines int, done bool
 }
 
 // reportError sends error update to callback
-func (t *ChunkedTransfer) reportError(errMsg string, chunk, total, totalLines int) {
+func (t *ChunkedTransfer) reportError(err error, chunk, total, totalLines int) {
 	t.mu.Lock()
 	t.state = TransferError
 	t.mu.Unlock()
@@ -275,7 +276,8 @@ func (t *ChunkedTransfer) reportError(errMsg string, chunk, total, totalLines in
 			Chunk:      chunk,
 			Total:      total,
 			TotalLines: totalLines,
-			Error:      errMsg,
+			Err:        err,
+			Error:      err.Error(),
 			Duration:   time.Since(t.startTime).Seconds(),
 		})
 	}

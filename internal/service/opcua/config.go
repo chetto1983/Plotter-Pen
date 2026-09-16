@@ -4,6 +4,7 @@ import (
 	"os"
 	"sync"
 
+	"plotter-pen/internal/i18n"
 	"plotter-pen/internal/persistence"
 
 	"gorm.io/gorm"
@@ -54,6 +55,9 @@ type Config struct {
 	Username       string `json:"username"`
 	Password       string `json:"password"`
 }
+
+// ErrActivePLC refuses to delete the PLC the app is working with.
+var ErrActivePLC = i18n.Errorf("the active PLC cannot be deleted")
 
 // ConfigManager handles OPC UA configuration with database persistence
 type ConfigManager struct {
@@ -173,7 +177,7 @@ func (cm *ConfigManager) Delete(id int64) error {
 	cm.mu.RLock()
 	if cm.activeID == id {
 		cm.mu.RUnlock()
-		return gorm.ErrRecordNotFound
+		return ErrActivePLC
 	}
 	cm.mu.RUnlock()
 	return cm.db.Delete(&persistence.OPCUAConfig{}, id).Error

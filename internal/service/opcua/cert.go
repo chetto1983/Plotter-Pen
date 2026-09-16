@@ -15,6 +15,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"plotter-pen/internal/i18n"
 )
 
 // GenerateCert generates a self-signed certificate for OPC UA client authentication
@@ -90,7 +92,7 @@ func GenerateAndSaveCert(certPath, keyPath string) (err error) {
 // os.Root confines even symlinks and concurrent directory changes to that root.
 func GenerateAndSaveCertInDir(root *os.Root, dir string) (err error) {
 	if !filepath.IsLocal(dir) {
-		return fmt.Errorf("certificate directory must be within the certificate root")
+		return i18n.Errorf("the certificate directory must be within the certificate root")
 	}
 	if err := root.MkdirAll(dir, 0700); err != nil {
 		return err
