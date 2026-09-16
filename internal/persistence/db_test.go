@@ -437,6 +437,44 @@ func TestInitDB_ExistingToolsTakeTheGlobalSpeeds(t *testing.T) {
 	}
 }
 
+// A database from before the job gets an empty one, with the parameters of a step in columns of
+// their own; the operation keeps its columns where they were, with no prefix.
+func TestInitDB_ExistingDatabaseGetsAnEmptyJob(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "old.db")
+	old, err := gorm.Open(sqlite.Open(path), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	if err := old.AutoMigrate(&camOperationBeforeStock{}); err != nil {
+		t.Fatalf("old schema: %v", err)
+	}
+	closeDB(t, old)
+
+	db, err := InitDB(path)
+	if err != nil {
+		t.Fatalf("InitDB: %v", err)
+	}
+	t.Cleanup(func() { closeDB(t, db) })
+
+	var steps int64
+	if err := db.Model(&JobStep{}).Count(&steps).Error; err != nil {
+		t.Fatalf("count the steps: %v", err)
+	}
+	if steps != 0 {
+		t.Fatalf("%d steps in a database that had no job, want 0", steps)
+	}
+	for _, column := range []string{"position", "layer", "operation", "tool_id", "drill_id", "drill_depth"} {
+		if !db.Migrator().HasColumn(&JobStep{}, column) {
+			t.Errorf("job_steps has no column %q", column)
+		}
+	}
+	for _, column := range []string{"operation", "tool_id", "drill_depth"} {
+		if !db.Migrator().HasColumn(&CAMOperation{}, column) {
+			t.Errorf("cam_operations has no column %q", column)
+		}
+	}
+}
+
 func closeDB(t *testing.T, db *gorm.DB) {
 	t.Helper()
 	sqlDB, err := db.DB()

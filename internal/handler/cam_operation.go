@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"slices"
@@ -35,63 +36,70 @@ func (h *PersistenceHandler) SaveCAMOperation(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if !slices.Contains(camOperations, req.Operation) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("operation must be one of %q", camOperations)})
+	if err := checkCAMParams(&req.CAMParams); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if req.Side != cam.SideOutside && req.Side != cam.SideInside && req.Side != cam.SideOn {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("side must be %q, %q or %q", cam.SideOutside, cam.SideInside, cam.SideOn)})
-		return
-	}
-	// The kind of tool is only drawn, never cut with: a body that does not carry it keeps the
-	// default rather than being refused. A kind nobody knows is still a mistake.
-	if req.ToolType == "" {
-		req.ToolType = "endmill"
-	}
-	if req.DrillType == "" {
-		req.DrillType = "drill"
-	}
-	for name, kind := range map[string]string{"toolType": req.ToolType, "drillType": req.DrillType} {
-		if !slices.Contains(toolKinds, kind) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("%s must be one of %q", name, toolKinds)})
-			return
-		}
-	}
-	if req.ToolID < 0 || req.DrillID < 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "toolId and drillId must not be negative, 0 is no tool"})
-		return
-	}
-	if req.Direction != cam.CuttingConventional && req.Direction != cam.CuttingClimb {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("direction must be %q or %q", cam.CuttingConventional, cam.CuttingClimb)})
-		return
-	}
-
-	// a map, so that false and 0 are written too
-	updates := map[string]any{
-		"operation":         req.Operation,
-		"thickness":         req.Thickness,
-		"overcut":           req.Overcut,
-		"tool_diameter":     req.ToolDiameter,
-		"tool_type":         req.ToolType,
-		"tool_id":           req.ToolID,
-		"side":              req.Side,
-		"direction":         req.Direction,
-		"profile_through":   req.ProfileThrough,
-		"profile_depth":     req.ProfileDepth,
-		"drill_diameter":    req.DrillDiameter,
-		"drill_type":        req.DrillType,
-		"drill_id":          req.DrillID,
-		"min_hole_diameter": req.MinHoleDiameter,
-		"max_hole_diameter": req.MaxHoleDiameter,
-		"peck_depth":        req.PeckDepth,
-		"tip_angle":         req.TipAngle,
-		"tip_through":       req.TipThrough,
-		"drill_through":     req.DrillThrough,
-		"drill_depth":       req.DrillDepth,
-	}
-	if err := h.db.Model(&persistence.CAMOperation{}).Where("id = 1").Updates(updates).Error; err != nil {
+	if err := h.db.Model(&persistence.CAMOperation{}).Where("id = 1").Updates(camParamsColumns(req.CAMParams)).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+// checkCAMParams refuses a choice outside the known ones, for the operation and for every step of
+// the job. The kind of tool is only drawn, never cut with: a body that does not carry it gets the
+// default rather than being refused, which is why the parameters are taken by pointer.
+func checkCAMParams(p *persistence.CAMParams) error {
+	if !slices.Contains(camOperations, p.Operation) {
+		return fmt.Errorf("operation must be one of %q", camOperations)
+	}
+	if p.Side != cam.SideOutside && p.Side != cam.SideInside && p.Side != cam.SideOn {
+		return fmt.Errorf("side must be %q, %q or %q", cam.SideOutside, cam.SideInside, cam.SideOn)
+	}
+	if p.ToolType == "" {
+		p.ToolType = "endmill"
+	}
+	if p.DrillType == "" {
+		p.DrillType = "drill"
+	}
+	for name, kind := range map[string]string{"toolType": p.ToolType, "drillType": p.DrillType} {
+		if !slices.Contains(toolKinds, kind) {
+			return fmt.Errorf("%s must be one of %q", name, toolKinds)
+		}
+	}
+	if p.ToolID < 0 || p.DrillID < 0 {
+		return errors.New("toolId and drillId must not be negative, 0 is no tool")
+	}
+	if p.Direction != cam.CuttingConventional && p.Direction != cam.CuttingClimb {
+		return fmt.Errorf("direction must be %q or %q", cam.CuttingConventional, cam.CuttingClimb)
+	}
+	return nil
+}
+
+// camParamsColumns are the parameters as columns. A map, so that false and 0 are written too: a
+// struct would leave them to the column defaults.
+func camParamsColumns(p persistence.CAMParams) map[string]any {
+	return map[string]any{
+		"operation":         p.Operation,
+		"thickness":         p.Thickness,
+		"overcut":           p.Overcut,
+		"tool_diameter":     p.ToolDiameter,
+		"tool_type":         p.ToolType,
+		"tool_id":           p.ToolID,
+		"side":              p.Side,
+		"direction":         p.Direction,
+		"profile_through":   p.ProfileThrough,
+		"profile_depth":     p.ProfileDepth,
+		"drill_diameter":    p.DrillDiameter,
+		"drill_type":        p.DrillType,
+		"drill_id":          p.DrillID,
+		"min_hole_diameter": p.MinHoleDiameter,
+		"max_hole_diameter": p.MaxHoleDiameter,
+		"peck_depth":        p.PeckDepth,
+		"tip_angle":         p.TipAngle,
+		"tip_through":       p.TipThrough,
+		"drill_through":     p.DrillThrough,
+		"drill_depth":       p.DrillDepth,
+	}
 }

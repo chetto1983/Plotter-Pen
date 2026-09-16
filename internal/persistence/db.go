@@ -61,12 +61,15 @@ type PLCSimulationSettings struct {
 	UpdatedAt        time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
 }
 
-// CAMOperation stores the operation whose program the PLC output shows (singleton): Operation is
-// "pen", "profile" or "drill", with the piece both cut and the parameters of the profile and of the
-// drilling. Each cuts through the piece, Overcut into the bed, or goes its depth below the top of
-// the piece. The PLC never receives the diameters, so they live apart from PLCSimulationSettings.
-type CAMOperation struct {
-	ID           int64   `gorm:"primaryKey;check:id = 1" json:"id"`
+// CAMParams are the parameters of one operation: Operation is "pen", "profile" or "drill", with the
+// piece both cut and the parameters of the profile and of the drilling. Each cuts through the piece,
+// Overcut into the bed, or goes its depth below the top of the piece. The PLC never receives the
+// diameters, so they live apart from PLCSimulationSettings. Embedded, they keep their own column
+// names, so the operation and the steps of the job share them.
+//
+// The column defaults fill the rows of older databases; they also replace a zero value on Create,
+// so rows are written from a map (a false or a 0 is a choice here, not a missing value).
+type CAMParams struct {
 	Operation    string  `gorm:"default:'pen'" json:"operation"`
 	Thickness    float64 `gorm:"default:1.6" json:"thickness"`
 	Overcut      float64 `gorm:"default:0.2" json:"overcut"`
@@ -77,22 +80,41 @@ type CAMOperation struct {
 	// ToolID and DrillID are the tools of the library the profile and the drilling were given, 0
 	// when none was: the operation reads their speeds, and a tool deleted since falls back on the
 	// global ones.
-	ToolID          int64     `gorm:"default:0" json:"toolId"`
-	Side            string    `gorm:"default:'outside'" json:"side"`
-	Direction       string    `gorm:"default:'conventional'" json:"direction"`
-	ProfileThrough  bool      `gorm:"default:true" json:"profileThrough"`
-	ProfileDepth    float64   `gorm:"default:1" json:"profileDepth"`
-	DrillDiameter   float64   `gorm:"default:1" json:"drillDiameter"`
-	DrillType       string    `gorm:"default:'drill'" json:"drillType"`
-	DrillID         int64     `gorm:"default:0" json:"drillId"`
-	MinHoleDiameter float64   `gorm:"default:0.4" json:"minHoleDiameter"`
-	MaxHoleDiameter float64   `gorm:"default:1.2" json:"maxHoleDiameter"`
-	PeckDepth       float64   `gorm:"default:0" json:"peckDepth"`
-	TipAngle        float64   `gorm:"default:118" json:"tipAngle"`
-	TipThrough      bool      `gorm:"default:false" json:"tipThrough"`
-	DrillThrough    bool      `gorm:"default:true" json:"drillThrough"`
-	DrillDepth      float64   `gorm:"default:1" json:"drillDepth"`
-	UpdatedAt       time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
+	ToolID          int64   `gorm:"default:0" json:"toolId"`
+	Side            string  `gorm:"default:'outside'" json:"side"`
+	Direction       string  `gorm:"default:'conventional'" json:"direction"`
+	ProfileThrough  bool    `gorm:"default:true" json:"profileThrough"`
+	ProfileDepth    float64 `gorm:"default:1" json:"profileDepth"`
+	DrillDiameter   float64 `gorm:"default:1" json:"drillDiameter"`
+	DrillType       string  `gorm:"default:'drill'" json:"drillType"`
+	DrillID         int64   `gorm:"default:0" json:"drillId"`
+	MinHoleDiameter float64 `gorm:"default:0.4" json:"minHoleDiameter"`
+	MaxHoleDiameter float64 `gorm:"default:1.2" json:"maxHoleDiameter"`
+	PeckDepth       float64 `gorm:"default:0" json:"peckDepth"`
+	TipAngle        float64 `gorm:"default:118" json:"tipAngle"`
+	TipThrough      bool    `gorm:"default:false" json:"tipThrough"`
+	DrillThrough    bool    `gorm:"default:true" json:"drillThrough"`
+	DrillDepth      float64 `gorm:"default:1" json:"drillDepth"`
+}
+
+// CAMOperation stores the operation whose program the PLC output shows (singleton).
+type CAMOperation struct {
+	ID int64 `gorm:"primaryKey;check:id = 1" json:"id"`
+	CAMParams
+	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
+}
+
+// JobStep is one step of the job: an operation with its tool and parameters, on one layer of the
+// drawing. The job is the list of the steps in Position order; there is one, for the drawing on
+// screen, and a save replaces it whole, so neither the row id nor the position is part of the
+// JSON — the order of the list is the position.
+type JobStep struct {
+	ID       int64 `gorm:"primaryKey;autoIncrement" json:"-"`
+	Position int   `gorm:"not null;index" json:"-"`
+	// Layer is the id of the layer the step works on — for a DXF, the name of its layer — and
+	// empty for the whole drawing.
+	Layer string `gorm:"not null;default:''" json:"layer"`
+	CAMParams
 }
 
 // MachineConfig stores machine configuration
@@ -191,6 +213,7 @@ func InitDBWithConfig(dbPath string, cfg DBConfig) (*gorm.DB, error) {
 		&Tool{},
 		&PLCSimulationSettings{},
 		&CAMOperation{},
+		&JobStep{},
 		&MachineConfig{},
 		&OPCUAConfig{},
 	)

@@ -46,6 +46,10 @@ func (h *PersistenceHandler) RegisterRoutes(r *gin.RouterGroup) {
 	// Operation shown in the PLC output (cam_operation.go)
 	r.GET("/cam/operation", h.GetCAMOperation)
 	r.POST("/cam/operation", h.SaveCAMOperation)
+
+	// The job: the steps cut one after the other (cam_job.go)
+	r.GET("/cam/job", h.GetCAMJob)
+	r.POST("/cam/job", h.SaveCAMJob)
 }
 
 // === App State ===
