@@ -3,6 +3,7 @@ import { PLC3DAnimator } from '../plc/PLC3DAnimator.js';
 import { getPLCSettingsFromUI, setPLCSettingsToUI, getPLCSettingsFromModal, setPLCSettingsToModal } from './plcSettingsUtils.js';
 import { CAMOperationManager } from './CAMOperationManager.js';
 import { camArea, visibleLayerKey } from './camArea.js';
+import { stockOf } from './camStock.js';
 
 export class PLCOutputManager {
   constructor(app) {
@@ -420,15 +421,28 @@ export class PLCOutputManager {
   }
 
   /**
+   * Show the piece the given work area is cut out of. It follows the drawing and the operation,
+   * not the program: a request the server refuses leaves the piece where it is.
+   * this.operation.operation is the state of the CAM panel, which holds the operation and the
+   * thickness.
+   */
+  updateStock(primitives) {
+    this.simulator3D?.setStock(stockOf(primitives, this.operation.operation, getPLCSettingsFromUI().workZ));
+  }
+
+  /**
    * Update 3D simulation with current PLC output
    */
   update3DSimulation() {
+    this.updateStock(camArea(this.app).primitives);
     if (!this.animator3D || !this.app.plcOutput || this.app.plcOutput.length === 0) return;
 
     // Draw CAD primitives on 3D work surface
     if (this.simulator3D && this.app.primitives && this.app.primitives.length > 0) {
       this.simulator3D.drawPrimitivesOnSurface(this.app.primitives);
     }
+
+    this.updateStock(camArea(this.app).primitives);
 
     this.animator3D.load(this.app.plcOutput);
   }
@@ -471,12 +485,14 @@ export class PLCOutputManager {
     const run = ++this._extractRun;
     if (this.app.primitives.length === 0) {
       this.operation.showArea({ total: 0 });
+      this.updateStock([]);
       this.app.ui.updateStatus("Nessuna primitiva da estrarre");
       return;
     }
 
     const area = camArea(this.app);
     this.operation.showArea({ scope: area.scope, count: area.primitives.length, total: area.total });
+    this.updateStock(area.primitives);
     if (area.primitives.length === 0) {
       // Everything is hidden, or nothing selected can be cut: no stale program may stay around
       this.clearOutput("Nessun comando: niente da lavorare nell'area");

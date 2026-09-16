@@ -187,6 +187,50 @@ export class PLCSimulator3D {
         this.scene.add(this.gridOutline);
     }
 
+    /**
+     * Show the piece being cut as a block from the bed (z0) to its top (z1), over the given
+     * bounds. Called again with no piece (or with nothing to cut) it leaves the scene empty.
+     * @param {{minX: number, minY: number, maxX: number, maxY: number, z0: number, z1: number}|null} stock
+     */
+    setStock(stock) {
+        this.clearStock();
+        if (!stock) return;
+
+        const { minX, minY, maxX, maxY, z0, z1 } = stock;
+        const width = maxX - minX, depth = maxY - minY, height = z1 - z0;
+        if (!(width > 0 && depth > 0 && height > 0)) return;
+
+        // Transparent and out of the depth buffer, so the path inside the material stays visible
+        const material = new THREE.MeshStandardMaterial({
+            color: 0xb08d57, transparent: true, opacity: 0.25, depthWrite: false,
+            roughness: 0.9, metalness: 0, side: THREE.DoubleSide
+        });
+        this.stockMesh = new THREE.Mesh(new THREE.BoxGeometry(width, depth, height), material);
+        this.stockMesh.position.set((minX + maxX) / 2, (minY + maxY) / 2, (z0 + z1) / 2);
+        this.scene.add(this.stockMesh);
+
+        // The edges keep the block readable where it is nearly edge-on
+        this.stockEdges = new THREE.LineSegments(
+            new THREE.EdgesGeometry(this.stockMesh.geometry),
+            new THREE.LineBasicMaterial({ color: 0xb08d57, transparent: true, opacity: 0.6 })
+        );
+        this.stockEdges.position.copy(this.stockMesh.position);
+        this.scene.add(this.stockEdges);
+        this.renderFrame();
+    }
+
+    /** Take the piece out of the scene and give its geometry and materials back */
+    clearStock() {
+        for (const key of ['stockMesh', 'stockEdges']) {
+            const object = this[key];
+            if (!object) continue;
+            this.scene.remove(object);
+            object.geometry.dispose();
+            object.material.dispose();
+            this[key] = null;
+        }
+    }
+
     createDefaultTool(diameter, height) {
         const group = new THREE.Group();
         const radius = diameter / 2;
@@ -923,6 +967,7 @@ export class PLCSimulator3D {
         this.canvas.removeEventListener('contextmenu', this.handleContextMenu);
 
         this.clearTrail();
+        this.clearStock();
 
         // Dispose LineMaterials
         this.rapidMaterial?.dispose();
