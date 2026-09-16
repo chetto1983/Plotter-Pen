@@ -455,9 +455,15 @@ work area, falling back on the visible layers, for all three operations.
   gone, a rename that regenerates nothing (`extractPLC` call counter unchanged), every layer
   hidden emptying the output, and everything back when the layers are shown again. No page
   errors.
-- **Open, not touched:** `SelectionManager.boxSelect` selects primitives on hidden layers, so a
-  window selection can delete or move what is not on the screen. The CAM no longer cuts them,
-  but the selection itself still reaches them.
+- **Then fixed, right after** (the user said "procedi"): `boxSelect` now skips hidden layers as a
+  click already did, so a window selection no longer reaches what is not on the screen — not to
+  cut it, and not to delete or move it either. It also announces the change, which it never did:
+  a rubber band changed the selection while the CAM kept the old area. Escape
+  (`cancelCurrentOperation`) had the same hole and now announces it too. The three copies of the
+  dispatch line became `SelectionManager.notifySelectionChanged`, the one place that says it.
+  Checked in headless Chrome: a window over everything with one layer hidden selects three of
+  six and the program follows without another gesture, Escape hands the area back to the visible
+  layers, and with the layer shown again the same window takes all six. No page errors.
 
 ## Environment
 
