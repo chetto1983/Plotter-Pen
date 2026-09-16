@@ -705,12 +705,15 @@ func fitArcsToPoints(points []Point) []Primitive {
 					continue
 				}
 
+				// Vertices alone prove nothing (any three points are concyclic): the chord
+				// midpoints must stay on the circle too, or the arc leaves the drawn path.
 				fits := true
-				for k := i; k <= j; k++ {
+				for k := i; k <= j && fits; k++ {
 					dist := distance(points[k], Point{X: circle.Cx, Y: circle.Cy})
-					if math.Abs(dist-circle.R) > tolerance {
-						fits = false
-						break
+					fits = math.Abs(dist-circle.R) <= tolerance
+					if fits && k < j {
+						chordMid := Point{X: (points[k].X + points[k+1].X) / 2, Y: (points[k].Y + points[k+1].Y) / 2}
+						fits = math.Abs(distance(chordMid, Point{X: circle.Cx, Y: circle.Cy})-circle.R) <= tolerance
 					}
 				}
 
