@@ -41,6 +41,7 @@ One piece at a time: a short design approved first, then TDD, then a check on th
 | — | The piece of material shown in the 3D view | Done 2026-09-16 |
 | — | The 3D camera follows the tool, without changing the angle | Done 2026-09-16 |
 | — | The tool that is cutting drawn as itself, from the library kind | Done 2026-09-16 |
+| — | Details out of reach measured and marked in the drawing | Done 2026-09-16 |
 
 Measured on `dxf/L28YO-tree-of-life-wall-spiritual-art.dxf`:
 
@@ -587,6 +588,40 @@ cone and a cylinder at a fixed 6 mm, whatever the operation and whatever the too
   `toolType: "vbit"`, the mesh it replaced is really disposed, the drilling draws its point at
   118° (0.300 mm to the full diameter), a ball nose saved from the window draws 14 points all on
   its sphere, and the pen is a pen again. No page errors.
+
+### The details the tool cannot reach (2026-09-16)
+
+The last piece of the CAM list. A contour the tool could not reach was already warned about, but
+the warning only gave its corners: not how narrow it is, not what tool would cut it, and nothing
+on the drawing said which piece of it was left out.
+
+- **How wide the detail is** (`widestTool` in `internal/service/cam/profile.go`): the largest
+  circle the contour holds, found by shrinking the contour with `clipper.OffsetContours` until
+  nothing is left — a binary search to 0.01 mm, rounded **down**, so the tool it names really
+  does fit. It is one contour offset a dozen times, not the whole drawing, so it costs nothing on
+  a large DXF. The measure is the right one for both cases the warning covers: a hole when
+  cutting outside and an outline when cutting inside are each a region the tool cannot enter.
+- **What the response carries**: `ProfileResponse.Unreached`, one `UnreachedDetail` per contour
+  with its bounds, its width and the primitives it is drawn with. The primitives come from
+  `Contours.ClosedIDs` matched to the merged material with `clipper.Within`, a new helper that
+  counts a point on the outline as within — `Inside` answers the stricter question and so says no
+  for the contour that *is* the merged one, which is the ordinary case.
+- **What the panel says**: `2 dettagli non raggiungibili con Ø6 mm: serve Ø 3,98 mm o meno`. The
+  narrowest detail decides, since a tool that fits it fits the others; when nothing fits, it says
+  so instead of offering a tool of 0 mm. The list below still carries a sentence per detail.
+- **What the drawing shows** (`CADApplication.unreachedPrimitives`, `renderer.drawUnreached`): the
+  primitives of those details are drawn dashed in orange, over the static cache and under the
+  hover and the selection — it is a property of the drawing, not a gesture of the user. The marks
+  follow every regeneration: a tool that fits clears them, a refused program clears them too.
+- **Checked:** TDD on the Go side (a 4 mm hole measures 3.99 with a Ø6 tool and names the hole
+  alone; a round hole measures its diameter; a slot of 0.005 mm has no tool that fits and the
+  warning says so), then `go vet`, `go test ./...`, `make quality` (exit 0), `npm run lint`,
+  `npm run build`, and headless Chrome: the panel names the tool needed, the small hole is marked
+  and the big one is not, Ø3 clears both the warning and the marks, Ø400 marks both holes with
+  the narrowest naming the tool, and a refused program leaves no marks behind. No page errors.
+- **Met on the way:** with many pages opened in one run the app logs `[WS] WebSocket error`. It
+  is the rate limit of the server, 5 WebSocket connections per IP (`wsMaxPerIP`), answering 429
+  to the sixth: the test harness had exhausted it, not the app. A fresh browser is clean.
 
 ## Environment
 

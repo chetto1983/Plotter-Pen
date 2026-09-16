@@ -96,6 +96,7 @@ tools/s7sim/                  # S7-1500 OPC UA simulator (Python, not part of Co
 | Piece in the 3D view | `src/app/camStock.js` | Done | A transparent block over the work area, from the bed up by the thickness |
 | Camera on the tool | `src/plc/PLCSimulator3D.js` | Done | A toolbar button keeps the view on the tool; a pan lets it go |
 | The tool drawn | `src/plc/toolShapes.js` | Done | Turned profiles through three.js LatheGeometry, from the kind chosen in the library |
+| Details out of reach | `internal/service/cam/profile.go` | Done | Measured to 0.01 mm, named in the panel and marked in the drawing |
 | Transfer | `internal/service/opcua/transfer.go` | Done | Chunked async with ACK |
 | WebSocket | `internal/handler/opcua_ws.go` | Done | Real-time position streaming |
 | Simulator | `tools/s7sim/s7sim.py` | Done | S7-1500 OPC UA simulator for transfer tests |
