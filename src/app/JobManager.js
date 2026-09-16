@@ -31,6 +31,8 @@ export class JobManager {
     this.steps = [{ layer: '', ...defaults }];
     this.active = 0;
     this.loaded = false;
+    // While the job runs (JobRunner) the list is not changed and only the run moves the active step
+    this.locked = false;
     this._saveTimeout = null;
     this._saving = Promise.resolve();
   }
@@ -129,6 +131,15 @@ export class JobManager {
   }
 
   select(index) {
+    if (this.locked) return;
+    this.activate(index);
+  }
+
+  /**
+   * Make a step the active one, which the panel shows with its program; the run uses it while the
+   * list is locked
+   */
+  activate(index) {
     if (!Number.isInteger(index) || index === this.active || !this.steps[index]) return;
     this.active = index;
     this.changed(false);
@@ -140,7 +151,7 @@ export class JobManager {
    * piece is still held by the stock around it.
    */
   add(operation) {
-    if (!this.labels[operation]) return;
+    if (this.locked || !this.labels[operation]) return;
     const firstProfile = this.steps.findIndex((step) => step.operation === 'profile');
     const index = operation === 'drill' && firstProfile >= 0 ? firstProfile : this.steps.length;
     this.steps.splice(index, 0, { ...this.step, operation, layer: '' });
@@ -149,6 +160,7 @@ export class JobManager {
   }
 
   duplicate() {
+    if (this.locked) return;
     this.steps.splice(this.active + 1, 0, { ...this.step });
     this.active += 1;
     this.changed(true);
@@ -156,7 +168,7 @@ export class JobManager {
 
   // The job keeps a step: the panel always edits one
   remove() {
-    if (this.steps.length <= 1) return;
+    if (this.locked || this.steps.length <= 1) return;
     this.steps.splice(this.active, 1);
     this.active = Math.min(this.active, this.steps.length - 1);
     this.changed(true);
@@ -164,7 +176,7 @@ export class JobManager {
 
   move(delta) {
     const to = this.active + delta;
-    if (to < 0 || to >= this.steps.length) return;
+    if (this.locked || to < 0 || to >= this.steps.length) return;
     [this.steps[this.active], this.steps[to]] = [this.steps[to], this.steps[this.active]];
     this.active = to;
     this.changed(true);
@@ -220,9 +232,12 @@ export class JobManager {
     this.renderSteps();
     this.renderLayerChoice();
     const buttons = {
-      camJobRemove: this.steps.length <= 1,
-      camJobUp: this.active === 0,
-      camJobDown: this.active === this.steps.length - 1
+      camJobAdd: this.locked,
+      camJobDuplicate: this.locked,
+      camJobRun: this.locked,
+      camJobRemove: this.locked || this.steps.length <= 1,
+      camJobUp: this.locked || this.active === 0,
+      camJobDown: this.locked || this.active === this.steps.length - 1
     };
     for (const [id, disabled] of Object.entries(buttons)) {
       const button = document.getElementById(id);
@@ -239,6 +254,7 @@ export class JobManager {
       row.type = 'button';
       row.className = 'cam-job-step';
       row.dataset.index = String(index);
+      row.disabled = this.locked;
       row.classList.toggle('active', index === this.active);
       row.setAttribute('aria-current', String(index === this.active));
       const diameter = { profile: step.toolDiameter, drill: step.drillDiameter }[step.operation];
@@ -277,6 +293,7 @@ export class JobManager {
       return option;
     }));
     select.value = current;
+    select.disabled = this.locked;
   }
 }
 

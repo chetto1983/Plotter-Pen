@@ -5,6 +5,7 @@
  * (JobManager), which keeps them in the database (/api/cam/job).
  */
 import { JobManager } from './JobManager.js';
+import { JobRunner } from './JobRunner.js';
 import { loadTools, speedsFor } from './toolCatalog.js';
 
 // Same defaults as the CAMParams columns
@@ -58,6 +59,7 @@ export class CAMOperationManager {
         this.app.plcOutputManager.refreshPLCOutput();
       }
     });
+    this.runner = new JobRunner(app, this);
     this.paramsCollapsed = localStorage.getItem(PARAMS_COLLAPSED_KEY) === 'true';
   }
 
@@ -73,6 +75,7 @@ export class CAMOperationManager {
    */
   async init() {
     this.job.init();
+    this.runner.init();
     document.getElementById('camStepLayer')?.addEventListener('change', (e) => this.change({ layer: e.target.value }));
     // the choice of layer and the rows of the steps name the layers
     document.addEventListener('layersChanged', () => this.job.render());
@@ -127,6 +130,12 @@ export class CAMOperationManager {
    * Apply a change from the panel to the active step: show it, regenerate the output, save the job
    */
   change(values) {
+    // A job being run is not edited: what the operator confirms is what gets sent
+    if (this.job.locked) {
+      this.app.ui.updateStatus('Lavoro in corso: i passi non si modificano');
+      this.render();
+      return;
+    }
     this.job.update(values);
     this.render();
     this.app.plcOutputManager.refreshPLCOutput();
@@ -179,7 +188,11 @@ export class CAMOperationManager {
   }
 
   get label() {
-    return LABELS[this.operation.operation] || LABELS.pen;
+    return this.labelOf(this.operation);
+  }
+
+  labelOf(step) {
+    return LABELS[step.operation] || LABELS.pen;
   }
 
   /**
@@ -200,21 +213,21 @@ export class CAMOperationManager {
   }
 
   /**
-   * The keys of the through choice and of the depth of the active operation: the profile and the
-   * drilling cut the same piece, each through or to its own depth
+   * The keys of the through choice and of the depth of an operation, the active one unless given:
+   * the profile and the drilling cut the same piece, each through or to its own depth
    */
-  cutKeys() {
-    const prefix = this.operation.operation === 'drill' ? 'drill' : 'profile';
+  cutKeys(op = this.operation) {
+    const prefix = op.operation === 'drill' ? 'drill' : 'profile';
     return { through: `${prefix}Through`, depth: `${prefix}Depth` };
   }
 
   /**
-   * The endpoint and body that generate the program of the active operation
+   * The endpoint and body that generate the program of a step, the active one unless given
    * @param {Array} primitives - primitives in the API format
    * @param {Object} settings - PLC settings from the settings table
+   * @param {Object} [op] - the step
    */
-  request(primitives, settings) {
-    const op = this.operation;
+  request(primitives, settings, op = this.operation) {
     // The speeds of the tool the operation was given, the global ones where it has none; the pen
     // has no tool of the library and cuts at the global ones
     const toolId = { profile: op.toolId, drill: op.drillId }[op.operation] ?? 0;
@@ -227,7 +240,7 @@ export class CAMOperationManager {
       workZ: settings.workZ,
       waitTime: settings.waitTime
     };
-    const cut = this.cutKeys();
+    const cut = this.cutKeys(op);
     const piece = { thickness: op.thickness, overcut: op.overcut, through: op[cut.through], depth: op[cut.depth] };
     if (op.operation === 'profile') {
       return {

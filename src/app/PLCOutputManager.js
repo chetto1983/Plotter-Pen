@@ -536,7 +536,8 @@ export class PLCOutputManager {
       return;
     }
 
-    const area = this.workArea();
+    const step = this.operation.operation;
+    const area = camArea(this.app, step.layer);
     this.operation.showArea({ scope: area.scope, count: area.primitives.length, total: area.total, layer: area.layer });
     this.updateStock(area.primitives);
     this.updateTool();
@@ -550,25 +551,16 @@ export class PLCOutputManager {
       return;
     }
 
-    // Convert primitives to API format
-    const primitives = area.primitives.map((p) => this.primitiveToRequest(p));
     const label = this.operation.label;
-    const { url, body } = this.operation.request(primitives, getPLCSettingsFromUI());
-
     try {
-      const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body)
-      });
-      const result = await response.json().catch(() => ({}));
+      const { error, result } = await this.generate(step, area);
       if (run !== this._extractRun) return;
 
-      if (!response.ok) {
+      if (error) {
         // A program that does not match the parameters must not stay around to be sent
         this.clearOutput("Nessun comando: vedi il messaggio sopra");
         this.markUnreached(null);
-        this.operation.showReport({ error: result.error || `HTTP ${response.status}` });
+        this.operation.showReport({ error });
         this.app.ui.updateStatus(`${label}: programma non generato`);
         return;
       }
@@ -601,6 +593,24 @@ export class PLCOutputManager {
       this.operation.showReport({ error: err.message });
       this.app.ui.updateStatus(`Errore estrazione PLC: ${err.message}`);
     }
+  }
+
+  /**
+   * The program of a step of the job, without showing it: the active step's for the panel, any
+   * step's for the run of the job. The area must hold something to cut.
+   * @returns {Promise<{error?: string, result?: object}>} the server's error, or its answer
+   */
+  async generate(step, area = camArea(this.app, step.layer)) {
+    const primitives = area.primitives.map((p) => this.primitiveToRequest(p));
+    const { url, body } = this.operation.request(primitives, getPLCSettingsFromUI(), step);
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) return { error: result.error || `HTTP ${response.status}` };
+    return { result };
   }
 
   // Convert frontend primitive to API request format
@@ -693,62 +703,28 @@ export class PLCOutputManager {
   }
 
   /**
-   * Send output to PLC via WebSocket chunked transfer
-   * Falls back to HTTP if WebSocket is not connected
+   * Send the program on screen to the PLC, by the chunked transfer over the WebSocket: the PLC
+   * acknowledges every chunk. There is no other way to send: the HTTP send the page used to fall
+   * back on wrote the whole program at once, which is not how the PLC reads it.
    */
-  async sendToPLC() {
+  sendToPLC() {
+    // A job being run sends its steps from its own bar, one at a time, when the operator says so
+    if (this.operation.runner.running) {
+      this.app.ui.updateStatus("Lavoro in corso: si invia dalla barra del lavoro");
+      return;
+    }
     if (this.app.plcOutput.length === 0) {
       this.app.ui.updateStatus("Nessun output da inviare");
       return;
     }
 
     const ws = this.app.wsService;
-
-    // Use WebSocket if connected, otherwise fall back to HTTP
-    if (ws && ws.isConnected()) {
-      this.sendViaWebSocket(ws);
-    } else {
-      this.sendViaHTTP();
+    if (!ws || !ws.isConnected() || !ws.transfer(this.app.plcOutput)) {
+      this.app.ui.updateOPCUAStatus("PLC non connesso: niente inviato", "error");
+      this.app.ui.updateStatus("PLC non connesso: niente inviato");
+      return;
     }
-  }
-
-  /**
-   * Send via WebSocket chunked transfer (preferred)
-   */
-  sendViaWebSocket(ws) {
     this.app.ui.updateOPCUAStatus("Avvio trasferimento...", "info");
-
-    const success = ws.transfer(this.app.plcOutput);
-    if (!success) {
-      this.app.ui.updateOPCUAStatus("WebSocket non pronto", "error");
-      // Fall back to HTTP
-      this.sendViaHTTP();
-    }
-  }
-
-  /**
-   * Send via HTTP POST (fallback)
-   */
-  async sendViaHTTP() {
-    this.app.ui.updateOPCUAStatus("Invio HTTP...", "info");
-
-    try {
-      const response = await fetch("/api/opcua/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ commands: this.app.plcOutput }),
-      });
-
-      if (response.ok) {
-        this.app.ui.updateOPCUAStatus("Inviato con successo", "success");
-        this.app.ui.updateStatus("Comandi inviati al PLC");
-      } else {
-        throw new Error("Errore nella risposta");
-      }
-    } catch (err) {
-      this.app.ui.updateOPCUAStatus(`Errore: ${err.message}`, "error");
-      this.app.ui.updateStatus("Errore invio PLC");
-    }
   }
 }
 

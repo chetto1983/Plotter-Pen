@@ -19,6 +19,15 @@ export async function loadTools() {
 }
 
 /**
+ * The tool of the library with that id, or null: 0 is no tool, and a deleted one is not there
+ * @param {number} toolId
+ * @returns {object|null}
+ */
+export function toolById(toolId) {
+  return toolId ? tools.find((t) => t.id === toolId) ?? null : null;
+}
+
+/**
  * The speeds to cut with: the tool's own where it has one, the global setting where it has 0 or
  * where the tool is not in the library any more.
  * @param {number} toolId 0 when the operation was given no tool
@@ -26,7 +35,7 @@ export async function loadTools() {
  * @returns {{feed: number, plunge: number, stepDown: number}}
  */
 export function speedsFor(toolId, settings) {
-  const tool = toolId ? tools.find((t) => t.id === toolId) : null;
+  const tool = toolById(toolId);
   const own = (value, fallback) => (value > 0 ? value : fallback);
   return {
     feed: own(tool?.feed, settings.workSpeed),

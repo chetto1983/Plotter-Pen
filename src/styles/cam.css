@@ -12,6 +12,107 @@
     background: rgba(15, 21, 33, 0.7);
 }
 
+/* The job being run: where it is, what to mount, and the one thing to press next */
+.cam-run {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    background: rgba(56, 139, 253, 0.1);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+}
+
+.cam-run[hidden],
+.cam-run [hidden] {
+    display: none;
+}
+
+.cam-run[data-state="blocked"],
+.cam-run[data-state="failed"] {
+    background: rgba(244, 67, 54, 0.1);
+    border-color: rgba(244, 67, 54, 0.5);
+}
+
+.cam-run[data-state="finished"] {
+    background: rgba(76, 175, 80, 0.1);
+    border-color: rgba(76, 175, 80, 0.5);
+}
+
+.cam-run-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--fg);
+}
+
+.cam-run-text {
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--fg);
+    overflow-wrap: anywhere;
+}
+
+.cam-run-mounted {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 36px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--fg);
+    cursor: pointer;
+}
+
+.cam-run-mounted input {
+    width: 22px;
+    height: 22px;
+    accent-color: var(--accent);
+}
+
+.cam-run-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.cam-run-actions button {
+    min-height: 40px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.cam-run-primary {
+    flex: 1;
+    background: var(--accent);
+    border: 1px solid var(--accent);
+    color: #fff;
+}
+
+.cam-run-primary:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.cam-run-secondary {
+    flex: 1;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--border);
+    color: var(--fg);
+}
+
+.cam-run-stop {
+    background: rgba(244, 67, 54, 0.15);
+    border: 1px solid rgba(244, 67, 54, 0.6);
+    color: #ffb4ab;
+}
+
+.cam-run-note {
+    font-size: 10px;
+    color: var(--muted);
+}
+
 /* The job: its steps in cutting order, and the buttons that change the list */
 .cam-job {
     display: flex;
@@ -56,6 +157,10 @@
 .cam-job-btn:hover:not(:disabled) {
     background: var(--bg-hover);
     color: var(--fg);
+}
+
+.cam-job-run:not(:disabled) {
+    color: var(--accent);
 }
 
 .cam-job-remove:hover:not(:disabled) {

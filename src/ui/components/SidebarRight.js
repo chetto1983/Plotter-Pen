@@ -32,10 +32,27 @@ export class SidebarRight {
         <div class="cad-panel-body-collapsible" id="plcPanelBody">
           <!-- The job and the operation of its active step (JobManager, CAMOperationManager) -->
           <div class="cam-op" id="camOperation">
+            <!-- The job being run: one step at a time, sent when the operator says so (JobRunner) -->
+            <div class="cam-run" id="camRun" hidden>
+              <div class="cam-run-title" id="camRunTitle"></div>
+              <div class="cam-run-text" id="camRunText"></div>
+              <label class="cam-run-mounted" id="camRunMountedField" hidden><input type="checkbox" id="camRunMounted"> <span id="camRunMountedLabel"></span></label>
+              <div class="cam-run-actions">
+                <button type="button" class="cam-run-primary" id="camRunSend" hidden></button>
+                <button type="button" class="cam-run-primary" id="camRunDone" hidden></button>
+                <button type="button" class="cam-run-primary" id="camRunRetry" hidden>Riprova</button>
+                <button type="button" class="cam-run-secondary" id="camRunClose" hidden>Chiudi</button>
+                <button type="button" class="cam-run-stop" id="camRunStop" hidden>Ferma</button>
+              </div>
+              <div class="cam-run-note" id="camRunNote">Ferma chiude il lavoro nell'app ma non arresta la macchina: per quello usa l'arresto della macchina.</div>
+            </div>
             <div class="cam-job" id="camJob">
               <div class="cam-job-bar">
                 <span class="cam-job-title">Lavoro</span>
                 <div class="cam-job-actions">
+                  <button type="button" class="cam-job-btn cam-job-run" id="camJobRun" title="Esegui lavoro">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+                  </button>
                   <div class="cam-job-add">
                     <button type="button" class="cam-job-btn" id="camJobAdd" title="Aggiungi passo" aria-haspopup="menu" aria-expanded="false">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
