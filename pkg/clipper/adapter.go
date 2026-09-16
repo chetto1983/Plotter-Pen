@@ -98,6 +98,29 @@ func Inside(inner, outer []geom.Path) [][]bool {
 	return result
 }
 
+// Within reports, for each inner path, whether it lies within each outer path, counting a point
+// on the outline as within. Inside() answers the stricter question and so says no for a path that
+// is the outer one, which is what happens when a merged contour is matched to the contour it was
+// made of.
+func Within(inner, outer []geom.Path) [][]bool {
+	outerPaths := toPaths64(outer)
+	result := make([][]bool, len(inner))
+	for i, ring := range toPaths64(inner) {
+		result[i] = make([]bool, len(outerPaths))
+		for j, around := range outerPaths {
+			within := true
+			for _, pt := range ring {
+				if clipper2.PointInPolygon(pt, around) == clipper2.IsOutside {
+					within = false
+					break
+				}
+			}
+			result[i][j] = within
+		}
+	}
+	return result
+}
+
 // GeneratePocket creates a concentric pocket toolpath
 // paths: Input geometry (Outer Boundary + Islands)
 // toolRadius: Radius of the cutter

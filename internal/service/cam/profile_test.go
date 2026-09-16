@@ -602,6 +602,62 @@ func TestProfile_WarnsAboutContoursTheToolCannotReach(t *testing.T) {
 	}
 }
 
+// A warning says how wide the detail is and which primitives draw it, so the drawing can mark it
+// and the user knows what tool would reach it.
+func TestProfile_MeasuresTheDetailsTheToolCannotReach(t *testing.T) {
+	hole := squareP(14, 28, 18, 32)
+	hole.ID = "hole"
+	outline := squareP(0, 0, 60, 60)
+	outline.ID = "outline"
+
+	res, err := Profile(request(SideOutside, 6, outline, hole))
+	if err != nil {
+		t.Fatalf("Profile: %v", err)
+	}
+	if len(res.Unreached) != 1 {
+		t.Fatalf("%d details out of reach, want 1: %+v", len(res.Unreached), res.Unreached)
+	}
+	got := res.Unreached[0]
+	if math.Abs(got.Width-4) > 0.02 {
+		t.Errorf("the 4 mm hole measures %.3f mm", got.Width)
+	}
+	if !slices.Equal(got.PrimitiveIDs, []string{"hole"}) {
+		t.Errorf("drawn by %q, want the hole alone", got.PrimitiveIDs)
+	}
+	if got.MinX != 14 || got.MinY != 28 || got.MaxX != 18 || got.MaxY != 32 {
+		t.Errorf("bounds (%.3f, %.3f) to (%.3f, %.3f)", got.MinX, got.MinY, got.MaxX, got.MaxY)
+	}
+	// the measurement is rounded down, so the tool it names really does fit
+	if !strings.Contains(res.Warnings[0], fmt.Sprintf("%.3f mm", got.Width)) || !strings.Contains(res.Warnings[0], "6.000 mm") {
+		t.Errorf("warning %q says neither how wide the detail is nor the tool it was cut with", res.Warnings[0])
+	}
+}
+
+// A round hole is as wide as its diameter, whatever the fit tolerance of the contour.
+func TestProfile_MeasuresARoundHoleByItsDiameter(t *testing.T) {
+	res, err := Profile(request(SideOutside, 6, squareP(0, 0, 60, 60), circleP(30, 30, 1.5)))
+	if err != nil {
+		t.Fatalf("Profile: %v", err)
+	}
+	if len(res.Unreached) != 1 || math.Abs(res.Unreached[0].Width-3) > 0.05 {
+		t.Fatalf("details out of reach %+v, want one 3 mm wide", res.Unreached)
+	}
+}
+
+// Nothing at all fits some details, and the warning must say so rather than offer a tool of 0 mm.
+func TestProfile_SaysWhenNoToolFitsTheDetail(t *testing.T) {
+	res, err := Profile(request(SideOutside, 6, squareP(0, 0, 60, 60), squareP(20, 30, 20.005, 40)))
+	if err != nil {
+		t.Fatalf("Profile: %v", err)
+	}
+	if len(res.Unreached) != 1 || res.Unreached[0].Width != 0 {
+		t.Fatalf("details out of reach %+v, want one no tool fits", res.Unreached)
+	}
+	if !strings.Contains(res.Warnings[0], "no tool") {
+		t.Errorf("warning %q does not say that no tool fits", res.Warnings[0])
+	}
+}
+
 func TestProfile_RejectsWhatCannotBeCut(t *testing.T) {
 	valid := func() ProfileRequest { return request("outside", 3, squareP(0, 0, 20, 20)) }
 	tests := []struct {

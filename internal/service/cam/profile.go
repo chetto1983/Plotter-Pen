@@ -56,10 +56,23 @@ type ProfileRequest struct {
 }
 
 // ProfileResponse is the program in the /api/plc/extract response shape, with a warning for each
-// contour the tool cannot reach.
+// contour the tool cannot reach and the same contours as measurements the drawing can mark.
 type ProfileResponse struct {
 	plc.ExtractResponse
-	Warnings []string `json:"warnings,omitempty"`
+	Warnings  []string          `json:"warnings,omitempty"`
+	Unreached []UnreachedDetail `json:"unreached,omitempty"`
+}
+
+// UnreachedDetail is a detail of the drawing the tool cannot cut: where it is, the primitives it
+// is drawn with, so the drawing can mark it, and the widest tool that would fit it — 0 when none
+// does.
+type UnreachedDetail struct {
+	PrimitiveIDs []string `json:"primitiveIds,omitempty"`
+	Width        float64  `json:"width"`
+	MinX         float64  `json:"minX"`
+	MinY         float64  `json:"minY"`
+	MaxX         float64  `json:"maxX"`
+	MaxY         float64  `json:"maxY"`
 }
 
 // Profile returns the PLC program that cuts around the closed contours of the drawing, one radius
@@ -91,6 +104,7 @@ func Profile(req ProfileRequest) (ProfileResponse, error) {
 
 	var rings []geom.Path
 	var warnings []string
+	var unreached []UnreachedDetail
 	if req.Side == SideOn {
 		// The centre of the tool follows the drawing: there is no offset to take, so no contour
 		// can be lost in one and none has to fit the tool. The contours are cut as drawn, each
@@ -107,7 +121,7 @@ func Profile(req ProfileRequest) (ProfileResponse, error) {
 			return ProfileResponse{}, fmt.Errorf("a %.3f mm tool does not fit inside any contour", req.ToolDiameter)
 		}
 		rings = orderRings(offset, req.Side, req.Direction)
-		warnings = unreachedContours(material, offset, req.Side, req.ToolDiameter)
+		warnings, unreached = unreachedDetails(contours, material, offset, req.Side, req.ToolDiameter)
 	}
 
 	g := plcgen.NewGenerator()
@@ -141,6 +155,7 @@ func Profile(req ProfileRequest) (ProfileResponse, error) {
 	return ProfileResponse{
 		ExtractResponse: response(g.Lines()),
 		Warnings:        warnings,
+		Unreached:       unreached,
 	}, nil
 }
 
@@ -209,14 +224,42 @@ func alongRing(ring geom.Path, length float64) geom.Path {
 	}
 }
 
-// unreachedContours warns about the contours that no ring cuts. Only a contour around a region the
-// offset shrinks can lose its ring: a hole when cutting outside, an outline when cutting inside.
-// Such a contour is cut when some ring lies inside it but not inside another contour within it,
-// since a ring inside an inner contour cuts that contour instead.
-func unreachedContours(material, rings []geom.Path, side string, diameter float64) []string {
+// widestTool is the widest tool that fits inside a contour: the largest circle it holds, found by
+// shrinking the contour until nothing is left of it. It is what the detail measures across, and so
+// the tool that would cut it. Zero when the detail is thinner than the resolution of the search.
+func widestTool(contour geom.Path, limit float64) float64 {
+	fits := func(diameter float64) bool {
+		return len(clipper.OffsetContours([]geom.Path{contour}, -diameter/2)) > 0
+	}
+	if fits(limit) {
+		return limit
+	}
+	low, high := 0.0, limit
+	// 0.01 mm is ten times the resolution of the PLC coordinates: finer would say nothing
+	for high-low > 0.01 {
+		mid := (low + high) / 2
+		if fits(mid) {
+			low = mid
+		} else {
+			high = mid
+		}
+	}
+	return math.Floor(low*100) / 100
+}
+
+// unreachedDetails warns about the contours that no ring cuts, and measures them. Only a contour
+// around a region the offset shrinks can lose its ring: a hole when cutting outside, an outline
+// when cutting inside. Such a contour is cut when some ring lies inside it but not inside another
+// contour within it, since a ring inside an inner contour cuts that contour instead.
+//
+// The contours here are the merged material, so the primitives of a detail are those of every
+// drawn contour that lies within it: where two drawn contours overlap into one, both are named.
+func unreachedDetails(contours Contours, material, rings []geom.Path, side string, diameter float64) ([]string, []UnreachedDetail) {
 	nested := clipper.Inside(material, material)
 	ringInside := clipper.Inside(rings, material)
+	drawnWithin := clipper.Within(contours.Closed, material)
 	var warnings []string
+	var details []UnreachedDetail
 	for c, contour := range material {
 		depth := 0
 		for _, in := range nested[c] {
@@ -236,11 +279,22 @@ func unreachedContours(material, rings []geom.Path, side string, diameter float6
 		}
 		if !reached {
 			minX, minY, maxX, maxY := contour.Bounds()
-			warnings = append(warnings, fmt.Sprintf("a %.3f mm tool cannot reach the contour from (%.3f, %.3f) to (%.3f, %.3f): it is not cut",
-				diameter, minX, minY, maxX, maxY))
+			detail := UnreachedDetail{Width: widestTool(contour, diameter), MinX: minX, MinY: minY, MaxX: maxX, MaxY: maxY}
+			for d, within := range drawnWithin {
+				if within[c] && d < len(contours.ClosedIDs) {
+					detail.PrimitiveIDs = append(detail.PrimitiveIDs, contours.ClosedIDs[d]...)
+				}
+			}
+			fits := fmt.Sprintf("the widest tool that fits it is %.3f mm", detail.Width)
+			if detail.Width == 0 {
+				fits = "no tool fits it"
+			}
+			warnings = append(warnings, fmt.Sprintf("a %.3f mm tool cannot reach the contour from (%.3f, %.3f) to (%.3f, %.3f): it is not cut, %s",
+				diameter, minX, minY, maxX, maxY, fits))
+			details = append(details, detail)
 		}
 	}
-	return warnings
+	return warnings, details
 }
 
 func (req ProfileRequest) validate() error {
