@@ -26,20 +26,9 @@ export function computeFilletGeometry(intersection, v1, v2, radius) {
     const distToCenter = radius / Math.sin(theta / 2);
     const Center = intersection.clone().add(bisector.scale(distToCenter));
 
-    // Arc angles
-    const startAngle = Math.atan2(T1.y - Center.y, T1.x - Center.x);
-    const endAngle = Math.atan2(T2.y - Center.y, T2.x - Center.x);
-
-    // Determine arc direction from cross product
-    const cross = v1.cross(v2);
-    const anticlockwise = cross > 0;
-
     return {
         center: Center,
         radius: radius,
-        startAngle: startAngle,
-        endAngle: endAngle,
-        anticlockwise: !anticlockwise,
         t1: T1,
         t2: T2
     };

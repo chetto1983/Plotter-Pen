@@ -1,5 +1,5 @@
 import { Tool } from './baseTool.js';
-import { Arc } from '../geometry/primitives.js';
+import { ArcBuilder } from '../geometry/arcBuilder.js';
 import { computeFilletGeometry } from '../geometry/fillet.js';
 import { Vector2, distance } from '../geometry/core.js';
 
@@ -92,40 +92,19 @@ export class FilletTool extends Tool {
 
         const result = computeFilletGeometry(I, v1, v2, this.radius);
 
-        if (result) {
-            const arc = new Arc(
-                `fillet_${Date.now()}`,
-                result.center.x,
-                result.center.y,
-                result.radius,
-                result.startAngle,
-                result.endAngle,
-                result.anticlockwise
-            );
+        if (!result) return;
 
-            // Fix angles (Arc constructor expects normalized?)
-            // Arc primitive handles angles.
-            // Check if we need to trim lines.
+        // The fillet is the short arc from T1 to T2, the one that faces the corner. The Arc takes
+        // its start, end and centre; the builder adds the point that sets the side it bulges to.
+        const arc = ArcBuilder.fromCenterStartEnd(result.center, result.t1, result.t2);
+        if (!arc) return;
 
-            // Trim Line 1 to T1 (keep side of pick point, or just set End to T1)
-            // T1 is on the vector v1 from Intersection.
-            // We want the line segment to END at T1.
-            // But line1 might proceed through intersection or away.
-            // The segment we KEEP is the one containing the Pick Point, clipped at T1.
+        // Each line keeps the part with the pick point and now ends at its tangent point
+        this.trimLine(l1, result.t1, I);
+        this.trimLine(l2, result.t2, I);
 
-            // Logic:
-            // Find which endpoint of l1 is furthest from Intersection in direction of Pick?
-            // Actually, we keep the endpoint that is "farther out" than T1?
-            // Or rather: The line segment starts at "Far Endpoint" and ends at T1.
-            // Which is the "Far Endpoint"? It's the one (x1 or x2) that dot( (End - I), v1 ) > 0 ?
-            // Probably the simple logic is: Modified line is from Original_Farthest_End to T1.
-
-            this.trimLine(l1, result.t1, I);
-            this.trimLine(l2, result.t2, I);
-
-            this.manager.addPrimitive(arc);
-            this.reset();
-        }
+        this.manager.addPrimitive(arc);
+        this.reset();
     }
 
     trimLine(line, tPoint, intersection) {
